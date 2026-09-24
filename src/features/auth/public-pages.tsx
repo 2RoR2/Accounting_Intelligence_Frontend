@@ -4,18 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import {
   ArrowRight,
-  BarChart3,
   Check,
   CheckCircle2,
   FileCheck2,
   LockKeyhole,
-  Sparkles,
   ScanLine,
-  ShieldCheck,
   Upload,
-  Users,
-  Zap,
 } from "lucide-react";
+import { LandingPage } from "@/features/auth/landing-page";
 import { Brand } from "@/components/common/layout/app-shell";
 import { PublicHeader } from "@/components/common/layout/public-header";
 import { Badge, Field, ErrorState } from "@/components/common/ui";
@@ -31,6 +27,7 @@ import {
 import { requestEnterpriseAccess } from "@/lib/api/tenant.service";
 import { roleHome } from "@/lib/permissions";
 import { useResource } from "@/features/common/hooks/use-resource";
+
 export function PublicPage({ page }: { page: string }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -128,221 +125,7 @@ export function PublicPage({ page }: { page: string }) {
       </div>
     );
 
-  if (!page)
-    return (
-      <div className="landing">
-        <PublicHeader />
-        <main className="landing-main">
-          <div className="landing-copy">
-            <div className="eyebrow">
-              <span className="pulse-dot" /> ENTERPRISE ACCOUNTING INTELLIGENCE
-            </div>
-            <div className="hero-rating">
-              <span>SAIC</span> secure · auditable · built for finance teams
-            </div>
-            <h1>
-              From invoice to
-              <br />
-              trusted <em>record.</em>
-            </h1>
-            <p className="landing-subtitle">
-              AI-driven invoice processing with
-              <br />
-              automated record standardisation
-            </p>
-            <p className="landing-description">
-              One professional workspace for extraction, exception handling,
-              validation, and standardised accounting records — with clear
-              ownership at every step.
-            </p>
-            <div className="actions">
-              <Link href="/login" className="btn primary">
-                Enter your workspace <ArrowRight size={17} />
-              </Link>
-              <Link href="/request-access" className="btn">
-                Register enterprise
-              </Link>
-            </div>
-            <form
-              className="landing-email-cta"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const value = new FormData(event.currentTarget).get("work-email");
-                router.push(`/request-access?email=${encodeURIComponent(String(value ?? ""))}`);
-              }}
-            >
-              <input
-                name="work-email"
-                type="email"
-                aria-label="Work email"
-                placeholder="Enter your work email"
-                required
-              />
-              <button className="btn primary">Get started</button>
-            </form>
-            <div className="landing-trust">
-              <ShieldCheck size={17} /> Built for teams. Designed for
-              accountability.
-            </div>
-          </div>
-          <div className="landing-visual">
-            <div className="floating-label">
-              <CheckCircle2 size={16} /> From document to decision
-            </div>
-            <div className="invoice-mock">
-              <div className="invoice-mock-header">
-                <div className="brand-symbol">
-                  <FileCheck2 size={26} />
-                </div>
-                <Badge>VALIDATED</Badge>
-              </div>
-              <small>STANDARDISED ACCOUNTING RECORD</small>
-              <h2>Everything in its right place.</h2>
-              <div className="invoice-grid">
-                <div>
-                  <small>SUPPLIER</small>
-                  <strong>Atlas Office Supplies</strong>
-                </div>
-                <div>
-                  <small>INVOICE</small>
-                  <strong>INV-2026-00821</strong>
-                </div>
-              </div>
-              <div className="invoice-lines">
-                <span>Office supplies</span>
-                <strong>RM 800.00</strong>
-              </div>
-              <div className="invoice-lines">
-                <span>Tax · 6%</span>
-                <strong>RM 48.00</strong>
-              </div>
-              <div className="invoice-total">
-                <span>Total amount</span>
-                <strong>RM 848.00</strong>
-              </div>
-              <div className="verified">
-                <CheckCircle2 size={16} /> Extracted. Validated. Ready for
-                what’s next.
-              </div>
-            </div>
-            <div className="floating-metric">
-              <ScanLine size={22} />
-              <div>
-                <strong>96.4%</strong>
-                <span>Illustrative extraction accuracy</span>
-              </div>
-            </div>
-          </div>
-        </main>
-        <section className="product-showcase" aria-label="Platform preview">
-          <div className="showcase-glow" />
-          <div className="product-window">
-            <div className="product-window-bar">
-              <span className="window-dots"><i /><i /><i /></span>
-              <span>Accounting Intelligence workspace</span>
-              <Badge>Ready</Badge>
-            </div>
-            <div className="product-window-body">
-              <aside className="preview-nav">
-                <strong>Workspace</strong>
-                {["Overview", "Documents", "Exceptions", "Records"].map((item, index) => (
-                  <span className={index === 0 ? "active" : ""} key={item}>
-                    <i /> {item}
-                  </span>
-                ))}
-              </aside>
-              <div className="preview-content">
-                <div className="preview-heading">
-                  <div><small>GOOD MORNING</small><h2>Your financial workflow, at a glance.</h2></div>
-                  <span className="preview-avatar">AT</span>
-                </div>
-                <div className="preview-stats">
-                  {[["42", "Processed"], ["7", "Needs review"], ["98%", "Validated"]].map(([value, label]) => (
-                    <div key={label}><span>{label}</span><strong>{value}</strong><small>Updated just now</small></div>
-                  ))}
-                </div>
-                <div className="preview-grid">
-                  <div className="preview-chart">
-                    <div><strong>Processing volume</strong><span>Last 7 days</span></div>
-                    <div className="preview-bars">
-                      {[44, 68, 52, 84, 61, 92, 75].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}
-                    </div>
-                  </div>
-                  <div className="preview-activity">
-                    <div><strong>Recent activity</strong><span>Live</span></div>
-                    {["Invoice validated", "Record standardised", "Review assigned"].map((item, index) => (
-                      <p key={item}><i className={`activity-dot dot-${index}`} /><span>{item}</span><small>{index + 1}m</small></p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section className="landing-features">
-          <div className="section-heading">
-            <span>ONE CONNECTED WORKSPACE</span>
-            <h2>Designed to make complex accounting feel simple.</h2>
-            <p>Give every role the clarity to move faster, without losing control or context.</p>
-          </div>
-          <div className="feature-cards">
-            {[
-              [Sparkles, "Intelligent extraction", "Turn invoices into structured, review-ready data with confidence signals."],
-              [Zap, "Faster exception handling", "Route mismatches to the right person and keep every correction traceable."],
-              [BarChart3, "Operational visibility", "See processing health, workload, and validation outcomes in one place."],
-              [Users, "Built for every role", "Focused workspaces for platform administrators, company admins, and accountants."],
-            ].map(([Icon, title, copy]) => (
-              <article key={String(title)}>
-                <span className="feature-icon"><Icon size={21} /></span>
-                <h3>{String(title)}</h3>
-                <p>{String(copy)}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-        <section className="workflow-strip">
-          {[
-            "Upload",
-            "Extract",
-            "Validate",
-            "Review",
-            "Standardise",
-            "Export",
-          ].map((step, i) => (
-            <div key={step}>
-              <span>0{i + 1}</span>
-              <strong>{step}</strong>
-              {i < 5 && <ArrowRight size={16} />}
-            </div>
-          ))}
-        </section>
-
-        <section className="landing-final-cta">
-          <div>
-            <span>READY FOR A CLEARER CLOSE?</span>
-            <h2>Clean data. Clear records. Confident accounting.</h2>
-          </div>
-
-          <div className="actions">
-            <Link href="/request-access" className="btn primary">
-              Register enterprise <ArrowRight size={16} />
-            </Link>
-
-            <Link href="/login" className="btn">
-              Sign in
-            </Link>
-
-            <Link href="/help" className="btn">
-              Help
-            </Link>
-          </div>
-        </section>
-
-        <footer className="public-footer">
-          <span>ACCOUNTING INTELLIGENCE · SAIC</span>
-        </footer>
-      </div>
-    );
+  if (!page) return <LandingPage />;
   return (
     <div className="auth-page">
       <aside className="auth-aside">
