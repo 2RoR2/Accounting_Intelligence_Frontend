@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import "@/styles/common.css";
+import "@/styles/landing.css";
 import "@/styles/super-admin.css";
 import "@/styles/local-admin.css";
 import "@/styles/accountant.css";
