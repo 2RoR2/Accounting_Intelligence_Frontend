@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Check, FileCheck, Gauge, Scan, ShieldAlert } from "lucide-react";
+import { Check, ChevronRight, FileCheck, FileText, Gauge, Receipt, Scan, ShieldAlert } from "lucide-react";
 
 const MODULES = [
   { id: "platform", name: "Platform" },
@@ -17,7 +17,7 @@ const NAV = ["Platform", "Documents", "Exceptions", "Records", "Reports"] as con
 const FEATURES = [
   {
     title: "Field extraction",
-    copy: "Reads supplier, date, line items, tax, and total from invoices, bills, and receipts so the team stops typing them in.",
+    copy: "Reads supplier, date, line items, and total from invoices, bills, and receipts so the team stops typing them in.",
     mark: "Target ≥ 95% on the pilot set",
     icon: Scan,
   },
@@ -43,11 +43,53 @@ const FEATURES = [
 
 const STEPS = [
   ["Upload", "The document comes in as an invoice, a bill, or a receipt. This is the only manual step before extraction starts."],
-  ["Extract", "The system pulls the accounting fields: who billed you, the date, each line, the tax, and the total."],
+  ["Extract", "The system pulls the accounting fields: who billed you, the date, each line, and the total."],
   ["Validate", "Those fields are checked against each other. A total that does not add up, or a missing value, fails here."],
   ["Review", "Failed documents become exceptions. They go to the right person, and every correction stays on the document."],
   ["Standardise", "A document that passes is written as one record, with the same fields every time."],
   ["Export", "The standardised record can leave the workspace. Tax filing, payment, and a live ledger are out of scope."],
+] as const;
+
+const SHEETS = [
+  {
+    kind: "Invoice",
+    kicker: "Demo invoice",
+    title: "Supplier invoice, checked.",
+    partyLabel: "Supplier",
+    party: "Atlas Office Supplies",
+    refLabel: "Invoice no.",
+    ref: "INV-2026-00821",
+    lines: [["Office supplies", "RM 480.00"], ["Printer toner", "RM 320.00"]],
+    total: "RM 800.00",
+    status: "Validated",
+    icon: FileText,
+  },
+  {
+    kind: "Bill",
+    kicker: "Demo bill",
+    title: "Utility bill, standardised.",
+    partyLabel: "Biller",
+    party: "Sarawak Energy",
+    refLabel: "Bill no.",
+    ref: "BILL-2026-01442",
+    lines: [["Electricity usage", "RM 186.40"], ["Service charge", "RM 12.00"]],
+    total: "RM 198.40",
+    status: "Ready",
+    icon: FileCheck,
+  },
+  {
+    kind: "Receipt",
+    kicker: "Demo receipt",
+    title: "Counter receipt, extracted.",
+    partyLabel: "Merchant",
+    party: "Kuching Stationery",
+    refLabel: "Receipt no.",
+    ref: "RCP-2026-00391",
+    lines: [["A4 paper", "RM 24.50"], ["Binding", "RM 8.00"]],
+    total: "RM 32.50",
+    status: "Extracted",
+    icon: Receipt,
+  },
 ] as const;
 
 function ModuleScreen({ id }: { id: (typeof MODULES)[number]["id"] }) {
@@ -68,7 +110,7 @@ function ModuleScreen({ id }: { id: (typeof MODULES)[number]["id"] }) {
   const lines = {
     platform: ["ABC Sdn Bhd approved", "XYZ Sdn Bhd pending", "Seat limit set"],
     documents: ["INV-2026-00821 extracted", "Receipt batch uploaded", "Supplier field checked"],
-    exceptions: ["Total does not match", "Tax line missing", "Sent to the owner"],
+    exceptions: ["Total does not match", "Supplier missing", "Sent to the owner"],
     records: ["Office supplies standardised", "Ready to export", "Change kept on the record"],
     reports: ["Pilot accuracy holding", "Under 20 seconds", "Concurrent uploads ok"],
   }[id];
@@ -122,7 +164,12 @@ function ModuleScreen({ id }: { id: (typeof MODULES)[number]["id"] }) {
 export function LandingPage() {
   const [moduleIndex, setModuleIndex] = useState(2);
   const [switchKey, setSwitchKey] = useState(0);
+  const [sheetIndex, setSheetIndex] = useState(0);
   const dragX = useRef(0);
+
+  function showSheet(next: number) {
+    setSheetIndex((next + SHEETS.length) % SHEETS.length);
+  }
 
   function showModule(next: number) {
     setModuleIndex((next + MODULES.length) % MODULES.length);
@@ -146,14 +193,14 @@ export function LandingPage() {
         </Link>
         <nav>
           <Link href="/help">Help</Link>
-          <Link href="/request-access" className="hp-register">Register enterprise</Link>
+          <Link href="/request-access" className="hp-register">Register company</Link>
           <Link href="/login" className="hp-login">Log in</Link>
         </nav>
       </header>
       <main>
         <section className="hp-hero">
           <div>
-            <p className="hp-eyebrow">Enterprise accounting intelligence</p>
+            <p className="hp-eyebrow">Company accounting intelligence</p>
             <p className="hp-quiet">SAIC secure · auditable · built for finance teams</p>
             <h1>From invoice to <span>trusted record.</span></h1>
             <p className="hp-lead">AI-driven invoice processing and automated record standardisation</p>
@@ -162,33 +209,68 @@ export function LandingPage() {
             </p>
             <div className="hp-actions">
               <Link href="/login" className="hp-btn dark">Enter your workspace</Link>
-              <Link href="/request-access" className="hp-btn light">Register enterprise</Link>
+              <Link href="/request-access" className="hp-btn light">Register company</Link>
               <a href="#workspace" className="hp-btn text">Get started</a>
             </div>
           </div>
           <div className="record-stage">
             <p className="record-chip">
               <span className="record-chip-mark" aria-hidden="true"><Check size={13} strokeWidth={2.6} /></span>
-              From document to decision
+              {SHEETS[sheetIndex].kind} sample · no tax fields
             </p>
-            <article className="record-sheet">
-              <div className="record-row">
-                <span className="record-mark" aria-hidden="true"><FileCheck size={20} strokeWidth={2.2} /></span>
-                <span className="record-status"><i />Validated</span>
-              </div>
-              <p className="record-kicker">Standardised accounting record</p>
-              <h2>Everything in its right place.</h2>
-              <dl className="record-meta">
-                <div><dt>Supplier</dt><dd>Atlas Office Supplies</dd></div>
-                <div><dt>Invoice</dt><dd>INV-2026-00821</dd></div>
-              </dl>
-              <div className="record-lines">
-                <p><span>Office supplies</span><strong>RM 800.00</strong></p>
-                <p><span>Tax · 6%</span><strong>RM 48.00</strong></p>
-                <p className="total"><span>Total amount</span><strong>RM 848.00</strong></p>
-              </div>
-              <p className="record-ready"><Check size={16} strokeWidth={2.6} />Extracted. Validated. Ready for what's next.</p>
-            </article>
+            <div className="record-deck">
+              {SHEETS.map((sheet, index) => {
+                const place = (index - sheetIndex + SHEETS.length) % SHEETS.length;
+                const Icon = sheet.icon;
+                const front = place === 0;
+                return (
+                  <article
+                    key={sheet.kind}
+                    className="record-sheet"
+                    data-place={place}
+                    aria-hidden={front ? undefined : true}
+                    role={front ? "button" : undefined}
+                    tabIndex={front ? 0 : undefined}
+                    aria-label={front ? `Show the next sample. Current sample is the ${sheet.kind.toLowerCase()}.` : undefined}
+                    onClick={front ? () => showSheet(sheetIndex + 1) : undefined}
+                    onKeyDown={front ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        showSheet(sheetIndex + 1);
+                      }
+                    } : undefined}
+                  >
+                    <div className="record-row">
+                      <span className="record-mark" aria-hidden="true"><Icon size={20} strokeWidth={2.2} /></span>
+                      <span className="record-status"><i />{sheet.status}</span>
+                    </div>
+                    <p className="record-kicker">{sheet.kicker}</p>
+                    <h2>{sheet.title}</h2>
+                    <dl className="record-meta">
+                      <div><dt>{sheet.partyLabel}</dt><dd>{sheet.party}</dd></div>
+                      <div><dt>{sheet.refLabel}</dt><dd>{sheet.ref}</dd></div>
+                    </dl>
+                    <div className="record-lines">
+                      {sheet.lines.map(([label, amount]) => (
+                        <p key={label}><span>{label}</span><strong>{amount}</strong></p>
+                      ))}
+                      <p className="total"><span>Total amount</span><strong>{sheet.total}</strong></p>
+                    </div>
+                    <p className="record-ready"><Check size={16} strokeWidth={2.6} />Extracted. Checked. No tax calculation.</p>
+                  </article>
+                );
+              })}
+              <button type="button" className="record-next" aria-label="Next sample" onClick={() => showSheet(sheetIndex + 1)}>
+                <ChevronRight size={18} strokeWidth={2.4} />
+              </button>
+            </div>
+            <div className="record-pager" role="tablist" aria-label="Document samples">
+              {SHEETS.map((sheet, index) => (
+                <button key={sheet.kind} type="button" className={index === sheetIndex ? "on" : ""} aria-pressed={index === sheetIndex} onClick={() => showSheet(index)}>
+                  {sheet.kind}
+                </button>
+              ))}
+            </div>
             <aside className="record-accuracy">
               <span className="record-scan" aria-hidden="true"><Scan size={16} strokeWidth={2.2} /></span>
               <p><strong>96.4%</strong><span>Illustrative extraction accuracy</span></p>
@@ -268,7 +350,7 @@ export function LandingPage() {
             <p className="hp-eyebrow light">Ready to try the workspace?</p>
             <h2>Clean extraction. Checked records. A standard you can export.</h2>
             <div className="hp-actions">
-              <Link href="/request-access" className="hp-btn light">Register enterprise</Link>
+              <Link href="/request-access" className="hp-btn light">Register company</Link>
               <Link href="/login" className="hp-btn ghost">Sign in</Link>
               <Link href="/help" className="hp-btn text light">Help</Link>
             </div>
@@ -284,7 +366,7 @@ export function LandingPage() {
           <p className="hp-eyebrow">On this page</p>
           <a href="#workspace">What the system does</a>
           <a href="#process">The six steps</a>
-          <Link href="/request-access">Register an enterprise</Link>
+          <Link href="/request-access">Register a company</Link>
           <Link href="/help">Help</Link>
         </div>
         <div>
