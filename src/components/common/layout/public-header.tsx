@@ -28,7 +28,7 @@ export function PublicHeader({
           href="/request-access"
           className={`btn header-register ${active === "register" ? "active" : ""}`}
         >
-          <Building2 size={15} /> Register enterprise
+          <Building2 size={15} /> Register company
         </Link>
         <Link
           href="/login"
