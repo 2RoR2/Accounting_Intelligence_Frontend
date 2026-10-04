@@ -8,10 +8,13 @@ import type {
   ValidationRules,
 } from "@/types";
 import { id, mutate, now, readDb } from "../mock/repository";
+import type { DocumentKind } from "@/types";
 import {
   defaultRules,
-  documentTypeFromName,
+  documentKindFromName,
+  labelForKind,
   makeExtraction,
+  nextDocumentCode,
 } from "../mock/seed";
 import { assertActive, canDocument, requireRole } from "../permissions";
 import { log } from "./audit.service";
@@ -282,6 +285,7 @@ export async function uploadDocument(
   file: Pick<File, "name" | "size" | "type">,
   scenario: string,
   category: RecordCategory = "ACCOUNTS_PAYABLE",
+  kind: DocumentKind = documentKindFromName(file.name),
 ) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   assertActive(readDb(), user);
@@ -293,14 +297,13 @@ export async function uploadDocument(
   if (file.size > 20 * 1024 * 1024)
     throw new Error("Maximum file size is 20 MB.");
   return mutate((db) => {
-    const documentType = documentTypeFromName(file.name);
     const doc: Document = {
-      id: id("DOC"),
+      id: nextDocumentCode(db.documents.map((item) => item.id), kind),
       tenantId: user.tenantId!,
       ownerId: user.id,
       assignedTo: user.id,
       name: file.name,
-      type: documentType,
+      type: labelForKind(kind),
       status: "UPLOADED",
       createdAt: now(),
       seconds: 8.7,
@@ -311,7 +314,7 @@ export async function uploadDocument(
       doc.id,
       scenario,
       db.tenants.find((t) => t.id === user.tenantId)!.name,
-      documentType,
+      doc.type,
       doc.createdAt,
       category,
     );
