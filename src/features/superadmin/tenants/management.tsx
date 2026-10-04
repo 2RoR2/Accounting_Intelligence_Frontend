@@ -79,7 +79,7 @@ export function Approvals({ user }: { user: User }) {
       <PageHeader
         eyebrow="PLATFORM ADMINISTRATION"
         title="Pending approvals"
-        description="Review enterprise access and account limit requests."
+        description="Review company access and account limit requests."
       />
       <Panel>
         <div className="filter-bar">
@@ -194,7 +194,7 @@ export function Approvals({ user }: { user: User }) {
         <Modal
           title={
             mode === "review"
-              ? "Review enterprise request"
+              ? "Review company request"
               : mode === "approve"
                 ? "Approve company"
                 : "Reject company"
