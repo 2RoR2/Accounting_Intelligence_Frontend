@@ -1,6 +1,6 @@
 import type { Database } from "@/types";
 import { seedDatabase } from "./seed";
-const KEY = "accounting-intelligence-v3";
+const KEY = "accounting-intelligence-v4";
 let memory: Database | undefined;
 export function readDb(): Database {
   if (typeof window !== "undefined") {
@@ -8,7 +8,7 @@ export function readDb(): Database {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Database;
-        if (parsed.version === 3) return parsed;
+        if (parsed.version === 4) return parsed;
       } catch {
         /* Recover malformed local storage with fixtures. */
       }
