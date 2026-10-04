@@ -1,5 +1,6 @@
 import type {
   Database,
+  DocumentKind,
   Extraction,
   RecordCategory,
   User,
@@ -13,10 +14,26 @@ export const defaultRules: ValidationRules = {
   duplicate: true,
   threshold: 80,
 };
-export function documentTypeFromName(name: string) {
-  if (/receipt/i.test(name)) return "Receipt";
-  if (/bill/i.test(name)) return "Bill";
+export function documentKindFromName(name: string): DocumentKind {
+  if (/receipt/i.test(name)) return "RECEIPT";
+  if (/bill/i.test(name)) return "BILL";
+  return "INVOICE";
+}
+export function labelForKind(kind: DocumentKind) {
+  if (kind === "RECEIPT") return "Receipt";
+  if (kind === "BILL") return "Bill";
   return "Invoice";
+}
+export function documentTypeFromName(name: string) {
+  return labelForKind(documentKindFromName(name));
+}
+export function nextDocumentCode(existingIds: string[], kind: DocumentKind) {
+  const numbers = existingIds.flatMap((id) => {
+    const match = id.match(new RegExp(`^${kind}_(\\d+)$`));
+    return match ? [Number(match[1])] : [];
+  });
+  const next = (numbers.length ? Math.max(...numbers) : 100000) + 1;
+  return `${kind}_${next}`;
 }
 export function makeExtraction(
   documentId: string,
@@ -227,8 +244,20 @@ export function seedDatabase(): Database {
       invitedBy,
       invitedAt: "2026-09-10",
       lastLogin: status === "ACTIVE" ? "2026-09-17T07:42:00" : "—",
+      mustChangePassword: role === "ACCOUNTANT" && status === "ACTIVE",
     })),
   ];
+  const sourceNames = [
+    "INV-2026-00821.pdf",
+    "Atlas-invoice-0822.pdf",
+    "September-receipt.jpg",
+    "Office-supplies.pdf",
+    "Invoice-copy.pdf",
+    "Damaged-scan.pdf",
+    "Consulting-fees.pdf",
+    "Monthly-bill.pdf",
+  ];
+  const assignedCodes: string[] = [];
   const documents: Database["documents"] = Array.from(
     { length: 16 },
     (_, i) => {
@@ -242,31 +271,17 @@ export function seedDatabase(): Database {
         "success",
         "success",
       ][i % 8];
+      const name = sourceNames[i % 8];
+      const kind = documentKindFromName(name);
+      const code = nextDocumentCode(assignedCodes, kind);
+      assignedCodes.push(code);
       return {
-        id: `DOC-${1001 + i}`,
+        id: code,
         tenantId: i < 11 ? "TENANT_001" : "TENANT_002",
         ownerId: i < 11 ? "USR-003" : "USR-006",
         assignedTo: i < 11 ? "USR-003" : "USR-006",
-        name: [
-          "INV-2026-00821.pdf",
-          "Atlas-invoice-0822.pdf",
-          "September-receipt.jpg",
-          "Office-supplies.pdf",
-          "Invoice-copy.pdf",
-          "Damaged-scan.pdf",
-          "Consulting-fees.pdf",
-          "Monthly-bill.pdf",
-        ][i % 8],
-        type: documentTypeFromName([
-          "INV-2026-00821.pdf",
-          "Atlas-invoice-0822.pdf",
-          "September-receipt.jpg",
-          "Office-supplies.pdf",
-          "Invoice-copy.pdf",
-          "Damaged-scan.pdf",
-          "Consulting-fees.pdf",
-          "Monthly-bill.pdf",
-        ][i % 8]),
+        name,
+        type: labelForKind(kind),
         status:
           scenario === "success"
             ? "COMPLETED"
@@ -279,22 +294,20 @@ export function seedDatabase(): Database {
       };
     },
   );
-  const extractions = documents.map((d) =>
+  const extractions = documents.map((d, index) =>
     makeExtraction(
       d.id,
       d.scenario,
       d.tenantId === "TENANT_001" ? "ABC Sdn Bhd" : "XYZ Sdn Bhd",
       d.type,
       d.createdAt,
-      Number(d.id.split("-")[1]) % 2 === 0
-        ? "ACCOUNTS_RECEIVABLE"
-        : "ACCOUNTS_PAYABLE",
+      index % 2 === 1 ? "ACCOUNTS_RECEIVABLE" : "ACCOUNTS_PAYABLE",
     ),
   );
   extractions[0].fields.invoice.value = "INV-2026-00821";
   extractions[0].fields.invoice.original = "INV-2026-00821";
   return {
-    version: 3,
+    version: 4,
     users,
     tenants: [
       {
