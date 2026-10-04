@@ -7,9 +7,10 @@ import {
   FileText,
   Plus,
   UploadCloud,
+  Camera,
   CheckCircle2,
 } from "lucide-react";
-import type { RecordCategory, User } from "@/types";
+import type { DocumentKind, RecordCategory, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   advanceProcessing,
@@ -28,6 +29,7 @@ import {
   SearchInput,
   formatDate,
 } from "@/components/common/ui";
+import { CameraCapture } from "@/features/common/documents/camera-capture";
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const { data, error, loading, refresh } = useResource(
@@ -86,7 +88,8 @@ export function DocumentList({ user }: { user: User }) {
         <DataTable
           rows={data.filter(
             (d) =>
-              d.name.toLowerCase().includes(search.toLowerCase()) &&
+              (d.name.toLowerCase().includes(search.toLowerCase()) ||
+                d.id.toLowerCase().includes(search.toLowerCase())) &&
               (!status || d.status === status) &&
               (!date || d.createdAt.startsWith(date)),
           )}
@@ -136,10 +139,12 @@ export function UploadPage({ user }: { user: User }) {
   const [files, setFiles] = useState<File[]>([]);
   const [scenario, setScenario] = useState("mismatch");
   const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
+  const [kind, setKind] = useState<DocumentKind>("INVOICE");
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [camera, setCamera] = useState(false);
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   async function start() {
     if (!files.length) {
@@ -151,7 +156,7 @@ export function UploadPage({ user }: { user: User }) {
     try {
       for (const file of files) {
         setStage(`Uploading ${file.name}`);
-        const doc = await uploadDocument(user, file, scenario, category);
+        const doc = await uploadDocument(user, file, scenario, category, kind);
         for (const step of [
           "QUEUED",
           "PROCESSING",
@@ -183,6 +188,24 @@ export function UploadPage({ user }: { user: User }) {
         >
           <div className="panel-body">
             {error && <ErrorState message={error} />}
+            <div className="upload-sources">
+              <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
+                <UploadCloud size={16} /> Upload from device
+              </button>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => setCamera(true)}>
+                <Camera size={16} /> Use camera
+              </button>
+            </div>
+            {camera ? (
+              <CameraCapture
+                onClose={() => setCamera(false)}
+                onConfirm={(file) => {
+                  setFiles((current) => [...current, file]);
+                  setCamera(false);
+                  setError("");
+                }}
+              />
+            ) : (
             <button
               type="button"
               className={`drop-zone ${dragging ? "dragging" : ""}`}
@@ -219,6 +242,7 @@ export function UploadPage({ user }: { user: User }) {
                 file
               </small>
             </button>
+            )}
             <input
               ref={input}
               hidden
@@ -244,6 +268,20 @@ export function UploadPage({ user }: { user: User }) {
                 </button>
               </div>
             ))}
+            <Field
+              label="Document type"
+              hint="Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
+            >
+              <select
+                value={kind}
+                disabled={busy}
+                onChange={(e) => setKind(e.target.value as DocumentKind)}
+              >
+                <option value="INVOICE">Invoice</option>
+                <option value="BILL">Bill</option>
+                <option value="RECEIPT">Receipt</option>
+              </select>
+            </Field>
             <Field
               label="Accounting category"
               hint="Choose whether this invoice was sent to a customer or received from a supplier."
