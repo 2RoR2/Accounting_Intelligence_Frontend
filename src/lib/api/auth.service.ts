@@ -1,5 +1,7 @@
+import type { User } from "@/types";
 import { mutate, now, readDb } from "../mock/repository";
 import { assertActive } from "../permissions";
+import { log } from "./audit.service";
 export async function getAccounts() {
   return structuredClone(readDb().users);
 }
@@ -62,10 +64,30 @@ export async function activateAccount(
     )
       throw new Error("No account seats available.");
     user.status = "ACTIVE";
+    if (user.role === "ACCOUNTANT") user.mustChangePassword = true;
     db.invitations
       .filter((i) => i.userId === userId)
       .forEach((i) => (i.status = "ACTIVE"));
     return user;
+  });
+}
+export async function changeOwnPassword(
+  user: User,
+  password: string,
+  confirmation: string,
+) {
+  if (user.role !== "ACCOUNTANT")
+    throw new Error("Only workspace users change their own password.");
+  assertActive(readDb(), user);
+  if (!passwordChecks(password).every(Boolean) || password !== confirmation)
+    throw new Error("Meet all password requirements and match both passwords.");
+  return mutate((db) => {
+    const target = db.users.find((candidate) => candidate.id === user.id);
+    if (!target || target.role !== "ACCOUNTANT")
+      throw new Error("Account was not found.");
+    target.mustChangePassword = false;
+    log(db, user, "PASSWORD_CHANGED", target.email, "User chose a new password.");
+    return target;
   });
 }
 export async function requestPasswordReset(email: string) {
