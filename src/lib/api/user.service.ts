@@ -30,6 +30,7 @@ export async function updateAccountantCredentials(user: User, userId: string, na
     if (!target || target.tenantId !== user.tenantId || target.role !== "ACCOUNTANT")
       throw new Error("Account is not manageable in this workspace.");
     target.name = name.trim();
+    if (password) target.mustChangePassword = true;
     log(db, user, "ACCOUNTANT_CREDENTIALS_UPDATED", target.email, password ? "Name updated and password reset recorded." : "Name updated.");
     return target;
   });
