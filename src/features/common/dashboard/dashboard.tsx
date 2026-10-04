@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect } from "react";
 import {
   Building2,
   Users,
@@ -33,6 +34,7 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { PerformanceCards, TrendChart } from "@/components/common/dashboard/charts";
+import { AccountantBoard } from "@/features/users/performance-board";
 export function Dashboard({ user }: { user: User }) {
   const admin = user.role === "SUPER_ADMIN";
   const local = user.role === "LOCAL_ADMIN";
@@ -49,6 +51,13 @@ export function Dashboard({ user }: { user: User }) {
     }),
     user.id,
   );
+  useEffect(() => {
+    if (admin || local) return;
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [admin, local, refresh]);
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const completed = data.docs.filter((d) => d.status === "COMPLETED").length;
@@ -154,6 +163,15 @@ export function Dashboard({ user }: { user: User }) {
           </span>
         </Link>
       )}
+      {!admin && !local ? (
+        <AccountantBoard
+          docs={data.docs}
+          openExceptions={open}
+          completed={completed}
+          processing={processing}
+        />
+      ) : (
+        <>
       <div className="stats-grid">
         {admin ? (
           <>
@@ -260,6 +278,8 @@ export function Dashboard({ user }: { user: User }) {
           </div>
         </Panel>
       </div>
+        </>
+      )}
       {admin ? (
         <Panel
           title="Tenant activity"
