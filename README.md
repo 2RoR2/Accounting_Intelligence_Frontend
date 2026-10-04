@@ -26,7 +26,7 @@ At `/login`, enter a company email below and any non-empty password. The app the
 
 ## Walkthrough
 
-1. Request enterprise access from the landing page.
+1. Request company access from the landing page.
 2. Log in as SAIC. Review the new request under Pending Approvals, approve it, and choose its seat limit.
 3. Open its tenant → Users → View → Open activation. Activate the Local Admin with a password meeting the displayed checklist.
 4. Sign in as that Local Admin. Invite an accountant from Users. Active users and pending invitations both reserve seats.
