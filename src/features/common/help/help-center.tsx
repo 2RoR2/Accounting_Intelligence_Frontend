@@ -43,7 +43,7 @@ const TUTORIAL_STEPS = [
     icon: ClipboardCheck,
     title: "Govern access and approvals",
     detail:
-      "Company admins manage users and rules. Platform admins review enterprise registration requests.",
+      "Company admins manage users and rules. Platform admins review company registration requests.",
   },
 ] as const;
 
@@ -174,7 +174,7 @@ export function HelpCenter({
           <div className="help-helpline-banner">
             <PhoneCall size={18} />
             <div>
-              <strong>Enterprise helpline</strong>
+              <strong>Company helpline</strong>
               <span>
                 Share your workspace issue and preferred contact details. Typical
                 response window: next business day.
@@ -200,7 +200,7 @@ export function HelpCenter({
                   Select a topic
                 </option>
                 <option value="access">Access & login</option>
-                <option value="enterprise">Enterprise registration</option>
+                <option value="enterprise">Company registration</option>
                 <option value="documents">Document processing</option>
                 <option value="exceptions">Exceptions & validation</option>
                 <option value="billing">Accounts & licences</option>
