@@ -9,6 +9,7 @@ import { isAllowedWorkspaceRoute, isPublicRoute } from "@/lib/constants/routes";
 import { roleHome } from "@/lib/permissions";
 import { PublicPage } from "@/features/auth/public-pages";
 import { UserRoutes } from "@/features/users/route-content";
+import { ForcePasswordChange } from "@/features/users/force-password";
 import { LocalAdminRoutes } from "@/features/localadmin/route-content";
 import { SuperAdminRoutes } from "@/features/superadmin/route-content";
 export function Application({ path }: { path: string[] }) {
@@ -35,6 +36,8 @@ export function Application({ path }: { path: string[] }) {
     );
   if (!isAllowedWorkspaceRoute(path, user.role))
     return <AccessDenied homeHref={roleHome(user.role)} />;
+  if (user.role === "ACCOUNTANT" && user.mustChangePassword !== false)
+    return <ForcePasswordChange user={user} />;
   return (
     <AppShell user={user}>
       {user.role === "SUPER_ADMIN" ? (
