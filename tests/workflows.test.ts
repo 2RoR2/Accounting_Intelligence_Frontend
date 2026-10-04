@@ -124,8 +124,8 @@ test("tenant isolation, assigned document access, and SAIC support gate", async 
   assert.ok(
     (await getDocuments(xyz)).every((d) => d.tenantId === "TENANT_002"),
   );
-  await assert.rejects(getExtraction(xyz, "DOC-1001"), /not found/);
-  await assert.rejects(getExtraction(saic, "DOC-1001"), /role/);
+  await assert.rejects(getExtraction(xyz, "INVOICE_100001"), /not found/);
+  await assert.rejects(getExtraction(saic, "INVOICE_100001"), /role/);
   await assert.rejects(getStandardisedRecords(saic), /role/);
   assert.equal("extraction" in (await getRecordMetadata(saic))[0], false);
   await assert.rejects(openSupportView(saic, "REC-10021", ""), /reason/);
