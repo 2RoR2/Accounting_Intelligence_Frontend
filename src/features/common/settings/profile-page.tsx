@@ -4,7 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Camera, UserRound } from "lucide-react";
 import type { User } from "@/types";
 import { updateOwnProfile } from "@/lib/api/user.service";
-import { resetPassword } from "@/lib/api/auth.service";
+import { changeOwnPassword, resetPassword } from "@/lib/api/auth.service";
 import { ErrorState, Field, PageHeader, Panel, Toast } from "@/components/common/ui";
 
 export function ProfilePage({ user }: { user: User }) {
@@ -79,7 +79,40 @@ export function ProfilePage({ user }: { user: User }) {
             <button className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
           </form>
         </Panel>
-        {user.role !== "ACCOUNTANT" ? (
+        {user.role === "ACCOUNTANT" ? (
+          <Panel title="Change password">
+            <form
+              className="panel-body"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                try {
+                  await changeOwnPassword(
+                    user,
+                    String(form.get("password")),
+                    String(form.get("confirmation")),
+                  );
+                  setMessage("Password updated. You will not be asked again at sign-in.");
+                  setFailure("");
+                  event.currentTarget.reset();
+                } catch (error) {
+                  setFailure((error as Error).message);
+                }
+              }}
+            >
+              <Field
+                label="New password *"
+                hint="Use uppercase, lowercase, a number, and a symbol. You can change it here any time."
+              >
+                <input name="password" type="password" autoComplete="new-password" required minLength={8} />
+              </Field>
+              <Field label="Confirm new password *">
+                <input name="confirmation" type="password" autoComplete="new-password" required minLength={8} />
+              </Field>
+              <button className="btn primary">Change password</button>
+            </form>
+          </Panel>
+        ) : (
           <Panel title="Change my password">
             <form className="panel-body" onSubmit={async (event) => {
               event.preventDefault();
@@ -98,10 +131,6 @@ export function ProfilePage({ user }: { user: User }) {
               </Field>
               <button className="btn primary">Change password</button>
             </form>
-          </Panel>
-        ) : (
-          <Panel title="Account security">
-            <div className="panel-body info-box">Your Local Admin manages account credentials. You can update only your own profile details and image.</div>
           </Panel>
         )}
       </div>
