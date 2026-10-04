@@ -18,6 +18,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ScanLine,
   Settings2,
   ShieldCheck,
@@ -36,10 +38,13 @@ import { Modal } from "@/components/common/ui";
 export function Brand() {
   return (
     <span className="brand">
+      <span className="brand-mark" aria-hidden="true">
+        A
+      </span>
       <span className="brand-symbol">
         <ChartNoAxesCombined size={23} />
       </span>
-      <span>
+      <span className="brand-copy">
         Accounting
         <span className="brand-second">
           Intelligence<span className="brand-period">.</span>
@@ -91,11 +96,24 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(true);
+  const [peek, setPeek] = useState(false);
   const [profile, setProfile] = useState(false);
   const [notifications, setNotifications] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
+  const rail = !pinned && !peek;
+  useEffect(() => {
+    if (window.localStorage.getItem("accia-sidebar-pinned") === "0") {
+      setPinned(false);
+    }
+  }, []);
+  const setSidebarPinned = (next: boolean) => {
+    setPinned(next);
+    setPeek(false);
+    window.localStorage.setItem("accia-sidebar-pinned", next ? "1" : "0");
+  };
   useEffect(() => {
     if (!open) return;
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -163,7 +181,7 @@ export function AppShell({
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
   return (
     <div
-      className="app-shell"
+      className={`app-shell${pinned ? "" : " sidebar-unextended"}`}
       data-role={user.role.toLowerCase().replaceAll("_", "-")}
     >
       <a href="#main-content" className="skip-link">
@@ -180,11 +198,27 @@ export function AppShell({
         ref={sidebarRef}
         id="workspace-navigation"
         aria-label="Workspace navigation"
-        className={`sidebar ${open ? "open" : ""}`}
+        className={`sidebar ${open ? "open" : ""} ${rail ? "rail" : ""} ${!pinned && peek ? "peek" : ""}`}
+        onMouseEnter={() => {
+          if (!pinned) setPeek(true);
+        }}
+        onMouseLeave={() => setPeek(false)}
       >
-        <Link href="/" className="brand-link">
-          <Brand />
-        </Link>
+        <div className="sidebar-head">
+          <Link href="/" className="brand-link" aria-label="Accounting Intelligence">
+            <Brand />
+          </Link>
+          <button
+            type="button"
+            className="sidebar-pin"
+            aria-pressed={pinned}
+            aria-label={pinned ? "Unextend sidebar" : "Extend sidebar"}
+            title={pinned ? "Unextend sidebar" : "Extend sidebar"}
+            onClick={() => setSidebarPinned(!pinned)}
+          >
+            {pinned ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+          </button>
+        </div>
         <button
           className="mobile-close icon-btn"
           aria-label="Close navigation"
@@ -223,6 +257,7 @@ export function AppShell({
               }
               onClick={() => setOpen(false)}
               className={`nav-item ${pathname.split("/")[2] === path ? "active" : ""} ${i === nav.length - 2 ? "nav-separator" : ""}`}
+              title={label}
             >
               <Icon size={18} />
               <span>{label}</span>
@@ -411,7 +446,7 @@ export function AppShell({
                 >
                   <CircleHelp size={15} /> Help & tutorial
                 </button>
-                <Link href="/request-access">Register enterprise</Link>
+                <Link href="/request-access">Register company</Link>
                 <Link href="/login">Switch account</Link>
                 <button
                   onClick={async () => {
