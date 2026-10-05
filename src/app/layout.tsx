@@ -9,7 +9,7 @@ import "@/styles/accountant.css";
 export const metadata: Metadata = {
   title: "Accounting Intelligence | SAIC",
   description:
-    "AI-Driven Invoice Processing and Automated Record Standardisation. Enterprise accounting intelligence platform.",
+    "AI-Driven Invoice Processing and Automated Record Standardisation. Company accounting intelligence platform.",
 };
 
 export default function RootLayout({
