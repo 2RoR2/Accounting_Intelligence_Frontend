@@ -81,3 +81,17 @@ npm run test:browser
 ```
 
 
+
+## Deploy to Vercel
+
+Import this repository into Vercel with the project root set to `Accounting_Intelligence_Frontend`. Vercel detects Next.js automatically.
+
+Set this environment variable in Vercel for Production, Preview, and Development:
+
+```env
+BACKEND_URL=https://your-public-backend.example.com
+```
+
+`BACKEND_URL` must be a public HTTPS URL for the deployed FastAPI service. Do not use `localhost` or `127.0.0.1` in Vercel. The Next.js rewrite forwards `/api/*` requests to that backend, keeping authentication requests on the frontend origin.
+
+Configure the backend `FRONTEND_ORIGIN` to the exact Vercel URL, enable `COOKIE_SECURE=true`, and ensure the backend accepts HTTPS requests. Deploy the backend separately; Vercel hosts the frontend only.
