@@ -622,7 +622,41 @@
   min-height: 26rem;
 }
 .auth-wash .reset-card h2 { margin-bottom: 22px; font-size: 2rem; }
-.auth-wash .otp-wait { display: grid; }
+.auth-wash .reset-card .otp-wait {
+  display: grid;
+  gap: 0;
+  align-content: start;
+}
+.auth-wash .reset-card .otp-wait > .auth-icon {
+  margin-bottom: 18px;
+  background: #eaf5ff;
+  color: #12618d;
+}
+.auth-wash .reset-card .otp-wait > .hp-eyebrow {
+  margin-bottom: 8px;
+  color: #527086;
+  letter-spacing: .08em;
+}
+.auth-wash .reset-card .otp-wait > h2 {
+  margin: 0 0 10px;
+  color: #061433;
+  font-size: clamp(1.65rem, 3vw, 2rem);
+  line-height: 1.15;
+}
+.auth-wash .reset-card .otp-wait > p:not(.hp-eyebrow):not(.otp-timer):not(.form-bottom) {
+  max-width: 38rem;
+  margin: 0 0 22px;
+  color: #5e7384;
+  line-height: 1.6;
+}
+.auth-wash .reset-card .otp-wait .field {
+  margin-bottom: 14px;
+}
+.auth-wash .reset-card .otp-wait .field > label {
+  margin-bottom: 10px;
+  color: #173042;
+  font-weight: 700;
+}
 .auth-wash .mfa-setup {
   margin-bottom: 16px;
   padding: 14px;
@@ -718,28 +752,41 @@
   .auth-wash .mfa-code-input input { width: 38px; height: 54px; font-size: 21px; border-radius: 10px; }
 }
 .auth-wash .otp-timer {
-  margin: 0 0 14px;
-  color: #2a3a4a;
+  margin: 10px 0 18px;
+  color: #527086;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .auth-wash .otp-resend {
-  justify-self: start;
-  margin-top: 12px;
+  justify-self: center;
+  margin-top: 14px;
   border: 0;
   background: transparent;
-  color: #2a3a4a;
+  color: #12618d;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.auth-wash .otp-resend:disabled { color: #8aa0b3; cursor: not-allowed; }
+.auth-wash .otp-resend:disabled { color: #8aa0b3; cursor: not-allowed; text-decoration: none; }
 .auth-wash .otp-wait .form-bottom button.form-link {
   border: 0;
   background: transparent;
   padding: 0;
   font: inherit;
   font-weight: 650;
+}
+.auth-wash .reset-card .otp-wait .form-bottom {
+  justify-self: center;
+  margin-top: 24px;
+  color: #6b7f8e;
+  text-align: center;
+}
+.auth-wash .reset-card .otp-wait .form-link {
+  color: #12618d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .auth-wash .reset-card .field input {

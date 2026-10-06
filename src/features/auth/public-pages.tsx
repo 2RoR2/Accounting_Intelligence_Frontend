@@ -433,16 +433,8 @@ export function PublicPage({ page }: { page: string }) {
               <p>If {resetEmail || "the company email"} belongs to an active account, a code has been sent. It stays valid for 10 minutes.</p>
               {error && <ErrorState message={error} />}
               <Field label="Code *">
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  placeholder="6-digit code"
-                  required
-                  value={otp}
-                  onChange={(event) => setOtp(event.target.value)}
-                />
+                <MfaCodeInput value={otp} onChange={setOtp} disabled={busy} />
+                <input className="sr-only" tabIndex={-1} required value={otp} onChange={() => undefined} aria-hidden="true" />
               </Field>
               <p className="otp-timer" aria-live="polite">
                 {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : "You can resend the code."}
