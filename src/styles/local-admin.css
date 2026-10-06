@@ -1,0 +1,9 @@
+.app-shell[data-role="local-admin"] {
+  --role-accent: #124deb;
+  --role-accent-strong: #061433;
+  --role-accent-soft: #edf5ff;
+}
+
+.app-shell[data-role="local-admin"] .sidebar {
+  border-right-color: rgba(18, 77, 235, 0.16);
+}

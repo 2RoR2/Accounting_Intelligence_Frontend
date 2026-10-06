@@ -1,0 +1,92 @@
+"use client";
+
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { Camera, UserRound } from "lucide-react";
+import type { User } from "@/types";
+import { updateOwnProfile } from "@/lib/api/user.service";
+import Link from "next/link";
+import { ErrorState, Field, PageHeader, Panel, Toast } from "@/components/common/ui";
+
+export function ProfilePage({ user }: { user: User }) {
+  const [name, setName] = useState(user.name);
+  const [avatar, setAvatar] = useState(user.avatar);
+  const [message, setMessage] = useState("");
+  const [failure, setFailure] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 1024 * 1024) {
+      setFailure("Choose a JPG, PNG, or WebP image smaller than 1 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setAvatar(String(reader.result));
+    reader.readAsDataURL(file);
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await updateOwnProfile(user, name, avatar);
+      setFailure("");
+      setMessage("Your profile has been updated.");
+    } catch (error) {
+      setFailure((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeader eyebrow="PERSONAL ACCOUNT" title="My profile" description="Manage your personal details and profile image." />
+      <div className="profile-layout">
+        <Panel title="Profile details">
+          <form className="panel-body profile-form" onSubmit={saveProfile}>
+            {failure && <ErrorState message={failure} />}
+            <div className="avatar-editor">
+              <span className="profile-avatar-large">
+                {avatar ? (
+                  // Profile avatar is stored as a data: URL — next/image cannot optimize it.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatar} alt="Profile" />
+                ) : (
+                  <UserRound size={38} />
+                )}
+              </span>
+              <div>
+                <strong>Profile image</strong>
+                <p>JPG, PNG, or WebP · maximum 1 MB</p>
+                <label className="btn small">
+                  <Camera size={15} /> Choose image
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} hidden />
+                </label>
+                {avatar && <button className="text-link danger-text" type="button" onClick={() => setAvatar(undefined)}>Remove</button>}
+              </div>
+            </div>
+            <Field label="Display name *">
+              <input value={name} onChange={(event) => setName(event.target.value)} required minLength={2} />
+            </Field>
+            <Field label="Company email">
+              <input value={user.email} disabled />
+            </Field>
+            <Field label="Role">
+              <input value={user.role.replaceAll("_", " ")} disabled />
+            </Field>
+            <button className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
+          </form>
+        </Panel>
+        <Panel title="Change password">
+          <div className="panel-body">
+            <p>Verify a code sent to your account email to choose a new password.</p>
+            <Link className="btn primary" href="/forgot-password">Reset my password</Link>
+          </div>
+        </Panel>
+      </div>
+      <Toast message={message} />
+    </>
+  );
+}
