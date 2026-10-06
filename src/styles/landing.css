@@ -794,6 +794,86 @@
   border-radius: 12px;
   font-size: 16px;
 }
+.auth-wash .account-missing-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 23, 42, .34);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+.auth-wash .account-missing {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 430px);
+  padding: 32px 30px 28px;
+  border: 1px solid rgba(255, 255, 255, .72);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 24px 70px rgba(7, 23, 42, .24);
+  text-align: center;
+}
+.auth-wash .account-missing-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b7f8e;
+  cursor: pointer;
+}
+.auth-wash .account-missing-close:hover,
+.auth-wash .account-missing-close:focus-visible {
+  background: #eaf5ff;
+  color: #12618d;
+  outline: none;
+}
+.auth-wash .account-missing-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
+  border: 1px solid #c9e4f3;
+  border-radius: 50%;
+  background: #eaf5ff;
+  color: #12618d;
+}
+.auth-wash .account-missing .hp-eyebrow {
+  margin: 0;
+  color: #527086;
+}
+.auth-wash .account-missing h2 {
+  margin: 0;
+  color: #061433;
+  font-size: clamp(1.55rem, 3vw, 1.9rem);
+}
+.auth-wash .account-missing-copy {
+  max-width: 30rem;
+  margin: 0 0 8px;
+  color: #5e7384;
+  line-height: 1.6;
+}
+.auth-wash .account-missing .btn {
+  margin-top: 4px;
+}
+.auth-wash .account-missing-link {
+  color: #12618d;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 @media (max-width: 1023px) {
   .auth-wash .auth-hero .reset-card { width: 100%; border-radius: 16px; min-height: 0; }
 }

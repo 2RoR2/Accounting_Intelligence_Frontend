@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   LockKeyhole,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
 import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
@@ -27,6 +28,7 @@ import {
   isFrontendMockAuthEnabled,
 } from "@/lib/api/auth.service";
 import { roleHome } from "@/lib/permissions";
+import { ApiError } from "@/lib/api/client";
 
 function MfaCodeInput({ value, onChange, disabled = false }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
@@ -72,6 +74,7 @@ export function PublicPage({ page }: { page: string }) {
   const [password, setPassword] = useState("");
   const activation = params.get("token") ?? "";
   const [resetReady, setResetReady] = useState(false);
+  const [accountMissing, setAccountMissing] = useState(false);
   const [welcomeUser, setWelcomeUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
   const [otpStep, setOtpStep] = useState(false);
   const [otp, setOtp] = useState("");
@@ -226,6 +229,9 @@ export function PublicPage({ page }: { page: string }) {
         );
       }
     } catch (e) {
+      if (page === "forgot-password" && e instanceof ApiError && e.status === 404) {
+        setAccountMissing(true);
+      }
       setError(e instanceof Error ? e.message : "Please try again.");
     } finally {
       setBusy(false);
@@ -412,7 +418,7 @@ export function PublicPage({ page }: { page: string }) {
               <p>Complete the form. SAIC reviews the request before the workspace opens.</p>
             </>
           )}
-          {accessPage && !success && !otpStep && !mfaStep && (
+          {accessPage && !success && !otpStep && !mfaStep && !accountMissing && (
             <>
               <span className="auth-icon">
                 <LockKeyhole size={20} />
@@ -422,6 +428,23 @@ export function PublicPage({ page }: { page: string }) {
               </p>
               <h2>{page === "login" ? "Company credentials" : "Request a reset"}</h2>
             </>
+          )}
+          {page === "forgot-password" && accountMissing && (
+            <div className="account-missing-backdrop">
+              <div className="account-missing" role="alert" aria-live="polite">
+                <button className="account-missing-close" type="button" aria-label="Close notification" onClick={() => { setAccountMissing(false); setError(""); }}>
+                  <X size={18} />
+                </button>
+                <div className="account-missing-icon" aria-hidden="true"><LockKeyhole size={22} /></div>
+                <p className="hp-eyebrow">Account access</p>
+                <h2>Account not found</h2>
+                <p className="account-missing-copy">You do not have an active account yet. Return home or request access from your company administrator.</p>
+                <Link className="btn primary full" href="/">
+                  Return to home <ArrowRight size={16} />
+                </Link>
+                <Link className="account-missing-link" href="/request-access">Request company access</Link>
+              </div>
+            </div>
           )}
           {page === "forgot-password" && otpStep && (
             <form className="otp-wait" onSubmit={continueReset}>
