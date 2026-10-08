@@ -61,6 +61,20 @@ Open `http://localhost:3000`. The frontend proxies `/api/*` to `BACKEND_URL`, no
 
 Set `BACKEND_URL` in `.env.local` when the API uses another address. Restart Next.js after changing environment values. For UI-only development, set `NEXT_PUBLIC_AUTH_MODE=mock`; remove it to use the real backend API.
 
+## Local mock accounts
+
+Set `NEXT_PUBLIC_AUTH_MODE=mock` in `.env.local` and run `npm run dev`. Sign in with any non-empty password, for example `Demo123!`. Mock login skips backend authentication and MFA and is available only in development.
+
+| Role | Email |
+| --- | --- |
+| Super Admin | admin@saic.example |
+| Local Admin | abc@saic.example |
+| Accountant | rachel@abc.example |
+
+The Accountant first signs in through the existing password-change screen. Enter matching passwords with uppercase, lowercase, a number, and a symbol. Mock passwords are not stored or verified.
+
+Set `NEXT_PUBLIC_AUTH_MODE=api` to restore backend login.
+
 ## Authentication behavior
 
 - Sign-in OTPs expire after 60 seconds.

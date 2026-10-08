@@ -156,7 +156,7 @@ export function seedDatabase(): Database {
       [
         "USR-002",
         "Alice Tan",
-        "alice@abc.example",
+        "abc@saic.example",
         "LOCAL_ADMIN",
         "TENANT_001",
         "ACTIVE",
@@ -314,7 +314,7 @@ export function seedDatabase(): Database {
         id: "TENANT_001",
         name: "ABC Sdn Bhd",
         registration: "202601234567",
-        adminEmail: "alice@abc.example",
+        adminEmail: "abc@saic.example",
         accountLimit: 10,
         status: "ACTIVE",
         createdAt: "2026-08-01",

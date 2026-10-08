@@ -8,7 +8,19 @@ export function readDb(): Database {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as Database;
-        if (parsed.version === 4) return parsed;
+        if (parsed.version === 4) {
+          // Update the original demo email without resetting saved work.
+          const admin = parsed.users.find(
+            (user) => user.id === "USR-002" && user.email === "alice@abc.example",
+          );
+          if (admin) {
+            admin.email = "abc@saic.example";
+            const tenant = parsed.tenants.find((item) => item.id === admin.tenantId);
+            if (tenant?.adminEmail === "alice@abc.example") tenant.adminEmail = admin.email;
+            window.localStorage.setItem(KEY, JSON.stringify(parsed));
+          }
+          return parsed;
+        }
       } catch {
         /* Recover malformed local storage with fixtures. */
       }
