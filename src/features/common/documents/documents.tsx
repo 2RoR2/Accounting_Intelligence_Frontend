@@ -9,6 +9,8 @@ import {
   UploadCloud,
   Camera,
   CheckCircle2,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
 import type { DocumentKind, RecordCategory, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -30,6 +32,7 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
+
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const { data, error, loading, refresh } = useResource(
@@ -133,6 +136,7 @@ export function DocumentList({ user }: { user: User }) {
     </>
   );
 }
+
 export function UploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -146,6 +150,7 @@ export function UploadPage({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [camera, setCamera] = useState(false);
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+
   async function start() {
     if (!files.length) {
       setError("Choose at least one file.");
@@ -174,25 +179,36 @@ export function UploadPage({ user }: { user: User }) {
       setBusy(false);
     }
   }
+
   return (
     <>
       <PageHeader
         eyebrow="DOCUMENT WORKSPACE"
-        title="Upload a document"
-        description="Bring invoices, bills, and receipts into one consistent workflow."
+        title="Document Upload"
+        description="Upload invoices, bills, and receipts for field extraction, validation, and standardised record creation."
       />
       <div className="upload-layout">
         <Panel
-          title="Upload invoice, bill or receipt"
-          subtitle="Choose your files to start processing"
+          title="Digital Shoebox"
+          subtitle="Organise documents and eliminate manual data entry"
         >
           <div className="panel-body">
             {error && <ErrorState message={error} />}
             <div className="upload-sources">
-              <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => input.current?.click()}
+              >
                 <UploadCloud size={16} /> Upload from device
               </button>
-              <button type="button" className="btn primary" disabled={busy} onClick={() => setCamera(true)}>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy}
+                onClick={() => setCamera(true)}
+              >
                 <Camera size={16} /> Use camera
               </button>
             </div>
@@ -206,42 +222,46 @@ export function UploadPage({ user }: { user: User }) {
                 }}
               />
             ) : (
-            <button
-              type="button"
-              className={`drop-zone ${dragging ? "dragging" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onPaste={(e) => {
-                if (busy) return;
-                const pastedFiles = Array.from(e.clipboardData.files);
-                if (pastedFiles.length) {
+              <button
+                type="button"
+                className={`drop-zone ${dragging ? "dragging" : ""}`}
+                onDragOver={(e) => {
                   e.preventDefault();
-                  setFiles(pastedFiles);
-                }
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                if (!busy) setFiles(Array.from(e.dataTransfer.files));
-              }}
-              onClick={() => input.current?.click()}
-              disabled={busy}
-            >
-              <span className="upload-icon">
-                <UploadCloud size={30} />
-              </span>
-              <strong>Drag, drop, paste, or browse your documents</strong>
-              <span>
-                Press Ctrl+V for a copied image or file, or <b>browse files</b>
-              </span>
-              <small>
-                PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per
-                file
-              </small>
-            </button>
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onPaste={(e) => {
+                  if (busy) return;
+                  const pastedFiles = Array.from(e.clipboardData.files);
+                  if (pastedFiles.length) {
+                    e.preventDefault();
+                    setFiles((current) => [...current, ...pastedFiles]);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  if (!busy)
+                    setFiles((current) => [
+                      ...current,
+                      ...Array.from(e.dataTransfer.files),
+                    ]);
+                }}
+                onClick={() => input.current?.click()}
+                disabled={busy}
+              >
+                <span className="upload-icon">
+                  <UploadCloud size={30} />
+                </span>
+                <strong>Drag, drop, paste, or browse your documents</strong>
+                <span>
+                  Press Ctrl+V for a copied image or file, or <b>browse files</b>
+                </span>
+                <small>
+                  PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per
+                  file
+                </small>
+              </button>
             )}
             <input
               ref={input}
@@ -249,25 +269,37 @@ export function UploadPage({ user }: { user: User }) {
               multiple
               type="file"
               accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              onChange={(e) =>
+                setFiles((current) => [
+                  ...current,
+                  ...Array.from(e.target.files ?? []),
+                ])
+              }
             />
-            {files.map((file, i) => (
-              <div className="selected-file" key={`${file.name}-${i}`}>
-                <FileText size={19} />
-                <div>
-                  <strong>{file.name}</strong>
-                  <small>{(file.size / 1024).toFixed(1)} KB</small>
-                </div>
-                <button
-                  disabled={busy}
-                  aria-label={`Remove ${file.name}`}
-                  className="text-link"
-                  onClick={() => setFiles(files.filter((_, j) => i !== j))}
-                >
-                  Remove
-                </button>
+            {files.length > 0 && (
+              <div className="selected-files">
+                {files.map((file, i) => (
+                  <div className="selected-file" key={`${file.name}-${i}`}>
+                    <FileText size={19} />
+                    <div>
+                      <strong>{file.name}</strong>
+                      <small>{(file.size / 1024).toFixed(1)} KB</small>
+                    </div>
+                    <Badge>
+                      <Clock size={12} /> Ready
+                    </Badge>
+                    <button
+                      disabled={busy}
+                      aria-label={`Remove ${file.name}`}
+                      className="text-link"
+                      onClick={() => setFiles(files.filter((_, j) => i !== j))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
             <Field
               label="Document type"
               hint="Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
@@ -284,24 +316,26 @@ export function UploadPage({ user }: { user: User }) {
             </Field>
             <Field
               label="Accounting category"
-              hint="Choose whether this invoice was sent to a customer or received from a supplier."
+              hint="Choose whether this document relates to accounts payable or accounts receivable."
             >
               <select
                 value={category}
                 disabled={busy}
-                onChange={(e) => setCategory(e.target.value as RecordCategory)}
+                onChange={(e) =>
+                  setCategory(e.target.value as RecordCategory)
+                }
               >
                 <option value="ACCOUNTS_PAYABLE">
-                  Accounts Payable · Invoice from supplier
+                  Accounts Payable · From supplier
                 </option>
                 <option value="ACCOUNTS_RECEIVABLE">
-                  Accounts Receivable · Invoice to customer
+                  Accounts Receivable · To customer
                 </option>
               </select>
             </Field>
             <Field
-              label="Extraction scenario"
-              hint="The selected scenario generates sample extraction data; no OCR or AI is performed."
+              label="Processing preference"
+              hint="Choose how the system should handle this document during extraction and validation."
             >
               <select
                 value={scenario}
@@ -311,7 +345,7 @@ export function UploadPage({ user }: { user: User }) {
                 <option value="mismatch">
                   Total mismatch · correction workflow
                 </option>
-                <option value="success">Successful invoice</option>
+                <option value="success">Standard extraction</option>
                 <option value="low">Low-confidence reference</option>
                 <option value="missing">Missing invoice number</option>
                 <option value="duplicate">Duplicate invoice</option>
@@ -334,11 +368,19 @@ export function UploadPage({ user }: { user: User }) {
             </button>
           </div>
         </Panel>
-        <Panel title="From upload to clarity">
+        <Panel title="Processing pipeline">
           <div className="panel-body upload-guide">
             {[
-              ["01", "Upload", "Add your invoice, bill, or receipt."],
-              ["02", "Extract", "Review the simulated extracted fields."],
+              [
+                "01",
+                "Upload",
+                "Ingest invoices, bills, or receipts.",
+              ],
+              [
+                "02",
+                "Extract",
+                "Extract key fields from the document.",
+              ],
               [
                 "03",
                 "Validate",
@@ -347,7 +389,7 @@ export function UploadPage({ user }: { user: User }) {
               [
                 "04",
                 "Standardise",
-                "Resolve exceptions and create a consistent record.",
+                "Resolve exceptions and create a consistent accounting record.",
               ],
             ].map(([n, t, d]) => (
               <div key={n}>
@@ -360,8 +402,18 @@ export function UploadPage({ user }: { user: User }) {
             ))}
             <div className="info-box">
               <CheckCircle2 size={18} />
-              Uploaded file contents stay local. This prototype shows a labelled
-              sample document preview.
+              Documents move through extraction, validation, and standardisation. Exceptions are routed for review.
+            </div>
+            <div className="status-legend">
+              <span>
+                <CheckCircle2 size={14} /> Ready
+              </span>
+              <span>
+                <Clock size={14} /> Processing
+              </span>
+              <span>
+                <AlertCircle size={14} /> Failed / Needs review
+              </span>
             </div>
           </div>
         </Panel>
