@@ -35,6 +35,7 @@ import { getTenants, getCompanyRequests } from "@/lib/api/tenant.service";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { HelpCenter } from "@/features/common/help/help-center";
 import { Modal } from "@/components/common/ui";
+
 export function Brand() {
   return (
     <span className="brand">
@@ -53,6 +54,7 @@ export function Brand() {
     </span>
   );
 }
+
 const adminNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
   ["Pending Approvals", "approvals", ClipboardCheck],
@@ -65,6 +67,7 @@ const adminNav = [
   ["System Settings", "settings", Settings2],
   ["My Profile", "profile", UserRound],
 ] as const;
+
 const companyNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
   ["Documents", "documents", Files],
@@ -78,14 +81,16 @@ const companyNav = [
   ["Company Settings", "settings", Settings2],
   ["My Profile", "profile", UserRound],
 ] as const;
+
 const workspaceNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
   ["Upload Document", "upload", Upload],
   ["My Documents", "documents", Files],
   ["Exceptions", "exceptions", ShieldCheck],
   ["Standardised Records", "records", FileCheck2],
-  ["Profile", "profile", Users],
+  ["Profile", "profile", UserRound],
 ] as const;
+
 export function AppShell({
   user,
   children,
@@ -104,16 +109,19 @@ export function AppShell({
   const [showBackToTop, setShowBackToTop] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const rail = !pinned && !peek;
+
   useEffect(() => {
     if (window.localStorage.getItem("accia-sidebar-pinned") === "0") {
       setPinned(false);
     }
   }, []);
+
   const setSidebarPinned = (next: boolean) => {
     setPinned(next);
     setPeek(false);
     window.localStorage.setItem("accia-sidebar-pinned", next ? "1" : "0");
   };
+
   useEffect(() => {
     if (!open) return;
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -146,12 +154,14 @@ export function AppShell({
       previousFocus?.focus();
     };
   }, [open]);
+
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > 320);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
   const data = useResource(
     async () => ({
       tenants: await getTenants(user),
@@ -165,6 +175,7 @@ export function AppShell({
     }),
     user.id,
   );
+
   const isAdmin = user.role === "SUPER_ADMIN";
   const prefix = isAdmin
     ? "admin"
@@ -179,6 +190,8 @@ export function AppShell({
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
   const latestActivity = data.data?.audit.slice(0, 4) ?? [];
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
+  const currentPage = pathname.split("/")[2] ?? "";
+
   return (
     <div
       className={`app-shell${pinned ? "" : " sidebar-unextended"}`}
@@ -252,11 +265,9 @@ export function AppShell({
             <Link
               key={path}
               href={`/${prefix}/${path}`}
-              aria-current={
-                pathname.split("/")[2] === path ? "page" : undefined
-              }
+              aria-current={currentPage === path ? "page" : undefined}
               onClick={() => setOpen(false)}
-              className={`nav-item ${pathname.split("/")[2] === path ? "active" : ""} ${i === nav.length - 2 ? "nav-separator" : ""}`}
+              className={`nav-item ${currentPage === path ? "active" : ""} ${i === nav.length - 2 ? "nav-separator" : ""}`}
               title={label}
             >
               <Icon size={18} />
@@ -306,7 +317,7 @@ export function AppShell({
             >
               <Menu />
             </button>
-            {pathname.split("/")[2] !== "dashboard" && (
+            {currentPage !== "dashboard" && (
               <button
                 className="back-button icon-btn"
                 aria-label="Go back to the previous page"
@@ -324,15 +335,14 @@ export function AppShell({
             </Link>
             <span className="crumb-divider">/</span>
             <strong>
-              {nav.find((n) => n[1] === pathname.split("/")[2])?.[0] ??
-                "Overview"}
+              {nav.find((n) => n[1] === currentPage)?.[0] ?? "Overview"}
             </strong>
           </div>
           <div className="topbar-right">
-        <span className="status-chip">
-          <span />
-          Secure workspace
-        </span>
+            <span className="status-chip">
+              <span />
+              Secure workspace
+            </span>
             <button
               className="help-trigger btn small"
               type="button"
@@ -418,7 +428,6 @@ export function AppShell({
             >
               <span className="avatar">
                 {user.avatar ? (
-                  // Avatar may be a data: URL from profile upload — next/image is not suitable.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatar} alt="" />
                 ) : user.name
@@ -436,7 +445,9 @@ export function AppShell({
             {profile && (
               <div className="profile-menu">
                 <strong>{user.email}</strong>
-                <Link href={`/${prefix}/profile`} onClick={() => setProfile(false)}>My profile</Link>
+                <Link href={`/${prefix}/profile`} onClick={() => setProfile(false)}>
+                  My profile
+                </Link>
                 <button
                   type="button"
                   onClick={() => {
