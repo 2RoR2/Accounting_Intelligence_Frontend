@@ -1,6 +1,9 @@
-import { FileText, ShieldCheck } from "lucide-react";
+"use client";
+import { useState } from "react";
+import { Minus, Plus, Search, FileText } from "lucide-react";
 import { money } from "@/components/common/ui";
 import type { Extraction } from "@/types";
+
 export function DocumentViewer({
   name,
   extraction,
@@ -9,99 +12,89 @@ export function DocumentViewer({
   extraction: Extraction;
 }) {
   const f = extraction.fields;
+  const [zoom, setZoom] = useState(100);
   const value = (key: string, fallback = "—") =>
     f[key]?.original || f[key]?.value || fallback;
-  const dateTime = (key: string) => {
-    const raw = value(key, "");
-    if (!raw) return "—";
-    const parsed = new Date(raw);
-    return Number.isNaN(parsed.getTime())
-      ? raw
-      : parsed.toLocaleString("en-MY", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        });
-  };
   const documentType = value("type", "Invoice").toUpperCase();
+
   return (
-    <div className="document-viewer">
-      <div className="viewer-toolbar">
-        <FileText size={16} />
-        <span>{name}</span>
-        <span className="subtle-tag">Sample preview</span>
+    <div className="doc-viewer">
+      <div className="doc-viewer-toolbar">
+        <button type="button" aria-label="Search" className="viewer-btn">
+          <Search size={14} />
+        </button>
+        <span className="viewer-page">1 of 1</span>
+        <button
+          type="button"
+          aria-label="Zoom out"
+          className="viewer-btn"
+          onClick={() => setZoom((z) => Math.max(60, z - 10))}
+        >
+          <Minus size={14} />
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          className="viewer-btn"
+          onClick={() => setZoom((z) => Math.min(160, z + 10))}
+        >
+          <Plus size={14} />
+        </button>
+        <span className="viewer-zoom">{zoom}%</span>
+        <span className="viewer-name">
+          <FileText size={13} /> {name}
+        </span>
       </div>
-      <div className="paper">
-        <div className="paper-brand">
-          ATLAS<span>OFFICE SUPPLIES</span>
-        </div>
-        <div className="paper-heading">
-          <h2>{documentType}</h2>
-          <span>{value("invoice", "INV-2026-00821")}</span>
-        </div>
-        <p>
-          <strong>{value("supplier", "Atlas Office Supplies Sdn Bhd")}</strong>
-          <br />
-          {value("supplierAddress")}
-        </p>
-        <hr />
-        <div className="paper-meta">
-          <div>
-            <small>BUYER</small>
+      <div className="doc-viewer-canvas">
+        <div className="doc-paper" style={{ transform: `scale(${zoom / 100})` }}>
+          <div className="doc-paper-head">
+            <strong>{value("supplier", "Supplier Name")}</strong>
+            <span>{documentType}</span>
+          </div>
+          <p className="doc-paper-address">{value("supplierAddress")}</p>
+          <hr />
+          <div className="doc-paper-meta">
+            <div>
+              <small>No.</small>
+              <strong>{value("invoice")}</strong>
+            </div>
+            <div>
+              <small>Date</small>
+              <strong>{value("date")}</strong>
+            </div>
+            <div>
+              <small>Due</small>
+              <strong>{value("due")}</strong>
+            </div>
+          </div>
+          <div className="doc-paper-party">
+            <small>Customer</small>
             <strong>{value("customer")}</strong>
             <span>{value("buyerAddress")}</span>
           </div>
-          <div>
-            <small>ISSUED</small>
-            <strong>{dateTime("issuanceDateTime")}</strong>
-            <small>DUE DATE</small>
-            <strong>{value("due")}</strong>
-          </div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>Qty</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {extraction.lineItems.map((item) => (
-              <tr key={item.description}>
-                <td>{item.description}</td>
-                <td>{item.quantity}</td>
-                <td>{money(item.amount)}</td>
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="paper-totals">
-          <div>
-            <span>Subtotal</span>
-            <span>RM 800.00</span>
-          </div>
-          <div>
-            <span>Tax (6%)</span>
-            <span>RM 48.00</span>
-          </div>
-          <div className="paper-total">
-            <strong>Total due</strong>
+            </thead>
+            <tbody>
+              {extraction.lineItems.map((item) => (
+                <tr key={item.description}>
+                  <td>{item.description}</td>
+                  <td>{item.quantity}</td>
+                  <td>{money(item.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="doc-paper-total">
+            <span>Total</span>
             <strong>{money(value("total", "0"))}</strong>
           </div>
         </div>
-        <div className="paper-lifecycle">
-          <div><small>SUBMITTED</small><strong>{dateTime("submissionDateTime")}</strong></div>
-          <div><small>VALIDATED</small><strong>{dateTime("validationDateTime")}</strong></div>
-        </div>
-        <p className="paper-note">
-          Thank you for your business.
-          <br />
-          <strong>Payment details:</strong> {value("paymentDetails")}
-        </p>
-      </div>
-      <div className="viewer-note">
-        <ShieldCheck size={14} />
-        Illustrative source document · not the contents of your upload
       </div>
     </div>
   );
