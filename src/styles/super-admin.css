@@ -1,0 +1,9 @@
+.app-shell[data-role="super-admin"] {
+  --role-accent: #022fa2;
+  --role-accent-strong: #061433;
+  --role-accent-soft: #eaf5ff;
+}
+
+.app-shell[data-role="super-admin"] .sidebar {
+  border-right-color: rgba(18, 77, 235, 0.22);
+}
