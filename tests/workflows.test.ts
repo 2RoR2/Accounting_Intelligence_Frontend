@@ -12,7 +12,7 @@ import {
   inviteAccountant,
   changeUserStatus,
 } from "../src/lib/api/user.service";
-import { activateAccount } from "../src/lib/api/auth.service";
+import { activateAccount } from "../src/lib/mock/auth.service";
 import {
   advanceProcessing,
   getDocuments,

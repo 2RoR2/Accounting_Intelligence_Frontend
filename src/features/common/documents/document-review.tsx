@@ -1,11 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, CheckCircle2, FileCheck2, RefreshCw } from "lucide-react";
 import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  advanceProcessing,
   getDocument,
   getExceptions,
   getExtraction,
@@ -114,13 +113,22 @@ export function DocumentReview({
     }
   }
 
+  const pending = Boolean(data?.doc && ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status));
+
+  useEffect(() => {
+    if (!pending) return;
+    const interval = setInterval(() => {
+      refresh();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [pending, refresh]);
+
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
   const readonly = data.doc.status === "COMPLETED";
   const record = data.records.find((r) => r.documentId === documentId);
   const failed = data.doc.status === "FAILED";
-  const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
 
   return (
     <>
@@ -146,20 +154,15 @@ export function DocumentReview({
             <p>
               {failed
                 ? "The document could not be processed. You can retry extraction."
-                : "Document is being processed. You can continue once extraction is ready."}
+                : "Docling extraction worker is processing this document. Status will update automatically."}
             </p>
             <button
               className="btn primary"
               disabled={busy}
-              onClick={() =>
-                run(
-                  () => advanceProcessing(user, documentId, "EXTRACTED"),
-                  "Extraction completed.",
-                )
-              }
+              onClick={() => run(refresh, "Status refreshed.")}
             >
               <RefreshCw size={16} />{" "}
-              {failed ? "Retry extraction" : "Complete extraction"}
+              Refresh status
             </button>
           </div>
         </Panel>
@@ -175,7 +178,7 @@ export function DocumentReview({
           {panel === "review" && (
             <div className="shoebox-split">
               <div className="shoebox-doc">
-                <DocumentViewer name={data.doc.name} extraction={data.extraction} />
+                <DocumentViewer name={data.doc.name} extraction={data.extraction} documentId={documentId} />
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">Extracted fields</div>

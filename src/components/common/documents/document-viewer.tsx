@@ -1,18 +1,21 @@
 "use client";
 import { useState } from "react";
-import { Minus, Plus, Search, FileText } from "lucide-react";
+import { Minus, Plus, Search, FileText, Eye, FileCheck } from "lucide-react";
 import { money } from "@/components/common/ui";
 import type { Extraction } from "@/types";
 
 export function DocumentViewer({
   name,
   extraction,
+  documentId,
 }: {
   name: string;
   extraction: Extraction;
+  documentId?: string;
 }) {
   const f = extraction.fields;
   const [zoom, setZoom] = useState(100);
+  const [viewMode, setViewMode] = useState<"structured" | "pdf">("structured");
   const value = (key: string, fallback = "—") =>
     f[key]?.original || f[key]?.value || fallback;
   const documentType = value("type", "Invoice").toUpperCase();
@@ -20,81 +23,113 @@ export function DocumentViewer({
   return (
     <div className="doc-viewer">
       <div className="doc-viewer-toolbar">
-        <button type="button" aria-label="Search" className="viewer-btn">
-          <Search size={14} />
-        </button>
-        <span className="viewer-page">1 of 1</span>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          className="viewer-btn"
-          onClick={() => setZoom((z) => Math.max(60, z - 10))}
-        >
-          <Minus size={14} />
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          className="viewer-btn"
-          onClick={() => setZoom((z) => Math.min(160, z + 10))}
-        >
-          <Plus size={14} />
-        </button>
-        <span className="viewer-zoom">{zoom}%</span>
+        {viewMode === "structured" && (
+          <>
+            <button type="button" aria-label="Search" className="viewer-btn">
+              <Search size={14} />
+            </button>
+            <span className="viewer-page">1 of 1</span>
+            <button
+              type="button"
+              aria-label="Zoom out"
+              className="viewer-btn"
+              onClick={() => setZoom((z) => Math.max(60, z - 10))}
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              className="viewer-btn"
+              onClick={() => setZoom((z) => Math.min(160, z + 10))}
+            >
+              <Plus size={14} />
+            </button>
+            <span className="viewer-zoom">{zoom}%</span>
+          </>
+        )}
         <span className="viewer-name">
           <FileText size={13} /> {name}
         </span>
+        {documentId && (
+          <div className="viewer-toggle-group" style={{ marginLeft: "auto", display: "inline-flex", gap: "6px" }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "structured" ? "btn-primary active" : ""}`}
+              onClick={() => setViewMode("structured")}
+            >
+              <FileCheck size={13} /> Structured
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === "pdf" ? "btn-primary active" : ""}`}
+              onClick={() => setViewMode("pdf")}
+            >
+              <Eye size={13} /> Original PDF
+            </button>
+          </div>
+        )}
       </div>
       <div className="doc-viewer-canvas">
-        <div className="doc-paper" style={{ transform: `scale(${zoom / 100})` }}>
-          <div className="doc-paper-head">
-            <strong>{value("supplier", "Supplier Name")}</strong>
-            <span>{documentType}</span>
+        {viewMode === "pdf" && documentId ? (
+          <div style={{ width: "100%", height: "650px", background: "#f8fafc", borderRadius: "8px", overflow: "hidden" }}>
+            <iframe
+              src={`/api/documents/${documentId}/download`}
+              title={name}
+              style={{ width: "100%", height: "100%", border: "none" }}
+            />
           </div>
-          <p className="doc-paper-address">{value("supplierAddress")}</p>
-          <hr />
-          <div className="doc-paper-meta">
-            <div>
-              <small>No.</small>
-              <strong>{value("invoice")}</strong>
+        ) : (
+          <div className="doc-paper" style={{ transform: `scale(${zoom / 100})` }}>
+            <div className="doc-paper-head">
+              <strong>{value("supplier", "Supplier Name")}</strong>
+              <span>{documentType}</span>
             </div>
-            <div>
-              <small>Date</small>
-              <strong>{value("date")}</strong>
+            <p className="doc-paper-address">{value("supplierAddress")}</p>
+            <hr />
+            <div className="doc-paper-meta">
+              <div>
+                <small>No.</small>
+                <strong>{value("invoice")}</strong>
+              </div>
+              <div>
+                <small>Date</small>
+                <strong>{value("date")}</strong>
+              </div>
+              <div>
+                <small>Due</small>
+                <strong>{value("due")}</strong>
+              </div>
             </div>
-            <div>
-              <small>Due</small>
-              <strong>{value("due")}</strong>
+            <div className="doc-paper-party">
+              <small>Customer</small>
+              <strong>{value("customer")}</strong>
+              <span>{value("buyerAddress")}</span>
             </div>
-          </div>
-          <div className="doc-paper-party">
-            <small>Customer</small>
-            <strong>{value("customer")}</strong>
-            <span>{value("buyerAddress")}</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Qty</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {extraction.lineItems.map((item) => (
-                <tr key={item.description}>
-                  <td>{item.description}</td>
-                  <td>{item.quantity}</td>
-                  <td>{money(item.amount)}</td>
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="doc-paper-total">
-            <span>Total</span>
-            <strong>{money(value("total", "0"))}</strong>
+              </thead>
+              <tbody>
+                {extraction.lineItems.map((item, idx) => (
+                  <tr key={`${item.description}-${idx}`}>
+                    <td>{item.description}</td>
+                    <td>{item.quantity}</td>
+                    <td>{money(item.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="doc-paper-total">
+              <span>Total</span>
+              <strong>{money(value("total", "0"))}</strong>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

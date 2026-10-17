@@ -1,9 +1,26 @@
-import type { User } from "@/types";
+import type { Extraction, StandardisedRecord, User } from "@/types";
 import { id, mutate, now, readDb } from "../mock/repository";
 import { assertActive, canDocument, requireRole } from "../permissions";
 import { log } from "./audit.service";
-export async function standardiseDocument(user: User, documentId: string) {
+import { isFrontendMockEnabled, getDocuments, getExtraction } from "./document.service";
+
+export async function standardiseDocument(user: User, documentId: string): Promise<string> {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  if (!isFrontendMockEnabled) {
+    const res = await fetch(`/api/documents/${documentId}/approve`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "AccountingIntelligence",
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Approval failed.");
+    }
+    const data = await res.json();
+    return data.record_code || data.standardised_record_id || `REC-${documentId.slice(0, 8)}`;
+  }
   return mutate((db) => {
     assertActive(db, user);
     const doc = db.documents.find((d) => d.id === documentId);
@@ -33,8 +50,33 @@ export async function standardiseDocument(user: User, documentId: string) {
     return record.id;
   });
 }
-export async function getStandardisedRecords(user: User) {
+
+export async function getStandardisedRecords(user: User): Promise<StandardisedRecord[]> {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  if (!isFrontendMockEnabled) {
+    const docs = await getDocuments(user);
+    const approved = docs.filter(
+      (d) => d.status === "STANDARDISED" || d.status === "COMPLETED",
+    );
+    const records: StandardisedRecord[] = [];
+    for (const doc of approved) {
+      let extraction: Extraction = { documentId: doc.id, fields: {}, lineItems: [] };
+      try {
+        extraction = await getExtraction(user, doc.id);
+      } catch {}
+      records.push({
+        id: `REC-${doc.id.slice(0, 8)}`,
+        documentId: doc.id,
+        tenantId: doc.tenantId,
+        createdAt: doc.createdAt,
+        category: "ACCOUNTS_PAYABLE",
+        validation: "PASSED",
+        status: "COMPLETED",
+        extraction,
+      });
+    }
+    return records;
+  }
   assertActive(readDb(), user);
   const db = readDb();
   return db.records.filter((r) => {
@@ -42,6 +84,7 @@ export async function getStandardisedRecords(user: User) {
     return doc && canDocument(user, doc);
   });
 }
+
 export async function getRecordMetadata(user: User, tenantId?: string) {
   requireRole(user, ["SUPER_ADMIN"]);
   return readDb()
@@ -57,9 +100,11 @@ export async function getRecordMetadata(user: User, tenantId?: string) {
       document: readDb().documents.find((d) => d.id === record.documentId),
     }));
 }
+
 export async function getStandardisedRecord(user: User, recordId: string) {
   return (await getStandardisedRecords(user)).find((r) => r.id === recordId);
 }
+
 export async function openSupportView(
   user: User,
   recordId: string,
@@ -75,6 +120,7 @@ export async function openSupportView(
     return structuredClone(record);
   });
 }
+
 export function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows
     .map((row) =>

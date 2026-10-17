@@ -1,45 +1,93 @@
 "use client";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   ArrowRight,
   Check,
   CheckCircle2,
   LockKeyhole,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
-import { Badge, Field, ErrorState } from "@/components/common/ui";
+import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
 import { HelpCenter } from "@/features/common/help/help-center";
 import {
   activateAccount,
-  getAccounts,
+  getCurrentUser,
+  getResetStatus,
+  verifyResetCode,
+  requestCompanyAccess,
   login,
+  verifyMfa,
   passwordChecks,
   requestPasswordReset,
   resetPassword,
+  isFrontendMockAuthEnabled,
 } from "@/lib/api/auth.service";
-import { requestEnterpriseAccess } from "@/lib/api/tenant.service";
 import { roleHome } from "@/lib/permissions";
-import { useResource } from "@/features/common/hooks/use-resource";
+import { ApiError } from "@/lib/api/client";
+
+function MfaCodeInput({ value, onChange, disabled = false }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? "");
+  const update = (index: number, next: string) => {
+    const clean = next.replace(/\D/g, "");
+    const nextDigits = digits.slice();
+    if (!clean) {
+      nextDigits[index] = "";
+      onChange(nextDigits.join("").replace(/\s+$/, ""));
+      return;
+    }
+    clean.slice(0, 6 - index).split("").forEach((digit, offset) => { nextDigits[index + offset] = digit; });
+    onChange(nextDigits.join("").slice(0, 6));
+    refs.current[Math.min(index + clean.length, 5)]?.focus();
+  };
+  const paste = (event: ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    onChange(event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6));
+    refs.current[Math.min(event.clipboardData.getData("text").replace(/\D/g, "").length, 5)]?.focus();
+  };
+  const keyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key === "Backspace" && !digits[index] && index > 0) {
+      const next = digits.slice(); next[index - 1] = ""; onChange(next.join("").trimEnd()); refs.current[index - 1]?.focus();
+    } else if (event.key === "ArrowLeft" && index > 0) refs.current[index - 1]?.focus();
+    else if (event.key === "ArrowRight" && index < 5) refs.current[index + 1]?.focus();
+  };
+  return <div className="mfa-code-input" role="group" aria-label="Six-digit authenticator code">
+    {digits.map((digit, index) => <input key={index} ref={(element) => { refs.current[index] = element; }}
+      aria-label={`Authenticator digit ${index + 1}`} inputMode="numeric" autoComplete={index === 0 ? "one-time-code" : "off"}
+      maxLength={1} pattern="[0-9]" value={digit} disabled={disabled}
+      onChange={(event) => update(index, event.target.value)} onPaste={paste} onKeyDown={(event) => keyDown(event, index)} />)}
+  </div>;
+}
 
 export function PublicPage({ page }: { page: string }) {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: accounts } = useResource(getAccounts, "public");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [activation, setActivation] = useState(params.get("user") ?? "");
+  const activation = params.get("token") ?? "";
+  const [resetReady, setResetReady] = useState(false);
+  const [accountMissing, setAccountMissing] = useState(false);
+  const [welcomeUser, setWelcomeUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
   const [otpStep, setOtpStep] = useState(false);
   const [otp, setOtp] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [otpRejected, setOtpRejected] = useState(false);
-  const previewOtp = "123456";
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaSetup, setMfaSetup] = useState(false);
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaOtpAuthUrl, setMfaOtpAuthUrl] = useState("");
+  const [manualKeyVisible, setManualKeyVisible] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSecondsLeft, setMfaSecondsLeft] = useState(60);
   const titles: Record<string, string> = {
     login: "Welcome back",
     welcome: "Welcome!",
@@ -49,7 +97,26 @@ export function PublicPage({ page }: { page: string }) {
     "reset-password": "Create a new password",
     help: "Help & support",
   };
-  const selected = accounts?.find((a) => a.id === activation);
+  useEffect(() => {
+    let cancelled = false;
+    if (page === "reset-password") {
+      getResetStatus().then(() => { if (!cancelled) setResetReady(true); })
+        .catch(() => { if (!cancelled) router.replace("/forgot-password"); });
+    }
+    if (page === "welcome") {
+      getCurrentUser().then((user) => {
+        if (cancelled) return;
+        if (user) setWelcomeUser(user);
+        else router.replace("/login");
+      }).catch(() => { if (!cancelled) router.replace("/login"); });
+    }
+    return () => { cancelled = true; };
+  }, [page, router]);
+  useEffect(() => {
+    if (!mfaStep || mfaMethod !== "email") return;
+    const timer = window.setInterval(() => setMfaSecondsLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [mfaStep, mfaMethod]);
   useEffect(() => {
     if (!otpStep) return;
     const timer = window.setInterval(() => {
@@ -58,37 +125,72 @@ export function PublicPage({ page }: { page: string }) {
     return () => window.clearInterval(timer);
   }, [otpStep]);
 
-  function resendOtp() {
-    setOtp("");
+  async function resendOtp() {
+    if (busy || secondsLeft > 0) return;
+    setBusy(true);
     setError("");
-    setOtpRejected(false);
-    setSecondsLeft(60);
+    try {
+      await requestPasswordReset(resetEmail);
+      setOtp("");
+      setSecondsLeft(60);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to resend code.");
+    } finally { setBusy(false); }
   }
 
-  function continueReset(event: FormEvent<HTMLFormElement>) {
+  async function continueReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+    setBusy(true);
     setError("");
-    if (otp.trim() !== previewOtp) {
-      setOtpRejected(true);
-      setError("That code is not valid. Check the company email, or resend the code.");
-      return;
+    try {
+      await verifyResetCode(resetEmail, otp.trim());
+      router.push("/reset-password");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to verify code.");
+    } finally { setBusy(false); }
+  }
+
+  async function continueMfa(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const verifiedUser = await verifyMfa(mfaCode);
+      // Accountants continue directly to the mandatory first-password screen
+      // after email MFA; privileged TOTP users retain the welcome handoff.
+      router.push(verifiedUser.mustChangePassword !== false ? roleHome(verifiedUser.role) : "/welcome");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to verify authenticator code.");
+    } finally {
+      setBusy(false);
     }
-    router.push("/reset-password");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError("");
     const f = new FormData(event.currentTarget);
     try {
       if (page === "login") {
-        const user = await login(email, password);
-        router.push(
-          `/welcome?name=${encodeURIComponent(user.name)}&home=${encodeURIComponent(roleHome(user.role))}`,
-        );
+        const result = await login(email, password);
+        if ("mfaRequired" in result) {
+          setMfaSetup(result.enrollmentRequired);
+          setMfaMethod(result.mfaMethod ?? "totp");
+          setMfaSecondsLeft(60);
+          setMfaSecret(result.totpSecret ?? "");
+          setMfaOtpAuthUrl(result.otpauthUrl ?? "");
+          setManualKeyVisible(false);
+          setMfaCode("");
+          setMfaStep(true);
+        } else {
+          router.push("/welcome");
+        }
       } else if (page === "request-access") {
-        await requestEnterpriseAccess({
+        await requestCompanyAccess({
           company: String(f.get("company")),
           registration: String(f.get("registration")),
           contact: String(f.get("contact")),
@@ -115,7 +217,6 @@ export function PublicPage({ page }: { page: string }) {
         await requestPasswordReset(entered);
         setResetEmail(entered);
         setOtp("");
-        setOtpRejected(false);
         setSecondsLeft(60);
         setOtpStep(true);
       } else {
@@ -128,11 +229,16 @@ export function PublicPage({ page }: { page: string }) {
         );
       }
     } catch (e) {
+      if (page === "forgot-password" && e instanceof ApiError && e.status === 404) {
+        setAccountMissing(true);
+      }
       setError(e instanceof Error ? e.message : "Please try again.");
     } finally {
       setBusy(false);
     }
   }
+  if (page === "welcome" && !welcomeUser) return <LoadingState />;
+  if (page === "reset-password" && !resetReady) return <LoadingState />;
   if (page === "help")
     return (
       <div className="home-wash auth-wash help-wash">
@@ -229,14 +335,20 @@ export function PublicPage({ page }: { page: string }) {
           <div>
             <p className="hp-eyebrow">Company accounting intelligence</p>
             <p className="hp-quiet">
-              {page === "login"
+              {page === "login" && mfaStep
+                ? "Complete the authenticator check"
+                : page === "login"
                 ? "SAIC secure · company email opens the workspace"
                 : otpStep
                   ? "Waiting for the code from the company email"
                   : "Reset stays inside this workspace"}
             </p>
             <h1>
-              {page === "login" ? (
+              {page === "login" && mfaStep ? (
+                <>
+                  Complete the <span>{mfaMethod === "email" ? "email code check." : "authenticator check."}</span>
+                </>
+              ) : page === "login" ? (
                 <>
                   Sign in to the <span>workspace.</span>
                 </>
@@ -251,18 +363,24 @@ export function PublicPage({ page }: { page: string }) {
               )}
             </h1>
             <p className="hp-lead">
-              {page === "login"
+              {page === "login" && mfaStep
+                ? mfaSetup
+                  ? "Privileged accounts require an authenticator app. Add this account using the setup key, then enter the current six-digit code."
+                  : "Enter the current six-digit code from your authenticator app."
+                : page === "login"
                 ? "From invoice to trusted record."
                 : otpStep
-                  ? "The code is valid for 15 minutes."
+                  ? "The code is valid for 10 minutes."
                   : "Use the company email on the account."}
             </p>
             <p className="hp-copy">
-              {page === "login"
+              {page === "login" && mfaStep
+                ? "Your company account needs one more security check. Scan the QR code with your authenticator app, then enter the six-digit code it generates."
+                : page === "login"
                 ? "Enter the company email you were issued. That address opens the right workspace. People are invited; there is no public self-signup."
                 : otpStep
-                  ? "Enter the code from the company email, then continue to choose a new password. Sending the email is handled later."
-                  : "Enter the company email. This preview records the reset here, then asks for the code before the new password."}
+                  ? "Enter the code from your email, then continue to choose a new password."
+                  : "Enter your account email. If it belongs to an active account, we will email you a reset code."}
             </p>
           </div>
         )}
@@ -300,7 +418,7 @@ export function PublicPage({ page }: { page: string }) {
               <p>Complete the form. SAIC reviews the request before the workspace opens.</p>
             </>
           )}
-          {accessPage && !success && !otpStep && (
+          {accessPage && !success && !otpStep && !mfaStep && !accountMissing && (
             <>
               <span className="auth-icon">
                 <LockKeyhole size={20} />
@@ -311,6 +429,23 @@ export function PublicPage({ page }: { page: string }) {
               <h2>{page === "login" ? "Company credentials" : "Request a reset"}</h2>
             </>
           )}
+          {page === "forgot-password" && accountMissing && (
+            <div className="account-missing-backdrop">
+              <div className="account-missing" role="alert" aria-live="polite">
+                <button className="account-missing-close" type="button" aria-label="Close notification" onClick={() => { setAccountMissing(false); setError(""); }}>
+                  <X size={18} />
+                </button>
+                <div className="account-missing-icon" aria-hidden="true"><LockKeyhole size={22} /></div>
+                <p className="hp-eyebrow">Account access</p>
+                <h2>Account not found</h2>
+                <p className="account-missing-copy">You do not have an active account yet. Return home or request access from your company administrator.</p>
+                <Link className="btn primary full" href="/">
+                  Return to home <ArrowRight size={16} />
+                </Link>
+                <Link className="account-missing-link" href="/request-access">Request company access</Link>
+              </div>
+            </div>
+          )}
           {page === "forgot-password" && otpStep && (
             <form className="otp-wait" onSubmit={continueReset}>
               <span className="auth-icon">
@@ -318,37 +453,83 @@ export function PublicPage({ page }: { page: string }) {
               </span>
               <p className="hp-eyebrow">Account access</p>
               <h2>Enter the code</h2>
-              <p>Waiting for the code sent to {resetEmail || "the company email"}. It stays valid for 15 minutes.</p>
+              <p>If {resetEmail || "the company email"} belongs to an active account, a code has been sent. It stays valid for 10 minutes.</p>
               {error && <ErrorState message={error} />}
               <Field label="Code *">
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="6-digit code"
-                  required
-                  value={otp}
-                  onChange={(event) => setOtp(event.target.value)}
-                />
+                <MfaCodeInput value={otp} onChange={setOtp} disabled={busy} />
+                <input className="sr-only" tabIndex={-1} required value={otp} onChange={() => undefined} aria-hidden="true" />
               </Field>
               <p className="otp-timer" aria-live="polite">
                 {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : "You can resend the code."}
               </p>
-              <button className="btn primary full" type="submit">
+              <button className="btn primary full" type="submit" disabled={busy}>
                 Continue reset password <ArrowRight size={16} />
               </button>
               <button
                 className="otp-resend"
                 type="button"
-                disabled={secondsLeft > 0 && !otpRejected}
+                disabled={busy || secondsLeft > 0}
                 onClick={resendOtp}
               >
                 Resend code
               </button>
               <p className="form-bottom">
                 Wrong email?{" "}
-                <button type="button" className="form-link" onClick={() => { setOtpStep(false); setError(""); }}>
+                <button type="button" className="form-link" disabled={busy} onClick={() => { setOtpStep(false); setError(""); }}>
                   Change company email
+                </button>
+              </p>
+            </form>
+          )}
+          {page === "login" && mfaStep && (
+            <form className="otp-wait" onSubmit={continueMfa}>
+              <span className="auth-icon">
+                <ShieldCheck size={20} />
+              </span>
+              <p className="hp-eyebrow">Privileged account security</p>
+              <h2>{mfaMethod === "email" ? "Enter the email code." : mfaSetup ? "Set up your authenticator." : "Enter your authenticator code."}</h2>
+              {mfaMethod === "email" ? <p className="mfa-setup">A six-digit sign-in code was sent to the accountant email on your account. It expires in 60 seconds. Code expires in <strong>00:{String(mfaSecondsLeft).padStart(2, "0")}</strong>.</p> : mfaSetup && (
+                <div className="mfa-setup">
+                  <p>
+                    Scan the QR code with your authenticator app. Then enter the current six-digit code it displays.
+                  </p>
+                  <Field label="Authenticator setup key">
+                    {mfaOtpAuthUrl && <div className="mfa-qr-wrap"><QRCodeSVG value={mfaOtpAuthUrl} size={176} includeMargin level="M" aria-label="Authenticator QR code" /></div>}
+                    <p className="mfa-manual-title">Can&apos;t scan the QR code?</p>
+                    <p className="mfa-manual-copy">Enter this setup key manually in your authenticator app.</p>
+                    <button type="button" className={`mfa-secret-reveal${manualKeyVisible ? " revealed" : ""}`} onClick={() => setManualKeyVisible((visible) => !visible)} aria-label={manualKeyVisible ? "Hide setup key" : "Reveal setup key"}>
+                      <code className="mfa-secret">{mfaSecret}</code>
+                    </button>
+                  </Field>
+                </div>
+              )}
+              {error && <ErrorState message={error} />}
+              <Field
+                label={mfaMethod === "email" ? "Email code *" : "Authenticator code *"}
+                hint={mfaMethod === "email" ? "Enter the six-digit code sent to the accountant email on your account." : "Enter the current six-digit code from your authenticator app."}
+              >
+                <MfaCodeInput value={mfaCode} onChange={setMfaCode} disabled={busy} />
+                <input className="sr-only" tabIndex={-1} required value={mfaCode} onChange={() => undefined} aria-hidden="true" />
+              </Field>
+              <button className="btn primary full" type="submit" disabled={busy}>
+                {busy ? "Please wait…" : mfaSetup ? "Enable and sign in" : "Verify and sign in"}
+                <ArrowRight size={16} />
+              </button>
+              <p className="form-bottom">
+                <button
+                  type="button"
+                  className="form-link"
+                  disabled={busy}
+                  onClick={() => {
+                    setMfaStep(false);
+                    setMfaSecret("");
+                    setMfaOtpAuthUrl("");
+                    setManualKeyVisible(false);
+                    setMfaCode("");
+                    setError("");
+                  }}
+                >
+                  Back to sign in
                 </button>
               </p>
             </form>
@@ -358,12 +539,12 @@ export function PublicPage({ page }: { page: string }) {
               <CheckCircle2 size={40} />
               <h2>Successful and welcome!</h2>
               <p>
-                Welcome{params.get("name") ? `, ${params.get("name")}` : ""}.
+                Welcome{welcomeUser ? `, ${welcomeUser.name}` : ""}.
                 Your secure workspace is ready.
               </p>
               <Link
                 className="btn primary"
-                href={params.get("home")?.startsWith("/") ? params.get("home")! : "/login"}
+                href={welcomeUser ? roleHome(welcomeUser.role) : "/login"}
               >
                 Continue to dashboard <ArrowRight size={16} />
               </Link>
@@ -388,12 +569,27 @@ export function PublicPage({ page }: { page: string }) {
                 <ArrowRight size={16} />
               </Link>
             </div>
-          ) : otpStep ? null : (
+          ) : otpStep || mfaStep ? null : (
             <form onSubmit={submit}>
               {error && <ErrorState message={error} />}
               {page === "login" && (
                 <>
-                  <Field label="Company email *">
+              {isFrontendMockAuthEnabled && (
+                <div className="hp-copy" role="note">
+                  <strong>Frontend mock sign-in is active.</strong>
+                  <br />
+                  Enter one of these sample emails and any non-empty password:
+                  <br />
+                  Super Admin: admin@saic.example
+                  <br />
+                  Local Admin: alice@abc.example
+                  <br />
+                  Accountant: rachel@abc.example
+                  <br />
+                  This tests frontend role routing only; it does not test backend authentication.
+                </div>
+              )}
+              <Field label="Company email *">
                     <input
                       type="email"
                       autoComplete="username"
@@ -464,34 +660,8 @@ export function PublicPage({ page }: { page: string }) {
                   </Field>
                 </>
               )}
-              {page === "activate" && (
-                <>
-                  <Field label="Pending invitation">
-                    <select
-                      required
-                      value={activation}
-                      onChange={(e) => setActivation(e.target.value)}
-                    >
-                      <option value="">Select an invitation</option>
-                      {accounts
-                        ?.filter((a) =>
-                          ["INVITED", "INVITATION_EXPIRED"].includes(a.status),
-                        )
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} · {a.email}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                  {selected && (
-                    <div className="info-box">
-                      <strong>{selected.email}</strong>
-                      <span>Company: {selected.tenantId}</span>
-                      <Badge>{selected.role}</Badge>
-                    </div>
-                  )}
-                </>
+              {page === "activate" && !activation && (
+                <ErrorState message="Open the activation link provided by your administrator." />
               )}
               {page === "forgot-password" && (
                 <Field label="Company email *">
@@ -502,7 +672,7 @@ export function PublicPage({ page }: { page: string }) {
                 <div className="password-setup">
                   <div className="password-setup-heading">
                     <strong>Set your password</strong>
-                    <span>Use a password only you can guess.</span>
+                    <span>Use a unique password that is difficult to guess.</span>
                   </div>
                   <Field label="Create password *">
                     <input
@@ -543,7 +713,7 @@ export function PublicPage({ page }: { page: string }) {
                   </div>
                 </div>
               )}
-              <button className={`btn primary full${page === "reset-password" ? " reset-submit" : ""}`} disabled={busy}>
+              <button className={`btn primary full${page === "reset-password" ? " reset-submit" : ""}`} disabled={busy || (page === "reset-password" && !resetReady) || (page === "activate" && !activation)}>
                 {busy
                   ? "Please wait…"
                   : page === "login"

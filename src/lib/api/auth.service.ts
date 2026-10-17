@@ -1,105 +1,72 @@
-import type { User } from "@/types";
-import { mutate, now, readDb } from "../mock/repository";
-import { assertActive } from "../permissions";
-import { log } from "./audit.service";
-export async function getAccounts() {
-  return structuredClone(readDb().users);
-}
+import type { CompanyRequest, User } from "@/types";
+import * as mockAuth from "../mock/auth.service";
+import { api, ApiError } from "./client";
+
+export const isFrontendMockAuthEnabled =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_AUTH_MODE === "mock";
+
+export type LoginResult = User | {
+  mfaRequired: true;
+  enrollmentRequired: boolean;
+  totpSecret?: string;
+  otpauthUrl?: string;
+  mfaMethod?: "totp" | "email";
+};
+
 export async function login(email: string, password: string) {
-  if (!password) throw new Error("Enter a password to continue.");
-  const user = readDb().users.find(
-    (u) => u.email.toLowerCase() === email.trim().toLowerCase(),
-  );
-  if (!user)
-    throw new Error(
-      "No active account was found for this company email. Check the address or activate your invitation first.",
-    );
-  assertActive(readDb(), user);
-  mutate((db) => {
-    db.users.find((u) => u.id === user.id)!.lastLogin = now();
-  });
-  localStorage.setItem("ai:session", user.id);
-  return user;
+  if (isFrontendMockAuthEnabled) return mockAuth.login(email, password);
+  return api<LoginResult>("/auth/login", { email: email.trim(), password });
+}
+export async function verifyMfa(code: string) {
+  return api<User>("/auth/verify-mfa", { code: code.trim() });
+}
+export async function authorizeWorkspace(path: string[]) {
+  if (isFrontendMockAuthEnabled) return { allowed: true as const };
+  return api<{ allowed: true }>(`/auth/authorize?path=${encodeURIComponent(path.join("/"))}`);
 }
 export async function getCurrentUser() {
-  const key =
-    typeof window === "undefined" ? null : localStorage.getItem("ai:session");
-  const user = readDb().users.find((u) => u.id === key);
-  if (!user) return null;
-  assertActive(readDb(), user);
-  return user;
+  if (isFrontendMockAuthEnabled) return mockAuth.getCurrentUser();
+  try {
+    return await api<User>("/auth/me");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
 }
 export async function logout() {
-  localStorage.removeItem("ai:session");
+  if (isFrontendMockAuthEnabled) return mockAuth.logout();
+  await api("/auth/logout", {});
 }
 export const passwordChecks = (password: string) => [
-  password.length >= 8,
+  password.length >= 8 && password.length <= 256,
   /[A-Z]/.test(password),
   /[a-z]/.test(password),
   /[0-9]/.test(password),
   /[^A-Za-z0-9]/.test(password),
 ];
-export async function activateAccount(
-  userId: string,
-  password: string,
-  confirmation: string,
-) {
-  if (!passwordChecks(password).every(Boolean) || password !== confirmation)
-    throw new Error(
-      "Meet all password requirements and confirm the same password.",
-    );
-  return mutate((db) => {
-    const user = db.users.find((u) => u.id === userId);
-    if (!user || !["INVITED", "INVITATION_EXPIRED"].includes(user.status))
-      throw new Error("Select a pending invitation.");
-    const tenant = db.tenants.find((t) => t.id === user.tenantId);
-    if (!tenant || tenant.status !== "ACTIVE")
-      throw new Error("Company is not active.");
-    if (
-      user.status === "INVITATION_EXPIRED" &&
-      db.users.filter(
-        (u) =>
-          u.tenantId === tenant.id && ["ACTIVE", "INVITED"].includes(u.status),
-      ).length >= tenant.accountLimit
-    )
-      throw new Error("No account seats available.");
-    user.status = "ACTIVE";
-    if (user.role === "ACCOUNTANT") user.mustChangePassword = true;
-    db.invitations
-      .filter((i) => i.userId === userId)
-      .forEach((i) => (i.status = "ACTIVE"));
-    return user;
-  });
+export async function activateAccount(token: string, password: string, confirmation: string) {
+  return api<{ success: boolean }>("/auth/activate", { token, password, confirmation });
 }
-export async function changeOwnPassword(
-  user: User,
-  password: string,
-  confirmation: string,
-) {
-  if (user.role !== "ACCOUNTANT")
-    throw new Error("Only workspace users change their own password.");
-  assertActive(readDb(), user);
-  if (!passwordChecks(password).every(Boolean) || password !== confirmation)
-    throw new Error("Meet all password requirements and match both passwords.");
-  return mutate((db) => {
-    const target = db.users.find((candidate) => candidate.id === user.id);
-    if (!target || target.role !== "ACCOUNTANT")
-      throw new Error("Account was not found.");
-    target.mustChangePassword = false;
-    log(db, user, "PASSWORD_CHANGED", target.email, "User chose a new password.");
-    return target;
-  });
+export async function changeOwnPassword(_user: User, password: string, confirmation: string) {
+  const updated = isFrontendMockAuthEnabled
+    ? await mockAuth.changeOwnPassword(_user, password, confirmation)
+    : await api<User>("/auth/change-password", { password, confirmation });
+  window.dispatchEvent(new Event("ai:changed"));
+  return updated;
 }
 export async function requestPasswordReset(email: string) {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    throw new Error("Enter a valid company email.");
-  return { message: "Password reset request recorded." };
+  return api<{ message: string }>("/auth/forgot-password", { email: email.trim() });
 }
-export async function resetPassword(
-  password: string,
-  confirmation: string,
-) {
-  if (!passwordChecks(password).every(Boolean) || password !== confirmation)
-    throw new Error("Meet all password requirements and match both passwords.");
-  return { success: true };
+export async function verifyResetCode(email: string, code: string) {
+  return api<{ success: boolean }>("/auth/verify-reset-code", { email: email.trim(), code });
+}
+export async function getResetStatus() {
+  return api<{ valid: boolean }>("/auth/reset-status");
+}
+export async function resetPassword(password: string, confirmation: string) {
+  return api<{ success: boolean }>("/auth/reset-password", { password, confirmation });
+}
+export async function requestCompanyAccess(input: Omit<CompanyRequest, "id" | "status" | "submittedAt">) {
+  return api<CompanyRequest>("/company-requests", input);
 }

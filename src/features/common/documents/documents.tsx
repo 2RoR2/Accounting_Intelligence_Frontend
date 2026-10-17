@@ -15,6 +15,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import {
   advanceProcessing,
   getDocuments,
+  isFrontendMockEnabled,
   uploadDocument,
 } from "@/lib/api/document.service";
 import {
@@ -155,16 +156,18 @@ export function UploadPage({ user }: { user: User }) {
     setError("");
     try {
       for (const file of files) {
-        setStage(`Uploading ${file.name}`);
+        setStage(`Uploading ${file.name}…`);
         const doc = await uploadDocument(user, file, scenario, category, kind);
-        for (const step of [
-          "QUEUED",
-          "PROCESSING",
-          scenario === "failed" ? "FAILED" : "EXTRACTED",
-        ] as const) {
-          await new Promise((r) => setTimeout(r, 650));
-          setStage(`${file.name} · ${step}`);
-          await advanceProcessing(user, doc.id, step);
+        if (isFrontendMockEnabled) {
+          for (const step of [
+            "QUEUED",
+            "PROCESSING",
+            scenario === "failed" ? "FAILED" : "EXTRACTED",
+          ] as const) {
+            await new Promise((r) => setTimeout(r, 650));
+            setStage(`${file.name} · ${step}`);
+            await advanceProcessing(user, doc.id, step);
+          }
         }
       }
       router.push(`${base}/documents`);

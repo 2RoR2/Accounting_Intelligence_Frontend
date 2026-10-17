@@ -1,14 +1,18 @@
 import type {
   Database,
   Document,
+  DocumentStatus,
+  DocumentKind,
+  Exception,
+  ExtractedField,
   Extraction,
+  LineItem,
   RecordCategory,
   User,
   ValidationResult,
   ValidationRules,
 } from "@/types";
 import { id, mutate, now, readDb } from "../mock/repository";
-import type { DocumentKind } from "@/types";
 import {
   defaultRules,
   documentKindFromName,
@@ -18,6 +22,13 @@ import {
 } from "../mock/seed";
 import { assertActive, canDocument, requireRole } from "../permissions";
 import { log } from "./audit.service";
+import { api } from "./client";
+
+export const isFrontendMockEnabled =
+  (typeof window === "undefined" && process.env.NEXT_PUBLIC_AUTH_MODE !== "real") ||
+  process.env.NEXT_PUBLIC_AUTH_MODE === "mock" ||
+  process.env.NODE_ENV === "test";
+
 function documentFor(
   db: Database,
   user: User,
@@ -35,20 +46,145 @@ function documentFor(
   }
   return doc;
 }
-export async function getDocuments(user: User) {
+
+interface BackendDocumentItem {
+  id: string;
+  document_code?: string;
+  tenant_id?: string;
+  original_filename: string;
+  kind?: string;
+  category?: string;
+  status: string;
+  file_size_bytes?: number;
+  uploaded_at: string;
+  updated_at?: string;
+  processing_seconds?: number;
+}
+
+interface BackendExtractionResult {
+  document_id: string;
+  document_code?: string;
+  status: string;
+  review_required?: boolean;
+  can_approve?: boolean;
+  run_number?: number;
+  routing_decision?: string;
+  fields?: Array<{
+    field_key: string;
+    field_label?: string;
+    raw_value?: string;
+    normalized_value?: string;
+    current_value?: string;
+    confidence?: number | null;
+    is_corrected?: boolean;
+    corrected_by?: string;
+  }>;
+  line_items?: Array<{
+    line_number?: number;
+    description?: string;
+    quantity?: number;
+    unit_price?: number;
+    amount?: number;
+  }>;
+  exceptions?: Array<{
+    id?: string;
+    exception_code?: string;
+    category?: string;
+    severity?: string;
+    message?: string;
+    details?: string;
+    status?: string;
+  }>;
+}
+
+export async function getDocuments(user: User): Promise<Document[]> {
+  if (!isFrontendMockEnabled) {
+    const docs = await api<BackendDocumentItem[]>("/documents");
+    return docs.map((d) => ({
+      id: String(d.id),
+      tenantId: String(d.tenant_id || user.tenantId || ""),
+      ownerId: user.id,
+      assignedTo: user.id,
+      name: d.original_filename,
+      type: (d.kind || "INVOICE").toUpperCase(),
+      status: (d.status || "UPLOADED").toUpperCase() as DocumentStatus,
+      createdAt: d.uploaded_at,
+      seconds: d.processing_seconds || 0,
+      scenario: "",
+    }));
+  }
   assertActive(readDb(), user);
   return readDb().documents.filter((d) => canDocument(user, d));
 }
-export async function getDocument(user: User, documentId: string) {
+
+export async function getDocument(user: User, documentId: string): Promise<Document> {
+  if (!isFrontendMockEnabled) {
+    const d = await api<BackendDocumentItem>(`/documents/${documentId}`);
+    return {
+      id: String(d.id),
+      tenantId: String(d.tenant_id),
+      ownerId: user.id,
+      assignedTo: user.id,
+      name: d.original_filename,
+      type: (d.kind || "INVOICE").toUpperCase(),
+      status: (d.status || "UPLOADED").toUpperCase() as DocumentStatus,
+      createdAt: d.uploaded_at,
+      seconds: d.processing_seconds || 0,
+      scenario: "",
+    };
+  }
   return documentFor(readDb(), user, documentId);
 }
-export async function getExtraction(user: User, documentId: string) {
+
+export async function getExtraction(user: User, documentId: string): Promise<Extraction> {
+  if (!isFrontendMockEnabled) {
+    const res = await api<BackendExtractionResult>(`/documents/${documentId}/result`);
+    const fields: Record<string, ExtractedField> = {};
+    const keyAliasMap: Record<string, string> = {
+      supplier_name: "supplier",
+      invoice_number: "invoice",
+      invoice_date: "date",
+      total_amount: "total",
+      subtotal: "subtotal",
+      tax_amount: "tax",
+      currency: "currency",
+    };
+
+    for (const f of res.fields || []) {
+      const fieldObj: ExtractedField = {
+        label: f.field_label || f.field_key,
+        value: f.current_value ?? f.normalized_value ?? f.raw_value ?? "",
+        original: f.raw_value ?? "",
+        confidence: f.confidence != null ? Math.round(f.confidence * 100) : 100,
+        correctedBy: f.is_corrected ? (f.corrected_by || "Accountant") : undefined,
+      };
+      fields[f.field_key] = fieldObj;
+      const alias = keyAliasMap[f.field_key];
+      if (alias && alias !== f.field_key) {
+        fields[alias] = fieldObj;
+      }
+    }
+
+    const lineItems: LineItem[] = (res.line_items || []).map((item) => ({
+      description: item.description || "Line item",
+      quantity: Number(item.quantity) || 1,
+      unitPrice: Number(item.unit_price) || 0,
+      amount: Number(item.amount) || 0,
+    }));
+
+    return {
+      documentId,
+      fields,
+      lineItems,
+    };
+  }
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   documentFor(readDb(), user, documentId);
   return structuredClone(
     readDb().extractions.find((e) => e.documentId === documentId)!,
   );
 }
+
 export function validateExtraction(
   extraction: Extraction,
   rules: ValidationRules,
@@ -72,30 +208,30 @@ export function validateExtraction(
   add(
     rules.supplier,
     "Supplier Required",
-    !!f.supplier.value.trim(),
+    !!f.supplier?.value.trim(),
     "Supplier name is required.",
   );
   add(
     rules.invoice,
     "Invoice Number Required",
-    !!f.invoice.value.trim(),
+    !!f.invoice?.value.trim(),
     "Invoice number is required.",
   );
   add(
     rules.date,
     "Invoice Date",
-    /^\d{4}-\d{2}-\d{2}$/.test(f.date.value) &&
-      !Number.isNaN(Date.parse(f.date.value)),
+    /^\d{4}-\d{2}-\d{2}$/.test(f.date?.value || "") &&
+      !Number.isNaN(Date.parse(f.date?.value || "")),
     "Enter a valid invoice date.",
   );
   const values = ["subtotal", "tax", "discount", "total"].map((k) =>
-    f[k].value.trim() === "" ? NaN : Number(f[k].value),
+    !f[k] || f[k].value.trim() === "" ? NaN : Number(f[k].value),
   );
   add(
     rules.total,
     "Total Calculation",
     values.every((v) => Number.isFinite(v) && v >= 0) &&
-      Math.abs(values[0] + values[1] - values[2] - values[3]) < 0.01,
+      Math.abs(values[0] + values[1] - (values[2] || 0) - values[3]) < 0.01,
     "Subtotal + tax − discount does not equal total.",
   );
   add(
@@ -104,8 +240,8 @@ export function validateExtraction(
     !otherExtractions.some(
       (e) =>
         e.documentId !== extraction.documentId &&
-        e.fields.invoice.value === f.invoice.value &&
-        e.fields.supplier.value === f.supplier.value,
+        e.fields.invoice?.value === f.invoice?.value &&
+        e.fields.supplier?.value === f.supplier?.value,
     ),
     "An invoice with this number and supplier already exists.",
   );
@@ -116,11 +252,12 @@ export function validateExtraction(
     rule: "Confidence Check",
     result: low.length ? "WARNING" : "PASS",
     message: low.length
-      ? `${low.map((f) => f.label).join(", ")} below ${rules.threshold}%. Review recommended.`
+      ? `${low.map((field) => field.label).join(", ")} below ${rules.threshold}%. Review recommended.`
       : "All fields meet the confidence threshold or have been reviewed.",
   });
   return results;
 }
+
 function resultsFor(db: Database, doc: Document) {
   return validateExtraction(
     db.extractions.find((e) => e.documentId === doc.id)!,
@@ -132,17 +269,76 @@ function resultsFor(db: Database, doc: Document) {
     ),
   );
 }
-export async function getValidationResults(user: User, documentId: string) {
+
+export async function getValidationResults(user: User, documentId: string): Promise<ValidationResult[]> {
+  if (!isFrontendMockEnabled) {
+    const res = await api<BackendExtractionResult>(`/documents/${documentId}/result`);
+    const results: ValidationResult[] = [];
+    if (res.exceptions && res.exceptions.length > 0) {
+      for (const exc of res.exceptions) {
+        results.push({
+          rule: exc.category || exc.exception_code || "Validation Issue",
+          result: exc.severity === "high" || exc.severity === "HIGH" ? "FAIL" : "WARNING",
+          message: exc.message || "Discrepancy detected.",
+        });
+      }
+    }
+    if (res.status === "validated" || res.status === "standardised") {
+      results.push({
+        rule: "Module 3 Accounting Rules",
+        result: "PASS",
+        message: "All validation rules passed with zero blocking exceptions.",
+      });
+    } else if (res.status === "corrected") {
+      results.push({
+        rule: "Human Field Corrections",
+        result: "WARNING",
+        message: "Field corrections recorded. Revalidation required before approval.",
+      });
+    } else if (res.exceptions?.length === 0) {
+      results.push({
+        rule: "Module 3 Rules Check",
+        result: "PASS",
+        message: "No open validation exceptions.",
+      });
+    }
+    return results;
+  }
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   const db = readDb();
   return resultsFor(db, documentFor(db, user, documentId));
 }
+
 export async function updateExtractedField(
   user: User,
   documentId: string,
   key: string,
   value: string,
-) {
+): Promise<void> {
+  if (!isFrontendMockEnabled) {
+    const reverseAliasMap: Record<string, string> = {
+      supplier: "supplier_name",
+      invoice: "invoice_number",
+      date: "invoice_date",
+      total: "total_amount",
+      tax: "tax_amount",
+    };
+    const backendKey = reverseAliasMap[key] || key;
+    const res = await fetch(`/api/documents/${documentId}/fields/${backendKey}`, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "AccountingIntelligence",
+      },
+      body: JSON.stringify({ value }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Failed to update field.");
+    }
+    return;
+  }
   mutate((db) => {
     const doc = documentFor(db, user, documentId, true);
     const field = db.extractions.find((e) => e.documentId === documentId)
@@ -161,11 +357,26 @@ export async function updateExtractedField(
     );
   });
 }
+
 export async function revalidateDocument(
   user: User,
   documentId: string,
   note = "",
-) {
+): Promise<ValidationResult[]> {
+  if (!isFrontendMockEnabled) {
+    const res = await fetch(`/api/documents/${documentId}/revalidate`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "AccountingIntelligence",
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Revalidation failed.");
+    }
+    return getValidationResults(user, documentId);
+  }
   return mutate((db) => {
     const doc = documentFor(db, user, documentId, true);
     const extraction = db.extractions.find(
@@ -240,7 +451,11 @@ export async function revalidateDocument(
     return results;
   });
 }
-export async function getExceptions(user: User) {
+
+export async function getExceptions(user: User): Promise<Exception[]> {
+  if (!isFrontendMockEnabled) {
+    return [];
+  }
   const docs = await getDocuments(user);
   return readDb().exceptions.filter(
     (e) =>
@@ -248,6 +463,7 @@ export async function getExceptions(user: User) {
       (user.role !== "ACCOUNTANT" || e.assignedTo === user.id),
   );
 }
+
 export async function resolveException(
   user: User,
   documentId: string,
@@ -257,6 +473,7 @@ export async function resolveException(
     throw new Error("Add a correction note before revalidating.");
   return revalidateDocument(user, documentId, note);
 }
+
 export async function assignException(
   user: User,
   exceptionId: string,
@@ -280,13 +497,53 @@ export async function assignException(
     log(db, user, "EXCEPTION_ASSIGNED", exception.documentId, target.name);
   });
 }
+
 export async function uploadDocument(
   user: User,
-  file: Pick<File, "name" | "size" | "type">,
-  scenario: string,
+  file: Pick<File, "name" | "size" | "type"> | File,
+  scenario = "",
   category: RecordCategory = "ACCOUNTS_PAYABLE",
   kind: DocumentKind = documentKindFromName(file.name),
-) {
+): Promise<Document> {
+  if (!isFrontendMockEnabled) {
+    if (!/\.(pdf|png|jpe?g|tiff?|xlsx|csv)$/i.test(file.name))
+      throw new Error("Supported formats: PDF, PNG, JPG, JPEG, TIFF, TIF, XLSX, CSV.");
+    if (file.size === 0) throw new Error("This file is empty.");
+    if (file.size > 20 * 1024 * 1024)
+      throw new Error("Maximum file size is 20 MB.");
+
+    const formData = new FormData();
+    formData.append("file", file as Blob, file.name);
+    formData.append("kind", String(kind).toLowerCase());
+    formData.append("category", String(category).toLowerCase());
+
+    const res = await fetch("/api/documents/upload", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "AccountingIntelligence",
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Document upload failed.");
+    }
+    const data = await res.json();
+    return {
+      id: String(data.document_id),
+      tenantId: String(data.tenant_id),
+      ownerId: user.id,
+      assignedTo: user.id,
+      name: data.original_filename,
+      type: (data.kind || "INVOICE").toUpperCase(),
+      status: (data.status || "QUEUED").toUpperCase() as DocumentStatus,
+      createdAt: data.uploaded_at,
+      seconds: 0,
+      scenario,
+    };
+  }
+
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   assertActive(readDb(), user);
   if (!/\.(pdf|png|jpe?g|tiff?|xlsx|csv)$/i.test(file.name))
@@ -334,11 +591,16 @@ export async function uploadDocument(
     return doc;
   });
 }
+
 export async function advanceProcessing(
   user: User,
   documentId: string,
   status: "QUEUED" | "PROCESSING" | "EXTRACTED" | "FAILED",
 ) {
+  if (!isFrontendMockEnabled) {
+    // In real mode, processing is executed asynchronously by backend RQ worker
+    return;
+  }
   mutate((db) => {
     const doc = documentFor(db, user, documentId, true);
     doc.status = status;
@@ -346,14 +608,16 @@ export async function advanceProcessing(
   });
   if (status === "EXTRACTED") await revalidateDocument(user, documentId);
 }
-export async function getValidationRules(user: User) {
+
+export async function getValidationRules(user: User): Promise<ValidationRules> {
   requireRole(user, ["LOCAL_ADMIN"]);
   return readDb().rules[user.tenantId!] ?? defaultRules;
 }
+
 export async function updateValidationRules(
   user: User,
   rules: ValidationRules,
-) {
+): Promise<void> {
   requireRole(user, ["LOCAL_ADMIN"]);
   if (rules.threshold < 0 || rules.threshold > 100)
     throw new Error("Threshold must be between 0 and 100.");

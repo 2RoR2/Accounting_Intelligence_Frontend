@@ -622,25 +622,154 @@
   min-height: 26rem;
 }
 .auth-wash .reset-card h2 { margin-bottom: 22px; font-size: 2rem; }
-.auth-wash .otp-wait { display: grid; }
-.auth-wash .otp-wait > p:not(.hp-eyebrow):not(.otp-timer):not(.form-bottom) { margin-bottom: 18px; }
+.auth-wash .reset-card .otp-wait {
+  display: grid;
+  gap: 0;
+  align-content: start;
+}
+.auth-wash .reset-card .otp-wait > .auth-icon {
+  margin-bottom: 18px;
+  background: #eaf5ff;
+  color: #12618d;
+}
+.auth-wash .reset-card .otp-wait > .hp-eyebrow {
+  margin-bottom: 8px;
+  color: #527086;
+  letter-spacing: .08em;
+}
+.auth-wash .reset-card .otp-wait > h2 {
+  margin: 0 0 10px;
+  color: #061433;
+  font-size: clamp(1.65rem, 3vw, 2rem);
+  line-height: 1.15;
+}
+.auth-wash .reset-card .otp-wait > p:not(.hp-eyebrow):not(.otp-timer):not(.form-bottom) {
+  max-width: 38rem;
+  margin: 0 0 22px;
+  color: #5e7384;
+  line-height: 1.6;
+}
+.auth-wash .reset-card .otp-wait .field {
+  margin-bottom: 14px;
+}
+.auth-wash .reset-card .otp-wait .field > label {
+  margin-bottom: 10px;
+  color: #173042;
+  font-weight: 700;
+}
+.auth-wash .mfa-setup {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid rgba(168, 211, 240, 0.8);
+  border-radius: 12px;
+  background: #f6fbff;
+}
+.auth-wash .mfa-setup p { margin: 0 0 12px; color: #5e7384; font-size: 13px; }
+.auth-wash .mfa-setup .field { margin-bottom: 0; }
+.auth-wash .mfa-secret {
+  display: block;
+  padding: 12px;
+  border-radius: 10px;
+  background: white;
+  color: #061433;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.auth-wash .mfa-qr-wrap {
+  display: grid;
+  place-items: center;
+  width: 192px;
+  padding: 8px;
+  margin: 0 auto 16px;
+  border: 1px solid #dbe7ef;
+  border-radius: 12px;
+  background: #fff;
+}
+.auth-wash .mfa-manual-title { margin: 0 0 3px; color: #173042; font-weight: 700; font-size: 13px; }
+.auth-wash .mfa-manual-copy { margin: 0 0 9px; color: #5e7384; font-size: 12px; }
+.auth-wash .mfa-secret-reveal {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dbe7ef;
+  border-radius: 10px;
+  background: #f8fbfd;
+  color: #638096;
+  cursor: pointer;
+  font: inherit;
+}
+.auth-wash .mfa-secret-reveal .mfa-secret {
+  color: transparent;
+  user-select: none;
+}
+.auth-wash .mfa-secret-reveal::after {
+  content: "";
+  position: absolute;
+  inset: 10px 12px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, #6f8ea0 0 3px, #b7cbd5 3px 5px, #7899aa 5px 7px);
+  opacity: .98;
+  pointer-events: none;
+}
+.auth-wash .mfa-secret-reveal.revealed .mfa-secret { color: #173042; user-select: text; }
+.auth-wash .mfa-secret-reveal.revealed::after { display: none; }
+.auth-wash .mfa-secret-reveal:focus-visible { outline: 3px solid rgba(47,143,189,.22); outline-offset: 2px; }
+.auth-wash .mfa-code-input {
+  display: grid;
+  grid-template-columns: repeat(6, 42px);
+  grid-auto-rows: 58px;
+  gap: 8px;
+  margin-top: 6px;
+  justify-content: center;
+}
+.auth-wash .mfa-code-input input {
+  width: 42px;
+  min-width: 0;
+  height: 58px;
+  padding: 0;
+  border: 1px solid #cbd9e5;
+  border-radius: 12px;
+  background: #fff;
+  color: #173042;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.auth-wash .mfa-code-input input:focus {
+  border-color: #2f8fbd;
+  box-shadow: 0 0 0 3px rgba(47,143,189,.15);
+  transform: translateY(-1px);
+}
+.auth-wash .mfa-code-input input:disabled { opacity: .6; cursor: not-allowed; }
+@media (max-width: 420px) {
+  .auth-wash .mfa-code-input { grid-template-columns: repeat(6, 38px); gap: 5px; }
+  .auth-wash .mfa-code-input input { width: 38px; height: 54px; font-size: 21px; border-radius: 10px; }
+}
 .auth-wash .otp-timer {
-  margin: 0 0 14px;
-  color: #2a3a4a;
+  margin: 10px 0 18px;
+  color: #527086;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .auth-wash .otp-resend {
-  justify-self: start;
-  margin-top: 12px;
+  justify-self: center;
+  margin-top: 14px;
   border: 0;
   background: transparent;
-  color: #2a3a4a;
+  color: #12618d;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.auth-wash .otp-resend:disabled { color: #8aa0b3; cursor: not-allowed; }
+.auth-wash .otp-resend:disabled { color: #8aa0b3; cursor: not-allowed; text-decoration: none; }
 .auth-wash .otp-wait .form-bottom button.form-link {
   border: 0;
   background: transparent;
@@ -648,11 +777,102 @@
   font: inherit;
   font-weight: 650;
 }
+.auth-wash .reset-card .otp-wait .form-bottom {
+  justify-self: center;
+  margin-top: 24px;
+  color: #6b7f8e;
+  text-align: center;
+}
+.auth-wash .reset-card .otp-wait .form-link {
+  color: #12618d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 .auth-wash .reset-card .field input {
   min-height: 52px;
   border-radius: 12px;
   font-size: 16px;
+}
+.auth-wash .account-missing-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 23, 42, .34);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+.auth-wash .account-missing {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 430px);
+  padding: 32px 30px 28px;
+  border: 1px solid rgba(255, 255, 255, .72);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 24px 70px rgba(7, 23, 42, .24);
+  text-align: center;
+}
+.auth-wash .account-missing-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b7f8e;
+  cursor: pointer;
+}
+.auth-wash .account-missing-close:hover,
+.auth-wash .account-missing-close:focus-visible {
+  background: #eaf5ff;
+  color: #12618d;
+  outline: none;
+}
+.auth-wash .account-missing-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
+  border: 1px solid #c9e4f3;
+  border-radius: 50%;
+  background: #eaf5ff;
+  color: #12618d;
+}
+.auth-wash .account-missing .hp-eyebrow {
+  margin: 0;
+  color: #527086;
+}
+.auth-wash .account-missing h2 {
+  margin: 0;
+  color: #061433;
+  font-size: clamp(1.55rem, 3vw, 1.9rem);
+}
+.auth-wash .account-missing-copy {
+  max-width: 30rem;
+  margin: 0 0 8px;
+  color: #5e7384;
+  line-height: 1.6;
+}
+.auth-wash .account-missing .btn {
+  margin-top: 4px;
+}
+.auth-wash .account-missing-link {
+  color: #12618d;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 @media (max-width: 1023px) {
   .auth-wash .auth-hero .reset-card { width: 100%; border-radius: 16px; min-height: 0; }
