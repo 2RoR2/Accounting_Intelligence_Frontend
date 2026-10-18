@@ -90,7 +90,16 @@ npm run test:browser
 
 ## Browser Acceptance & E2E Testing
 
-The Playwright browser test suite (`tests/browser/accountant_integration.spec.ts`) verifies the complete accountant and administrator journey against live services:
+The repository includes two comprehensive Playwright test suites:
+
+### 1. Authentic Browser Login & MFA Suite (`tests/browser/auth_flow.spec.ts`)
+- **Invalid Credential Handling:** Verifies login form validation and error alert when invalid passwords are submitted.
+- **Genuine Account Authentication:** Submits real credentials for `rachel@abc.example`.
+- **Email MFA Challenge:** Transitions to the MFA screen and captures the real 6-digit OTP code dispatched through the local test SMTP server (`scratch/test_mailbox.json`).
+- **Input & Session Verification:** Submits the 6-digit code via `MfaCodeInput`, asserts issuance of `ai_access` and `ai_refresh` HTTP-only session cookies, and confirms authenticated state at `/api/auth/me`.
+
+### 2. Document Workflow Integration Suite (`tests/browser/accountant_integration.spec.ts`)
+- **Deterministic Multi-Role Pipeline:** Injects test session cookies signed with `TEST_AUTH_SECRET` to test document processing across multiple roles without repetitive MFA steps.
 - **Honest Dashboard KPIs:** Confirms extraction accuracy and manual-entry reduction display `Not measured` badges when unbenchmarked.
 - **Upload Experience:** Verifies that only supported `.pdf` documents are advertised, and obsolete simulated selectors are hidden in API mode.
 - **Asynchronous Document Extraction:** Dynamically generates a unique invoice fixture, uploads it to FastAPI, verifies Redis/RQ processing, and confirms PostgreSQL storage.
@@ -102,6 +111,8 @@ The Playwright browser test suite (`tests/browser/accountant_integration.spec.ts
 - **Exceptions Workflow:** Demonstrates `LOCAL_ADMIN` exception assignment and resolution with mandatory audit notes.
 - **Duplicate Override Authorization:** Demonstrates administrator duplicate override with mandatory justification recording.
 - **Multi-Tenant Isolation:** Verifies that Tenant B users cannot inspect or access Tenant A's documents, records, or exceptions.
+- **Portable Artifacts:** Saves full-page screenshots to repository-relative `test-results/screenshots/`.
+
 
 ---
 

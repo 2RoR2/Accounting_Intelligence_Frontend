@@ -1,6 +1,9 @@
 import { defineConfig } from '@playwright/test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { loadEnvConfig } from '@next/env';
+
+loadEnvConfig(process.cwd());
 export default defineConfig({
   testDir: './tests/browser',
   outputDir: join(tmpdir(), 'accounting-intelligence-playwright'),

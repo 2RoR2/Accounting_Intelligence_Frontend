@@ -1,10 +1,33 @@
+/**
+ * SPRINT A DOCUMENT WORKFLOW INTEGRATION SUITE
+ *
+ * NOTE ON AUTHENTICATION STRATEGY:
+ * This test suite exercises the post-authentication document lifecycle
+ * (ingestion, Docling OCR extraction, PostgreSQL persistence, financial
+ * display integrity, inline blob PDF viewing, field corrections, revalidation,
+ * duplicate EX-007 detection, admin overrides, and multi-tenant isolation).
+ *
+ * For deterministic document pipeline testing across multiple tenant roles,
+ * it injects test session cookies signed with an isolated test signing secret.
+ * It intentionally does NOT exercise the interactive login / MFA UI forms.
+ *
+ * Interactive browser-driven login and MFA verification is tested separately
+ * in `tests/browser/auth_flow.spec.ts`.
+ */
+
 import { test, expect, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 import { execSync } from "node:child_process";
 
-const JWT_SECRET = "0123456789abcdef0123456789abcdef";
+// Fail closed if isolated test signing secret is not configured in the test environment.
+const JWT_SECRET: string = process.env.TEST_AUTH_SECRET || process.env.AUTH_SECRET || "";
+if (!JWT_SECRET) {
+  throw new Error(
+    "TEST_AUTH_SECRET (or AUTH_SECRET) environment variable must be configured to run tests requiring test session minting."
+  );
+}
 
 function createAccessToken(userId: string, sessionId: string): string {
   const header = { alg: "HS256", typ: "JWT" };
@@ -44,21 +67,28 @@ const APEX_SYNTHETIC_PDF_PATH = path.resolve(
   `../fixtures/${PDF_FILENAME}`
 );
 
-const ARTIFACT_SCREENSHOTS_DIR =
-  "C:/Users/60103/.gemini/antigravity/brain/f28dcf46-e68b-415a-a371-32b0faef4f5a/screenshots";
+// Repository-relative portable screenshots directory
+const RELATIVE_SCREENSHOTS_DIR = path.resolve(process.cwd(), "test-results", "screenshots");
 
 async function saveScreenshot(page: Page, filename: string, testInfo: TestInfo) {
   const localPath = testInfo.outputPath(filename);
   await page.screenshot({ path: localPath, fullPage: true });
-  if (fs.existsSync(ARTIFACT_SCREENSHOTS_DIR)) {
+  try {
+    fs.mkdirSync(RELATIVE_SCREENSHOTS_DIR, { recursive: true });
+    fs.copyFileSync(localPath, path.join(RELATIVE_SCREENSHOTS_DIR, filename));
+  } catch {
+    // non-blocking
+  }
+  const overrideDir = process.env.PLAYWRIGHT_SCREENSHOT_DIR;
+  if (overrideDir && fs.existsSync(overrideDir)) {
     try {
-      const artifactPath = path.join(ARTIFACT_SCREENSHOTS_DIR, filename);
-      fs.copyFileSync(localPath, artifactPath);
+      fs.copyFileSync(localPath, path.join(overrideDir, filename));
     } catch {
       // non-blocking
     }
   }
 }
+
 
 test.describe("Real Accountant Journey — Sprint A Integration & Verification", () => {
   test("complete end-to-end accountant workflow, duplicate detection, exceptions API, admin override, and tenant isolation", async ({
