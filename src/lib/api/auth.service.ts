@@ -49,12 +49,21 @@ export async function activateAccount(token: string, password: string, confirmat
   return api<{ success: boolean }>("/auth/activate", { token, password, confirmation });
 }
 export async function changeOwnPassword(_user: User, password: string, confirmation: string) {
-  const updated = isFrontendMockAuthEnabled
-    ? await mockAuth.changeOwnPassword(_user, password, confirmation)
-    : await api<User>("/auth/change-password", { password, confirmation });
+  if (isFrontendMockAuthEnabled) {
+    const updated = await mockAuth.changeOwnPassword(_user, password, confirmation);
+    window.dispatchEvent(new Event("ai:changed"));
+    return updated;
+  }
+  if (!_user.mustChangePassword) {
+    throw new Error(
+      "Password change on active accounts is disabled by security policy. Use the email reset flow to change your password.",
+    );
+  }
+  const updated = await api<User>("/auth/change-password", { password, confirmation });
   window.dispatchEvent(new Event("ai:changed"));
   return updated;
 }
+
 export async function requestPasswordReset(email: string) {
   return api<{ message: string }>("/auth/forgot-password", { email: email.trim() });
 }

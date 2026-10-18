@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Minus, Plus, Search, FileText, Eye, FileCheck } from "lucide-react";
 import { money } from "@/components/common/ui";
 import type { Extraction } from "@/types";
@@ -16,8 +16,54 @@ export function DocumentViewer({
   const f = extraction.fields;
   const [zoom, setZoom] = useState(100);
   const [viewMode, setViewMode] = useState<"structured" | "pdf">("structured");
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (viewMode !== "pdf" || !documentId) {
+      setBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfError(null);
+
+    fetch(`/api/documents/${documentId}/download`, {
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "AccountingIntelligence" },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load PDF document.");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        setBlobUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPdfError(err instanceof Error ? err.message : "Error loading PDF");
+      })
+      .finally(() => {
+        if (!cancelled) setPdfLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode, documentId]);
+
+  const docCurrency = f["currency"]?.value?.trim() || "MYR";
   const value = (key: string, fallback = "—") =>
-    f[key]?.original || f[key]?.value || fallback;
+    f[key]?.value?.trim() || f[key]?.original?.trim() || fallback;
   const documentType = value("type", "Invoice").toUpperCase();
 
   return (
@@ -72,12 +118,16 @@ export function DocumentViewer({
       </div>
       <div className="doc-viewer-canvas">
         {viewMode === "pdf" && documentId ? (
-          <div style={{ width: "100%", height: "650px", background: "#f8fafc", borderRadius: "8px", overflow: "hidden" }}>
-            <iframe
-              src={`/api/documents/${documentId}/download`}
-              title={name}
-              style={{ width: "100%", height: "100%", border: "none" }}
-            />
+          <div style={{ width: "100%", height: "650px", background: "#f8fafc", borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {pdfLoading && <div style={{ color: "#64748b", fontSize: "14px" }}>Loading original document...</div>}
+            {pdfError && <div style={{ color: "#dc2626", fontSize: "14px" }}>{pdfError}</div>}
+            {blobUrl && (
+              <iframe
+                src={blobUrl}
+                title={name}
+                style={{ width: "100%", height: "100%", border: "none" }}
+              />
+            )}
           </div>
         ) : (
           <div className="doc-paper" style={{ transform: `scale(${zoom / 100})` }}>
@@ -119,15 +169,45 @@ export function DocumentViewer({
                   <tr key={`${item.description}-${idx}`}>
                     <td>{item.description}</td>
                     <td>{item.quantity}</td>
-                    <td>{money(item.amount)}</td>
+                    <td>{money(item.amount, docCurrency)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="doc-paper-total">
-              <span>Total</span>
-              <strong>{money(value("total", "0"))}</strong>
+              <div>
+                <span>Total</span>
+                {f["total"]?.original && f["total"]?.original !== f["total"]?.value && (
+                  <small
+                    className="doc-paper-raw-evidence"
+                    title={`Raw extraction evidence: "${f["total"].original}"`}
+                    style={{
+                      display: "block",
+                      fontSize: "11px",
+                      color: "#64748b",
+                      fontWeight: 400,
+                      marginTop: "2px",
+                    }}
+                  >
+                    Raw: {f["total"].original}
+                  </small>
+                )}
+              </div>
+              {(() => {
+                const totalFormatted = money(
+                  f["total"]?.value || f["total"]?.original,
+                  docCurrency,
+                );
+                return totalFormatted !== "—" ? (
+                  <strong>{totalFormatted}</strong>
+                ) : (
+                  <strong style={{ color: "#d97706", fontSize: "13px" }}>
+                    Missing / Unresolved
+                  </strong>
+                );
+              })()}
             </div>
+
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, CheckCircle2, FileCheck2, RefreshCw } from "lucide-react";
+import { Check, CheckCircle2, FileCheck2, RefreshCw, ShieldAlert } from "lucide-react";
 import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -24,6 +24,7 @@ import {
   ErrorState,
   Field,
   LoadingState,
+  Modal,
   PageHeader,
   Panel,
   Toast,
@@ -48,10 +49,28 @@ function FormField({
     <label className="shoebox-field">
       <span className="shoebox-label">
         {field.label}
-        <em className={`conf ${field.confidence >= 95 ? "high" : field.confidence >= 80 ? "med" : "low"}`}>
-          {field.correctedBy ? <Check size={11} /> : null}
-          {field.correctedBy ? "Reviewed" : `${field.confidence}%`}
-        </em>
+        {field.correctedBy ? (
+          <em className="conf reviewed">
+            <Check size={11} /> Reviewed
+          </em>
+        ) : field.confidence !== null && field.confidence !== undefined ? (
+          <em
+            className={`conf ${
+              field.confidence >= 95
+                ? "high"
+                : field.confidence >= 80
+                  ? "med"
+                  : "low"
+            }`}
+          >
+            {field.confidence}%
+          </em>
+        ) : (
+          <em className="conf unavailable" title="Rule-based extraction did not assign a statistical confidence score">
+            Confidence unavailable
+          </em>
+        )}
+
       </span>
       <input
         value={value}
@@ -98,6 +117,8 @@ export function DocumentReview({
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideJustification, setOverrideJustification] = useState("");
 
   async function run(op: () => Promise<unknown>, message: string) {
     setBusy(true);
@@ -174,6 +195,55 @@ export function DocumentReview({
             <button className={panel === "record" ? "active" : ""} onClick={() => setPanel("record")}>Standardised Record</button>
             <button className={panel === "activity" ? "active" : ""} onClick={() => setPanel("activity")}>Activity</button>
           </div>
+
+          {data.exceptions.length > 0 && (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "12px 16px",
+                backgroundColor: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontWeight: "600",
+                  color: "#991b1b",
+                  marginBottom: "4px",
+                }}
+              >
+                <ShieldAlert size={18} />
+                <span>
+                  {data.exceptions.some((e) => e.status !== "RESOLVED")
+                    ? "Active Exceptions Detected"
+                    : "Resolved Exceptions"}
+                </span>
+              </div>
+              {data.exceptions.map((e) => (
+                <div
+                  key={e.id}
+                  style={{
+                    marginTop: "4px",
+                    fontSize: "13px",
+                    color: "#7f1d1d",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <strong>[{e.type}]</strong>
+                  <span>({e.severity})</span>
+                  <span>{e.message}</span>
+                  <Badge>{e.status}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
 
           {panel === "review" && (
             <div className="shoebox-split">
@@ -275,6 +345,20 @@ export function DocumentReview({
                 >
                   <FileCheck2 size={16} /> Create standardised record
                 </button>
+                {user.role === "LOCAL_ADMIN" &&
+                  (data.doc.status === "VALIDATED" || data.doc.status === "EXCEPTION") && (
+                  <button
+                    disabled={busy}
+                    className="btn"
+                    style={{ borderColor: "#d97706", color: "#b45309" }}
+                    onClick={() => {
+                      setShowOverrideModal(true);
+                      setOverrideJustification("");
+                    }}
+                  >
+                    <ShieldAlert size={16} /> Authorize duplicate override
+                  </button>
+                )}
               </div>
             </Panel>
           )}
@@ -293,6 +377,20 @@ export function DocumentReview({
                   >
                     <FileCheck2 size={16} /> Create standardised record
                   </button>
+                  {user.role === "LOCAL_ADMIN" &&
+                    (data.doc.status === "VALIDATED" || data.doc.status === "EXCEPTION") && (
+                    <button
+                      disabled={busy}
+                      className="btn"
+                      style={{ borderColor: "#d97706", color: "#b45309", marginTop: "8px" }}
+                      onClick={() => {
+                        setShowOverrideModal(true);
+                        setOverrideJustification("");
+                      }}
+                    >
+                      <ShieldAlert size={16} /> Authorize duplicate override
+                    </button>
+                  )}
                 </div>
               </Panel>
             ))}
@@ -314,6 +412,64 @@ export function DocumentReview({
             </Panel>
           )}
         </>
+      )}
+      {showOverrideModal && (
+        <Modal
+          title="Authorize Duplicate Invoice Approval"
+          onClose={() => setShowOverrideModal(false)}
+        >
+          <div className="panel-body">
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#64748b",
+                marginBottom: "12px",
+              }}
+            >
+              Administrator Override: Approving a detected duplicate invoice
+              bypasses standard duplicate rejection. A non-empty justification
+              is strictly required and will be permanently recorded in the audit
+              log.
+            </p>
+            <Field
+              label="Override justification *"
+              hint="Explain why this duplicate invoice is authorized for processing"
+            >
+              <textarea
+                value={overrideJustification}
+                onChange={(e) => setOverrideJustification(e.target.value)}
+                placeholder="e.g. Authorized under formal contract extension #2026-B; separate billing cycle confirmed."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                }}
+                required
+              />
+            </Field>
+            <button
+              className="btn primary"
+              disabled={busy || !overrideJustification.trim()}
+              onClick={() => {
+                setShowOverrideModal(false);
+                run(
+                  () =>
+                    standardiseDocument(
+                      user,
+                      documentId,
+                      true,
+                      overrideJustification.trim(),
+                    ),
+                  "Duplicate override authorized and standardised record created.",
+                );
+              }}
+            >
+              Confirm Authorized Override
+            </button>
+          </div>
+        </Modal>
       )}
       <Toast message={toast} />
     </>

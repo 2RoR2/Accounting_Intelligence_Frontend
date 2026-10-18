@@ -1,7 +1,5 @@
 import type { KPI, User } from "@/types";
 import { getDocuments } from "./document.service";
-import { assertActive } from "../permissions";
-import { readDb } from "../mock/repository";
 export async function getProcessingJobs(user: User) {
   return (await getDocuments(user)).map((d) => ({
     id: `JOB-${d.id.slice(4)}`,
@@ -19,43 +17,55 @@ export async function getProcessingJobs(user: User) {
     completedAt: ["QUEUED", "UPLOADED", "PROCESSING"].includes(d.status)
       ? "—"
       : new Date(
-          new Date(d.createdAt).getTime() + d.seconds * 1000,
+          new Date(d.createdAt).getTime() + (d.seconds || 0) * 1000,
         ).toISOString(),
   }));
 }
 export async function getPerformanceMetrics(user: User): Promise<KPI[]> {
-  assertActive(readDb(), user);
+  const docs = await getDocuments(user);
+  const timedDocs = docs.filter((d) => d.seconds != null && d.seconds > 0);
+  const avgSeconds = timedDocs.length
+    ? `${(timedDocs.reduce((a, b) => a + (b.seconds || 0), 0) / timedDocs.length).toFixed(1)}s`
+    : "Not measured";
+  const openExceptions = docs.filter((d) => d.status === "EXCEPTION").length;
+  const exceptionRate = docs.length
+    ? `${((openExceptions / docs.length) * 100).toFixed(1)}%`
+    : "0.0%";
+
   return [
     {
       label: "Extraction accuracy",
-      value: "96.4%",
+      value: "Not measured",
       target: "≥ 95%",
-      met: true,
-      change: "+1.2%",
+      met: false,
+      change: "Requires ground-truth dataset study",
     },
     {
       label: "Avg. processing time",
-      value: "8.7s",
+      value: avgSeconds,
       target: "≤ 20 sec",
-      met: true,
-      change: "−2.1s",
+      met: timedDocs.length > 0 && Number.parseFloat(avgSeconds) <= 20,
+      change: timedDocs.length
+        ? `${timedDocs.length} timed worker run(s)`
+        : "No timed runs",
     },
     {
       label: "Manual entry reduction",
-      value: "74.1%",
+      value: "Not measured",
       target: "≥ 70%",
-      met: true,
-      change: "+4.3%",
+      met: false,
+      change: "Requires human time study benchmark",
     },
     {
       label: "Exception rate",
-      value: "7.6%",
+      value: exceptionRate,
       target: "< 10%",
-      met: true,
-      change: "−1.8%",
+      met: Number.parseFloat(exceptionRate) < 10,
+      change: `${openExceptions} exception(s) across ${docs.length} doc(s)`,
     },
   ];
 }
+
 export async function getTrends(period = "week") {
   if (period === "day")
     return [

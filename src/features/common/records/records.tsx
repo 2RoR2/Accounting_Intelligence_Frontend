@@ -113,12 +113,12 @@ export function RecordsPage({
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const records = data.records.filter(
     (r) =>
-      `${r.id} ${r.extraction.fields.invoice.value} ${r.extraction.fields.supplier.value}`
+      `${r.id} ${r.extraction.fields.invoice?.value || ""} ${r.extraction.fields.supplier?.value || ""}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
-      (!supplier || r.extraction.fields.supplier.value === supplier) &&
+      (!supplier || r.extraction.fields.supplier?.value === supplier) &&
       (!category || r.category === category) &&
-      (!date || r.extraction.fields.date.value === date) &&
+      (!date || r.extraction.fields.date?.value === date) &&
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
   );
@@ -257,7 +257,10 @@ export function RecordsPage({
               },
               {
                 label: "Processing",
-                render: (r) => `${r.document?.seconds} sec`,
+                render: (r) =>
+                  r.document?.seconds != null
+                    ? `${r.document.seconds} sec`
+                    : "Unknown",
               },
               { label: "Processed at", render: (r) => formatDate(r.createdAt) },
               {

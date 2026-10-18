@@ -3,10 +3,16 @@ import { id, mutate, now, readDb } from "../mock/repository";
 import { assertActive, assertTenant, requireRole } from "../permissions";
 import { log } from "./audit.service";
 import { usage } from "./tenant.service";
-import { passwordChecks } from "./auth.service";
+import { isFrontendMockAuthEnabled, passwordChecks } from "./auth.service";
 
 export async function updateOwnProfile(user: User, name: string, avatar?: string) {
+  if (!isFrontendMockAuthEnabled) {
+    throw new Error(
+      "Profile updates are currently disabled in production mode pending Rachel's approved user-profile endpoint.",
+    );
+  }
   assertActive(readDb(), user);
+
   if (name.trim().length < 2) throw new Error("Enter a valid display name.");
   if (avatar && !avatar.startsWith("data:image/")) throw new Error("Select a valid profile image.");
   return mutate((db) => {

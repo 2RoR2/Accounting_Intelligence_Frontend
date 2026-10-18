@@ -7,6 +7,7 @@ import {
   assignException,
   getDocuments,
   getExceptions,
+  resolveExceptionDirect,
 } from "@/lib/api/document.service";
 import { getTenantUsers } from "@/lib/api/user.service";
 import {
@@ -41,6 +42,8 @@ export function ExceptionsPage({ user }: { user: User }) {
   const [date, setDate] = useState("");
   const [assign, setAssign] = useState("");
   const [target, setTarget] = useState("");
+  const [resolveTarget, setResolveTarget] = useState("");
+  const [resolveNote, setResolveNote] = useState("");
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
   if (loading) return <LoadingState />;
@@ -96,76 +99,127 @@ export function ExceptionsPage({ user }: { user: User }) {
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
-        <DataTable
-          rows={data.exceptions.filter(
-            (e) =>
-              (!status || e.status === status) &&
-              (!severity || e.severity === severity) &&
-              (!type || e.type === type) &&
-              (!assigned || e.assignedTo === assigned) &&
-              (!date || e.createdAt.startsWith(date)) &&
-              (data.docs.find((d) => d.id === e.documentId)?.name ?? "")
-                .toLowerCase()
-                .includes(search.toLowerCase()),
-          )}
-          rowKey={(e) => e.id}
-          columns={[
-            {
-              label: "Document",
-              render: (e) => (
-                <Link
-                  className="document-link"
-                  href={`${base}/documents/${e.documentId}`}
-                >
-                  {data.docs.find((d) => d.id === e.documentId)?.name}
-                </Link>
-              ),
-            },
-            {
-              label: "Exception type",
-              render: (e) => (
-                <div>
-                  {e.type.replaceAll("_", " ")}
-                  <small>{e.message}</small>
-                </div>
-              ),
-            },
-            { label: "Severity", render: (e) => <Badge>{e.severity}</Badge> },
-            {
-              label: "Assigned to",
-              render: (e) =>
-                data.users.find((u) => u.id === e.assignedTo)?.name ??
-                e.assignedTo,
-            },
-            { label: "Created", render: (e) => formatDate(e.createdAt) },
-            { label: "Status", render: (e) => <Badge>{e.status}</Badge> },
-            {
-              label: "Action",
-              render: (e) => (
-                <div className="row-actions">
+        {data.exceptions.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 16px", color: "#475569" }}>
+            <p style={{ fontWeight: 600, fontSize: "15px", marginBottom: "4px" }}>
+              All clear — zero open exceptions across your documents.
+            </p>
+            <small style={{ color: "#64748b" }}>
+              Uploaded documents meeting all accounting validation rules proceed directly to approval.
+            </small>
+          </div>
+        ) : (
+          <DataTable
+            rows={data.exceptions.filter(
+              (e) =>
+                (!status || e.status === status) &&
+                (!severity || e.severity === severity) &&
+                (!type || e.type === type) &&
+                (!assigned || e.assignedTo === assigned) &&
+                (!date || e.createdAt.startsWith(date)) &&
+                (data.docs.find((d) => d.id === e.documentId)?.name ?? "")
+                  .toLowerCase()
+                  .includes(search.toLowerCase()),
+            )}
+            rowKey={(e) => e.id}
+            columns={[
+              {
+                label: "Document",
+                render: (e) => (
                   <Link
-                    className="text-link"
+                    className="document-link"
                     href={`${base}/documents/${e.documentId}`}
                   >
-                    Review
+                    {e.originalFilename ||
+                      data.docs.find((d) => d.id === e.documentId)?.name ||
+                      e.documentCode ||
+                      e.documentId}
                   </Link>
-                  {user.role === "LOCAL_ADMIN" && e.status !== "RESOLVED" && (
-                    <button
-                      className="text-link"
-                      onClick={() => {
-                        setAssign(e.id);
-                        setTarget(e.assignedTo);
-                        setFailure("");
+                ),
+              },
+              {
+                label: "Exception type",
+                render: (e) => (
+                  <div>
+                    <strong>{e.type.replaceAll("_", " ")}</strong>
+                    <small
+                      style={{
+                        display: "block",
+                        color: "#64748b",
+                        marginTop: "2px",
                       }}
                     >
-                      Assign
-                    </button>
-                  )}
-                </div>
-              ),
-            },
-          ]}
-        />
+                      {e.message}
+                    </small>
+                    {e.note && (
+                      <small
+                        style={{
+                          display: "block",
+                          color: "#059669",
+                          marginTop: "2px",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Note: {e.note}
+                      </small>
+                    )}
+                  </div>
+                ),
+              },
+              { label: "Severity", render: (e) => <Badge>{e.severity}</Badge> },
+              {
+                label: "Assigned to",
+                render: (e) =>
+                  e.assignedToName ??
+                  data.users.find((u) => u.id === e.assignedTo)?.name ??
+                  e.assignedTo ??
+                  "Unassigned",
+              },
+              { label: "Created", render: (e) => formatDate(e.createdAt) },
+              { label: "Status", render: (e) => <Badge>{e.status}</Badge> },
+              {
+                label: "Action",
+                render: (e) => (
+                  <div className="row-actions">
+                    <Link
+                      className="text-link"
+                      href={`${base}/documents/${e.documentId}`}
+                    >
+                      Review
+                    </Link>
+                    {user.role === "LOCAL_ADMIN" && e.status !== "RESOLVED" && (
+                      <button
+                        className="text-link"
+                        onClick={() => {
+                          setAssign(e.id);
+                          setTarget(e.assignedTo || data.users[0]?.id || "");
+                          setFailure("");
+                        }}
+                      >
+                        Assign
+                      </button>
+                    )}
+                    {(user.role === "LOCAL_ADMIN" ||
+                      user.role === "ACCOUNTANT") &&
+                      e.status !== "RESOLVED" && (
+                        <button
+                          className="text-link"
+                          onClick={() => {
+                            setResolveTarget(e.id);
+                            setResolveNote("");
+                            setFailure("");
+                          }}
+                        >
+                          Resolve
+                        </button>
+                      )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        )}
+
       </Panel>
       {assign && (
         <Modal title="Assign exception" onClose={() => setAssign("")}>
@@ -192,12 +246,64 @@ export function ExceptionsPage({ user }: { user: User }) {
                   await assignException(user, assign, target);
                   setAssign("");
                   setToast("Exception assigned.");
+                  refresh();
                 } catch (e) {
                   setFailure((e as Error).message);
                 }
               }}
             >
               Save assignment
+            </button>
+          </div>
+        </Modal>
+      )}
+      {resolveTarget && (
+        <Modal
+          title="Resolve exception"
+          onClose={() => setResolveTarget("")}
+        >
+          <div className="panel-body">
+            {failure && <ErrorState message={failure} />}
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#64748b",
+                marginBottom: "12px",
+              }}
+            >
+              Resolving an exception marks this issue as handled. Note: The
+              document must still be verified and revalidated before accounting
+              approval.
+            </p>
+            <Field label="Resolution note *">
+              <input
+                type="text"
+                value={resolveNote}
+                onChange={(e) => setResolveNote(e.target.value)}
+                placeholder="e.g. Verified valid contract renewal / duplicate confirmed"
+                required
+              />
+            </Field>
+            <button
+              className="btn primary"
+              disabled={!resolveNote.trim()}
+              onClick={async () => {
+                try {
+                  await resolveExceptionDirect(
+                    user,
+                    resolveTarget,
+                    resolveNote,
+                  );
+                  setResolveTarget("");
+                  setResolveNote("");
+                  setToast("Exception marked as resolved.");
+                  refresh();
+                } catch (e) {
+                  setFailure((e as Error).message);
+                }
+              }}
+            >
+              Confirm resolution
             </button>
           </div>
         </Modal>

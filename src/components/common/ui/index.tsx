@@ -402,7 +402,38 @@ export const formatDate = (date: string) =>
         month: "short",
         year: "numeric",
       }).format(new Date(date));
-export const money = (value: string | number) =>
-  new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(
-    Number(value),
-  );
+export const money = (
+  value: string | number | null | undefined,
+  currency = "MYR",
+) => {
+  if (value === null || value === undefined) return "—";
+  let num: number;
+  if (typeof value === "number") {
+    num = value;
+  } else {
+    const trimmed = String(value).trim();
+    if (!trimmed || trimmed === "—" || trimmed.toLowerCase() === "nan") return "—";
+    // Match first valid numeric amount with optional thousands separators and decimal
+    const match = trimmed.match(/-?\d+(?:,\d{3})*(?:\.\d+)?/);
+    if (!match) return "—";
+    const cleaned = match[0].replace(/,/g, "");
+    num = Number(cleaned);
+  }
+  if (isNaN(num) || !isFinite(num)) return "—";
+  const validCurrency =
+    typeof currency === "string" && currency.trim().length === 3
+      ? currency.trim().toUpperCase()
+      : "MYR";
+  try {
+    return new Intl.NumberFormat("en-MY", {
+      style: "currency",
+      currency: validCurrency,
+    }).format(num);
+  } catch {
+    return new Intl.NumberFormat("en-MY", {
+      style: "currency",
+      currency: "MYR",
+    }).format(num);
+  }
+};
+

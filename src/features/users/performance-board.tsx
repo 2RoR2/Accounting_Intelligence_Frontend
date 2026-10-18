@@ -133,8 +133,6 @@ function Rank({
   );
 }
 
-const OPEN = new Set(["UPLOADED", "QUEUED", "PROCESSING"]);
-
 function dayKey(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -161,14 +159,11 @@ export function AccountantBoard({
   const running = docs.filter((doc) => doc.status === "PROCESSING").length;
   const failed = docs.filter((doc) => doc.status === "FAILED").length;
   const ready = Math.max(0, docs.length - queued - running - failed);
-  const finished = docs.filter((doc) => !OPEN.has(doc.status));
-  const clean = finished.filter((doc) => doc.status !== "FAILED" && doc.status !== "EXCEPTION");
-  const accuracy = percent(clean.length, finished.length);
-  const exceptionRate = percent(openExceptions, docs.length);
-  const reduction = percent(completed, docs.length);
-  const averageSeconds = finished.length
-    ? Math.round((finished.reduce((sum, doc) => sum + doc.seconds, 0) / finished.length) * 10) / 10
-    : 0;
+  const exceptionRate = docs.length ? percent(openExceptions, docs.length) : 0;
+  const timedDocs = docs.filter((doc) => doc.seconds != null && doc.seconds > 0);
+  const averageSeconds = timedDocs.length
+    ? Math.round((timedDocs.reduce((sum, doc) => sum + (doc.seconds || 0), 0) / timedDocs.length) * 10) / 10
+    : null;
   const grouped = new Map<string, number>();
   for (const doc of docs) {
     const key = dayKey(doc.createdAt);
@@ -192,25 +187,26 @@ export function AccountantBoard({
       <div className="acct-kpis">
         <article className="acct-kpi">
           <h3>Extraction accuracy</h3>
-          <strong>{finished.length ? `${accuracy}%` : "—"}</strong>
-          <p>Target ≥ 95%</p>
+          <strong style={{ fontSize: "19px", color: "#64748b" }}>Not measured</strong>
+          <p>Requires ground-truth dataset study</p>
         </article>
         <article className="acct-kpi">
           <h3>Avg. processing time</h3>
-          <strong>{finished.length ? `${averageSeconds}s` : "—"}</strong>
-          <p>Target ≤ 20 sec</p>
+          <strong>{averageSeconds !== null ? `${averageSeconds}s` : "Not measured"}</strong>
+          <p>{timedDocs.length ? `${timedDocs.length} timed run(s) · Target ≤ 20s` : "No worker timing metrics yet"}</p>
         </article>
         <article className="acct-kpi">
           <h3>Exception rate</h3>
-          <strong>{docs.length ? `${exceptionRate}%` : "—"}</strong>
-          <p>{"Target < 10%"}</p>
+          <strong>{docs.length ? `${exceptionRate}%` : "0%"}</strong>
+          <p>{openExceptions} open exceptions across {docs.length} doc(s)</p>
         </article>
         <article className="acct-kpi">
           <h3>Manual entry reduction</h3>
-          <strong>{docs.length ? `${reduction}%` : "—"}</strong>
-          <p>Target ≥ 70%</p>
+          <strong style={{ fontSize: "19px", color: "#64748b" }}>Not measured</strong>
+          <p>Requires human time study benchmark</p>
         </article>
       </div>
+
 
       <article className="acct-tile acct-trend">
         <header>
@@ -254,13 +250,24 @@ export function AccountantBoard({
       <article className="acct-tile acct-third">
         <header>
           <h3>Processing time</h3>
-          <p>Average against the 20 second target</p>
+          <p>
+            {averageSeconds !== null
+              ? "Average against the 20 second target"
+              : "Worker processing time not yet measured"}
+          </p>
         </header>
-        <Gauge value={averageSeconds} limit={20} />
-        <p className="acct-gauge-note">
-          {averageSeconds}s of 20s
-        </p>
+        {averageSeconds !== null ? (
+          <>
+            <Gauge value={averageSeconds} limit={20} />
+            <p className="acct-gauge-note">{averageSeconds}s of 20s target</p>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "40px 0 20px", color: "#64748b", fontSize: "13px" }}>
+            Timed worker runs will appear here
+          </div>
+        )}
       </article>
+
     </section>
   );
 }

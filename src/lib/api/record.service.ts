@@ -4,15 +4,25 @@ import { assertActive, canDocument, requireRole } from "../permissions";
 import { log } from "./audit.service";
 import { isFrontendMockEnabled, getDocuments, getExtraction } from "./document.service";
 
-export async function standardiseDocument(user: User, documentId: string): Promise<string> {
+export async function standardiseDocument(
+  user: User,
+  documentId: string,
+  overrideDuplicate = false,
+  overrideJustification = "",
+): Promise<string> {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   if (!isFrontendMockEnabled) {
     const res = await fetch(`/api/documents/${documentId}/approve`, {
       method: "POST",
       credentials: "same-origin",
       headers: {
+        "Content-Type": "application/json",
         "X-Requested-With": "AccountingIntelligence",
       },
+      body: JSON.stringify({
+        override_duplicate: overrideDuplicate,
+        override_justification: overrideJustification,
+      }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));

@@ -125,7 +125,12 @@ export function ProcessingPage({
             { label: "Status", render: (j) => <Badge>{j.status}</Badge> },
             {
               label: "Time",
-              render: (j) => (j.status === "FAILED" ? "—" : `${j.seconds} sec`),
+              render: (j) =>
+                j.status === "FAILED"
+                  ? "—"
+                  : j.seconds != null
+                    ? `${j.seconds} sec`
+                    : "Unknown",
             },
             { label: "Started", render: (j) => formatDate(j.startedAt) },
             { label: "Completed", render: (j) => formatDate(j.completedAt) },
@@ -155,10 +160,12 @@ export function PerformancePage({ user }: { user: User }) {
             ? "Platform performance"
             : "Company reports"
         }
-        description="Project success criteria and processing trends. Benchmark values reflect current workspace performance."
+        description="Project success criteria and processing trends. Benchmark values reflect illustrative workspace targets."
         actions={
-          <button
-            className="btn"
+          <>
+            <Badge>ILLUSTRATIVE BENCHMARKS</Badge>
+            <button
+              className="btn"
             onClick={() =>
               downloadCsv("performance-report.csv", [
                 [
@@ -192,7 +199,9 @@ export function PerformancePage({ user }: { user: User }) {
                   "Document detail",
                   doc.name,
                   doc.status,
-                  `${doc.seconds} sec processing`,
+                  doc.seconds != null
+                    ? `${doc.seconds} sec processing`
+                    : "Unknown processing duration",
                   doc.status === "COMPLETED" ? "Yes" : "Review",
                   formatDate(doc.createdAt),
                 ]),
@@ -201,6 +210,7 @@ export function PerformancePage({ user }: { user: User }) {
           >
             <Download size={16} /> Export report
           </button>
+          </>
         }
       />
       <PerformanceCards metrics={data.metrics} />

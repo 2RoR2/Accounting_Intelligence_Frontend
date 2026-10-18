@@ -1,72 +1,134 @@
-# Accounting Intelligence
+# Accounting Intelligence — Frontend
 
-Next.js App Router, React, strict TypeScript, Tailwind CSS, and Lucide. All project files live in `frontend/`. No backend, database, real OCR, email, or authentication server is implemented in this frontend package.
+A Next.js 15 web application designed for accountants and financial administrators to ingest, extract, validate, review, and approve business documents (invoices, receipts, and bills) powered by FastAPI, PostgreSQL 18, Redis 7 / RQ, and Docling OCR.
 
-## Run
+---
 
+## Architecture & System Overview
+
+- **Framework:** Next.js 15.5.25 (App Router, React 19, strict TypeScript 5.8).
+- **Styling:** Custom design system built with CSS variables (`src/styles/accountant.css`) and Lucide React icons.
+- **Backend API Integration:** Direct HTTP proxy via `next.config.mjs` routing `/api/*` to the FastAPI backend service (`http://127.0.0.1:8000`).
+- **Data Persistence:** All uploaded documents, extracted fields, validation results, exceptions, and approved accounting records are stored in PostgreSQL (`documents`, `raw_extractions`, `field_predictions`, `field_corrections`, `exceptions`, `standardised_records`, `audit_logs`).
+- **Processing Engine:** Redis 7 / RQ worker queue executing asynchronous Docling OCR parsing and M1–M4 accounting validation pipelines.
+
+---
+
+## Prerequisites & Backend Dependencies
+
+The frontend expects the following local backend services to be active:
+1. **PostgreSQL 18** (or PostgreSQL 14+): listening on port `5434` (or configured database port).
+2. **Redis 7**: listening on `127.0.0.1:6379`.
+3. **Outbox Dispatcher / Worker**: Python worker listening on Redis queue `cpu_tasks`.
+4. **FastAPI Backend**: running on `http://127.0.0.1:8000` from `Accounting_Intelligence_Backend` (`feature/backend-integration` branch).
+
+---
+
+## Local Setup & Development
+
+### 1. Repository & Branch
+Ensure you are on the local integration branch:
 ```sh
-cd frontend
+git checkout feature/frontend-integration
+```
+
+### 2. Environment Configuration
+Copy `.env.local.example` to `.env.local`:
+```sh
+cp .env.local.example .env.local
+```
+
+Default configuration:
+```env
+BACKEND_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_AUTH_MODE=api
+```
+- `BACKEND_URL`: URL of the FastAPI backend service.
+- `NEXT_PUBLIC_AUTH_MODE`: Set to `api` for genuine backend communication and cookie sessions, or `mock` for standalone browser fixture mode.
+
+### 3. Install Dependencies
+```sh
 npm install
+```
+
+### 4. Running the Development Server
+```sh
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-Open http://localhost:3000. On Windows PowerShell, use `npm.cmd` if script execution policy blocks `npm`.
-
-## Sample accounts
-
-At `/login`, enter a company email below and any non-empty password. The app then opens `/verify-otp` for the six-digit email verification code. A successful verification opens `/welcome` before the user continues to their role dashboard. There is no account or role dropdown: the entered email determines the workspace. Passwords are never saved in this frontend package. Real OTP email delivery requires the backend integration marked in `auth.service.ts`.
-
-| Account | Company | Role |
-| --- | --- | --- |
-| admin@saic.example | SAIC | Super Admin |
-| alice@abc.example | ABC Sdn Bhd | Local Admin |
-| rachel@abc.example | ABC Sdn Bhd | Accountant |
-| david@xyz.example | XYZ Sdn Bhd | Local Admin |
-| sarah@xyz.example | XYZ Sdn Bhd | Accountant |
-
-## Walkthrough
-
-1. Request company access from the landing page.
-2. Log in as SAIC. Review the new request under Pending Approvals, approve it, and choose its seat limit.
-3. Open its tenant → Users → View → Open activation. Activate the Local Admin with a password meeting the displayed checklist.
-4. Sign in as that Local Admin. Invite an accountant from Users. Active users and pending invitations both reserve seats.
-5. Open the accountant’s activation link and activate the account. Sign in as that accountant.
-6. Upload a PDF/image/XLSX and choose **Total mismatch**. The workspace queues and extracts the document. File contents are not parsed or persisted; the preview is an explicitly labelled sample.
-7. Open the document. Save Total Amount as `848.00`. Save the reference `PO-2192` to confirm its low-confidence value. Enter a correction note and select Save & revalidate.
-8. Open Validation, then Create standardised record. Open Standardised Record to review the immutable snapshot. Export CSV from the records list.
-9. Switch to Local Admin to see company documents, records, account usage, and reports.
-10. Switch to SAIC to inspect monitoring, metadata, and performance. Enter Support View with a reason to access a read-only financial record; the event is audited.
-11. Switch to Sarah at XYZ. ABC documents and records are filtered out.
-
-Changes persist in this browser’s localStorage. Clear `accounting-intelligence-v1` and `ai:session` in browser storage to restore fixtures. Do not use live customer data in local development.
-
-## Architecture and integration
-
-- `src/types`: shared domain contracts.
-- `src/lib/api`: promise-based service functions consumed by UI features. Replace these implementations with authenticated FastAPI calls; components need not depend on mock repositories.
-- `src/lib/mock`: fixture generation and persistent browser repository.
-- `src/lib/permissions`: role and tenant access checks for the UI layer.
-- `src/features/superadmin`, `localadmin`, and `users`: role-owned route composition and role-specific workflows.
-- `src/features/common`: reusable dashboard, document, exception, record, monitoring, settings, hooks, and user-management workflows.
-- `src/features/auth`: unauthenticated onboarding and account-access pages.
-- `src/components/common`: reusable tables, dialogs, layouts, charts, and document preview components.
-- `src/hooks/use-resource.ts`: loading, error, reload, and cross-tab refresh handling.
-
-Frontend filtering shapes the UI only. Real tenant isolation must be enforced by the backend API. Accounts and data are inspectable in browser storage; frontend route guards are not security boundaries. Replace `auth.service.ts` and permission checks with real authentication and backend authorization. The activation user ID is a mock account reference, not a token. No password or token appears in administrative data.
-
-SAIC record APIs return metadata by default. Financial detail is retrieved through `openSupportView(reason)` and displayed without editing controls. Audit metadata hides extracted financial values for SAIC.
-
-Dashboard counts reflect the local repository. Performance percentages and time-series charts are labelled illustrative benchmarks, not measured OCR performance. Preferences are saved as workspace settings. Real notifications, password resets, file storage, original-document rendering, job polling, and analytics require backend integrations.
-
-## Validation
-
+### 5. Running the Production Build
 ```sh
-npm run typecheck
-npm run lint
-npm test
 npm run build
+npm start
 ```
 
-`tests/workflows.test.ts` covers onboarding, reserved seats, correction and standardisation, tenant isolation, support audit, upload validation, and suspension. Browser smoke tests use installed Chrome (`npm run test:browser`) against a running app at http://localhost:3001. Set `PLAYWRIGHT_BASE_URL` to test another local port. The browser suite also checks email-only sign-in, separate administrative columns, brand colors, and mobile overflow.
+---
 
-The interface uses navy `#061433`, blue `#022fa2`, white, and light blue `#eaf5ff`. Success indicators use blue; warning and error labels retain distinct text and semantic accents. Wide tables scroll within their panels and keep action columns visible.
+## Automated Quality Gates
+
+Run all quality checks prior to staging commits:
+
+```sh
+# 1. Typecheck
+npm run typecheck
+
+# 2. Linting
+npm run lint
+
+# 3. Unit Tests (Financial Display, Permissions, Seat Management)
+npm test
+
+# 4. Production Build Verification (All 38 routes)
+npm run build
+
+# 5. Playwright Browser Acceptance Test
+npm run test:browser
+```
+
+---
+
+## Browser Acceptance & E2E Testing
+
+The Playwright browser test suite (`tests/browser/accountant_integration.spec.ts`) verifies the complete accountant and administrator journey against live services:
+- **Honest Dashboard KPIs:** Confirms extraction accuracy and manual-entry reduction display `Not measured` badges when unbenchmarked.
+- **Upload Experience:** Verifies that only supported `.pdf` documents are advertised, and obsolete simulated selectors are hidden in API mode.
+- **Asynchronous Document Extraction:** Dynamically generates a unique invoice fixture, uploads it to FastAPI, verifies Redis/RQ processing, and confirms PostgreSQL storage.
+- **Review & Financial Integrity:** Verifies supplier name, currency, line items, and monetary totals without `RMNaN`. Unscored fields show `Confidence unavailable`.
+- **Inline PDF Preview:** Confirms PDF rendering via authenticated blob URL iframe without forced download dialogs.
+- **Field Correction & Provenance:** Simulates accountant field modification, triggers `Reviewed` status tag, and records an immutable audit record.
+- **Approval & Standardisation:** Executes document revalidation and creates an immutable snapshot in `standardised_records`.
+- **Duplicate Detection (`EX-007`):** Uploads the same PDF a second time, asserts worker detection of `EX-007` duplicate exception, and verifies that accountant approval is disabled.
+- **Exceptions Workflow:** Demonstrates `LOCAL_ADMIN` exception assignment and resolution with mandatory audit notes.
+- **Duplicate Override Authorization:** Demonstrates administrator duplicate override with mandatory justification recording.
+- **Multi-Tenant Isolation:** Verifies that Tenant B users cannot inspect or access Tenant A's documents, records, or exceptions.
+
+---
+
+## Demo Accounts & Authentication
+
+In API mode, authentication is managed via secure, HTTP-only session cookies issued by FastAPI (`ai_access`). Standard test accounts seeded in PostgreSQL:
+
+| Account Email | Company (Tenant) | Role | Notes |
+| :--- | :--- | :--- | :--- |
+| `rachel@abc.example` | ACME (Tenant A) | `ACCOUNTANT` | Everyday document upload, review, and standardisation. |
+| `alice@abc.example` | ACME (Tenant A) | `LOCAL_ADMIN` | Team management, exception resolution, duplicate overrides. |
+| `david@xyz.example` | BetaCorp (Tenant B) | `LOCAL_ADMIN` | Used for cross-tenant isolation testing. |
+| `sarah@xyz.example` | BetaCorp (Tenant B) | `ACCOUNTANT` | Tenant B accountant. |
+| `admin@saic.example` | SAIC | `SUPER_ADMIN` | Platform oversight, support auditing. |
+
+---
+
+## Status of Features & Next Sprint Roadmap
+
+| Feature / Capability | Status in Sprint A | Roadmap (Sprint B) |
+| :--- | :--- | :--- |
+| **PDF Ingestion & OCR** | **REAL** (Docling layout & text extraction) | Support multi-page TIFF and scanned image preprocessing. |
+| **Validation Engine** | **REAL** (M1–M4 mathematical & vendor rules) | Dynamic company rule customization. |
+| **Duplicate Detection** | **REAL** (`EX-007` SHA-256 + supplier/invoice matching) | Cross-document similarity scoring. |
+| **Exceptions API** | **REAL** (Tenant-scoped, assignment & resolution) | Multi-assignee escalation alerts. |
+| **Standardised Records** | **REAL** (PostgreSQL snapshots) | Canonical JSON, CSV, and XLSX export endpoints. |
+| **Purchase Order Matching** | MOCK / Schema Ready | Connect backend PO reference import and 3-way matching. |
+| **Chart of Accounts (COA)** | MOCK / Static Suggestions | Connect backend GL account predictions and cost centers. |
+| **Bank Reconciliation** | MOCK / Illustrative | Bank statement CSV import and money-out reconciliation. |
+| **Profile & Password Updates** | Pending dedicated endpoints | Connect self-service password reset & profile endpoints. |

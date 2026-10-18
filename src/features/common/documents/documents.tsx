@@ -117,7 +117,12 @@ export function DocumentList({ user }: { user: User }) {
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
             {
               label: "Processing",
-              render: (d) => (d.status === "FAILED" ? "—" : `${d.seconds} sec`),
+              render: (d) =>
+                d.status === "FAILED"
+                  ? "—"
+                  : d.seconds != null
+                    ? `${d.seconds} sec`
+                    : "Unknown",
             },
             { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
             {
@@ -147,16 +152,41 @@ export function UploadPage({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [camera, setCamera] = useState(false);
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+
+  function handleFiles(incoming: File[]) {
+    if (!isFrontendMockEnabled) {
+      const invalid = incoming.filter((f) => !f.name.toLowerCase().endsWith(".pdf"));
+      if (invalid.length > 0) {
+        setError(
+          `Unsupported format: "${invalid.map((f) => f.name).join(", ")}". Currently only PDF documents (.pdf) are processed by the Docling neural extraction engine. Ingestion of image files and spreadsheets will be enabled in an upcoming release.`,
+        );
+        setFiles(incoming.filter((f) => f.name.toLowerCase().endsWith(".pdf")));
+        return;
+      }
+    }
+    setError("");
+    setFiles(incoming);
+  }
+
   async function start() {
     if (!files.length) {
       setError("Choose at least one file.");
       return;
     }
+    if (!isFrontendMockEnabled) {
+      const invalid = files.filter((f) => !f.name.toLowerCase().endsWith(".pdf"));
+      if (invalid.length > 0) {
+        setError(
+          `Unsupported format: "${invalid.map((f) => f.name).join(", ")}". The Docling neural extraction engine currently requires PDF documents (.pdf).`,
+        );
+        return;
+      }
+    }
     setBusy(true);
     setError("");
     try {
       for (const file of files) {
-        setStage(`Uploading ${file.name}…`);
+        setStage(`Uploading ${file.name} to private storage…`);
         const doc = await uploadDocument(user, file, scenario, category, kind);
         if (isFrontendMockEnabled) {
           for (const step of [
@@ -168,6 +198,8 @@ export function UploadPage({ user }: { user: User }) {
             setStage(`${file.name} · ${step}`);
             await advanceProcessing(user, doc.id, step);
           }
+        } else {
+          setStage(`${file.name} · Queued in durable outbox for neural extraction`);
         }
       }
       router.push(`${base}/documents`);
@@ -177,6 +209,7 @@ export function UploadPage({ user }: { user: User }) {
       setBusy(false);
     }
   }
+
   return (
     <>
       <PageHeader
@@ -222,13 +255,13 @@ export function UploadPage({ user }: { user: User }) {
                 const pastedFiles = Array.from(e.clipboardData.files);
                 if (pastedFiles.length) {
                   e.preventDefault();
-                  setFiles(pastedFiles);
+                  handleFiles(pastedFiles);
                 }
               }}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                if (!busy) setFiles(Array.from(e.dataTransfer.files));
+                if (!busy) handleFiles(Array.from(e.dataTransfer.files));
               }}
               onClick={() => input.current?.click()}
               disabled={busy}
@@ -241,8 +274,9 @@ export function UploadPage({ user }: { user: User }) {
                 Press Ctrl+V for a copied image or file, or <b>browse files</b>
               </span>
               <small>
-                PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per
-                file
+                {!isFrontendMockEnabled
+                  ? "PDF documents (.pdf) · Maximum 20 MB per file"
+                  : "PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per file"}
               </small>
             </button>
             )}
@@ -251,8 +285,12 @@ export function UploadPage({ user }: { user: User }) {
               hidden
               multiple
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              accept={
+                !isFrontendMockEnabled
+                  ? ".pdf"
+                  : ".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
+              }
+              onChange={(e) => handleFiles(Array.from(e.target.files ?? []))}
             />
             {files.map((file, i) => (
               <div className="selected-file" key={`${file.name}-${i}`}>
@@ -273,7 +311,11 @@ export function UploadPage({ user }: { user: User }) {
             ))}
             <Field
               label="Document type"
-              hint="Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
+              hint={
+                !isFrontendMockEnabled
+                  ? "Stored with the document code. Note: Specialized receipt/bill validation schemas are pending; non-invoice types currently process through the core accounting baseline."
+                  : "Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
+              }
             >
               <select
                 value={kind}
@@ -302,25 +344,27 @@ export function UploadPage({ user }: { user: User }) {
                 </option>
               </select>
             </Field>
-            <Field
-              label="Extraction scenario"
-              hint="The selected scenario generates sample extraction data; no OCR or AI is performed."
-            >
-              <select
-                value={scenario}
-                disabled={busy}
-                onChange={(e) => setScenario(e.target.value)}
+            {isFrontendMockEnabled && (
+              <Field
+                label="Extraction scenario"
+                hint="The selected scenario generates sample extraction data; no OCR or AI is performed."
               >
-                <option value="mismatch">
-                  Total mismatch · correction workflow
-                </option>
-                <option value="success">Successful invoice</option>
-                <option value="low">Low-confidence reference</option>
-                <option value="missing">Missing invoice number</option>
-                <option value="duplicate">Duplicate invoice</option>
-                <option value="failed">Processing failure</option>
-              </select>
-            </Field>
+                <select
+                  value={scenario}
+                  disabled={busy}
+                  onChange={(e) => setScenario(e.target.value)}
+                >
+                  <option value="mismatch">
+                    Total mismatch · correction workflow
+                  </option>
+                  <option value="success">Successful invoice</option>
+                  <option value="low">Low-confidence reference</option>
+                  <option value="missing">Missing invoice number</option>
+                  <option value="duplicate">Duplicate invoice</option>
+                  <option value="failed">Processing failure</option>
+                </select>
+              </Field>
+            )}
             {stage && (
               <div className="processing-banner" role="status">
                 <span className="pulse-dot" />
@@ -340,17 +384,21 @@ export function UploadPage({ user }: { user: User }) {
         <Panel title="From upload to clarity">
           <div className="panel-body upload-guide">
             {[
-              ["01", "Upload", "Add your invoice, bill, or receipt."],
-              ["02", "Extract", "Review the simulated extracted fields."],
+              ["01", "Upload", "Securely upload PDF invoice, bill, or receipt."],
+              [
+                "02",
+                "Extract",
+                "Extract structured fields via Docling neural intelligence.",
+              ],
               [
                 "03",
                 "Validate",
-                "Check totals, required fields, and confidence.",
+                "Evaluate totals, required fields, and supplier matching.",
               ],
               [
                 "04",
                 "Standardise",
-                "Resolve exceptions and create a consistent record.",
+                "Resolve exceptions and create an immutable accounting record.",
               ],
             ].map(([n, t, d]) => (
               <div key={n}>
@@ -363,11 +411,11 @@ export function UploadPage({ user }: { user: User }) {
             ))}
             <div className="info-box">
               <CheckCircle2 size={18} />
-              Uploaded file contents stay local. This prototype shows a labelled
-              sample document preview.
+              Uploaded documents are contained in tenant-isolated private storage and processed by verified queue workers.
             </div>
           </div>
         </Panel>
+
       </div>
     </>
   );

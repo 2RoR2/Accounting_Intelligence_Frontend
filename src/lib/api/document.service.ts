@@ -4,6 +4,8 @@ import type {
   DocumentStatus,
   DocumentKind,
   Exception,
+  ExceptionSeverity,
+  ExceptionStatus,
   ExtractedField,
   Extraction,
   LineItem,
@@ -25,7 +27,7 @@ import { log } from "./audit.service";
 import { api } from "./client";
 
 export const isFrontendMockEnabled =
-  (typeof window === "undefined" && process.env.NEXT_PUBLIC_AUTH_MODE !== "real") ||
+  (typeof window === "undefined" && process.env.NEXT_PUBLIC_AUTH_MODE !== "real" && process.env.NEXT_PUBLIC_AUTH_MODE !== "api") ||
   process.env.NEXT_PUBLIC_AUTH_MODE === "mock" ||
   process.env.NODE_ENV === "test";
 
@@ -58,7 +60,28 @@ interface BackendDocumentItem {
   file_size_bytes?: number;
   uploaded_at: string;
   updated_at?: string;
-  processing_seconds?: number;
+  processing_seconds?: number | null;
+}
+
+interface RawBackendException {
+  id?: string | number;
+  tenant_id?: string;
+  document_id?: string | number;
+  document_code?: string;
+  original_filename?: string;
+  type?: string;
+  category?: string;
+  exception_type?: string;
+  exception_code?: string;
+  severity?: string;
+  status?: string;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  message?: string;
+  details?: string;
+  note?: string;
+  created_at?: string;
+  resolved_at?: string;
 }
 
 interface BackendExtractionResult {
@@ -86,15 +109,7 @@ interface BackendExtractionResult {
     unit_price?: number;
     amount?: number;
   }>;
-  exceptions?: Array<{
-    id?: string;
-    exception_code?: string;
-    category?: string;
-    severity?: string;
-    message?: string;
-    details?: string;
-    status?: string;
-  }>;
+  exceptions?: RawBackendException[];
 }
 
 export async function getDocuments(user: User): Promise<Document[]> {
@@ -109,7 +124,7 @@ export async function getDocuments(user: User): Promise<Document[]> {
       type: (d.kind || "INVOICE").toUpperCase(),
       status: (d.status || "UPLOADED").toUpperCase() as DocumentStatus,
       createdAt: d.uploaded_at,
-      seconds: d.processing_seconds || 0,
+      seconds: d.processing_seconds != null ? Number(d.processing_seconds) : null,
       scenario: "",
     }));
   }
@@ -129,7 +144,7 @@ export async function getDocument(user: User, documentId: string): Promise<Docum
       type: (d.kind || "INVOICE").toUpperCase(),
       status: (d.status || "UPLOADED").toUpperCase() as DocumentStatus,
       createdAt: d.uploaded_at,
-      seconds: d.processing_seconds || 0,
+      seconds: d.processing_seconds != null ? Number(d.processing_seconds) : null,
       scenario: "",
     };
   }
@@ -151,18 +166,15 @@ export async function getExtraction(user: User, documentId: string): Promise<Ext
     };
 
     for (const f of res.fields || []) {
+      const canonicalKey = keyAliasMap[f.field_key] || f.field_key;
       const fieldObj: ExtractedField = {
         label: f.field_label || f.field_key,
         value: f.current_value ?? f.normalized_value ?? f.raw_value ?? "",
         original: f.raw_value ?? "",
-        confidence: f.confidence != null ? Math.round(f.confidence * 100) : 100,
+        confidence: f.confidence != null ? Math.round(f.confidence * 100) : null,
         correctedBy: f.is_corrected ? (f.corrected_by || "Accountant") : undefined,
       };
-      fields[f.field_key] = fieldObj;
-      const alias = keyAliasMap[f.field_key];
-      if (alias && alias !== f.field_key) {
-        fields[alias] = fieldObj;
-      }
+      fields[canonicalKey] = fieldObj;
     }
 
     const lineItems: LineItem[] = (res.line_items || []).map((item) => ({
@@ -246,8 +258,13 @@ export function validateExtraction(
     "An invoice with this number and supplier already exists.",
   );
   const low = Object.values(f).filter(
-    (field) => field.confidence < rules.threshold && !field.correctedBy,
+    (field) =>
+      field.confidence !== null &&
+      field.confidence !== undefined &&
+      field.confidence < rules.threshold &&
+      !field.correctedBy,
   );
+
   results.push({
     rule: "Confidence Check",
     result: low.length ? "WARNING" : "PASS",
@@ -452,10 +469,133 @@ export async function revalidateDocument(
   });
 }
 
-export async function getExceptions(user: User): Promise<Exception[]> {
+export interface ExceptionFilters {
+  status?: string;
+  severity?: string;
+  documentId?: string;
+  type?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function getExceptions(
+  user: User,
+  filters?: ExceptionFilters,
+): Promise<Exception[]> {
   if (!isFrontendMockEnabled) {
-    return [];
+    try {
+      const q = new URLSearchParams();
+      if (filters?.status) q.set("status", filters.status.toLowerCase());
+      if (filters?.severity) q.set("severity", filters.severity.toLowerCase());
+      if (filters?.documentId) q.set("document_id", filters.documentId);
+      if (filters?.type) q.set("type", filters.type);
+      if (filters?.limit) q.set("limit", String(filters.limit));
+      if (filters?.offset) q.set("offset", String(filters.offset));
+      const qs = q.toString() ? `?${q.toString()}` : "";
+
+      const res = await fetch(`/api/exceptions${qs}`, {
+        credentials: "same-origin",
+        headers: {
+          "X-Requested-With": "AccountingIntelligence",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rawList: RawBackendException[] = Array.isArray(data)
+          ? data
+          : data.exceptions || [];
+        return rawList.map((e: RawBackendException) => {
+          const sev = String(e.severity || "MEDIUM").toUpperCase();
+          const validSeverity: ExceptionSeverity =
+            sev === "HIGH" || sev === "LOW" ? sev : "MEDIUM";
+          const st = String(e.status || "OPEN").toUpperCase();
+          const validStatus: ExceptionStatus =
+            st === "RESOLVED" || st === "IN_REVIEW" || st === "ASSIGNED"
+              ? st
+              : "OPEN";
+          return {
+            id: String(e.id),
+            tenantId: String(e.tenant_id || user.tenantId),
+            documentId: String(e.document_id),
+            documentCode: e.document_code,
+            originalFilename: e.original_filename,
+            type: String(e.type || e.exception_type || "VALIDATION_ERROR"),
+            severity: validSeverity,
+            status: validStatus,
+            assignedTo: e.assigned_to ? String(e.assigned_to) : user.id,
+            assignedToName: e.assigned_to_name,
+            message: String(e.message || "Document requires review"),
+            createdAt: e.created_at || new Date().toISOString(),
+            resolvedAt: e.resolved_at || undefined,
+            note:
+              e.note ||
+              (e.resolved_at
+                ? `Resolved at ${e.resolved_at}`
+                : e.details || undefined),
+          };
+        });
+      }
+
+      if (res.status === 404) {
+        // Backend tenant-scoped /api/exceptions endpoint is not yet mounted.
+        // Fallback: Aggregate genuine exceptions from documents in 'EXCEPTION' status via /result
+        const docs = await getDocuments(user);
+        const flaggedDocs = docs.filter((d) =>
+          ["EXCEPTION", "IN_REVIEW"].includes(d.status),
+        );
+        if (!flaggedDocs.length) {
+          return [];
+        }
+        const aggregated: Exception[] = [];
+        for (const doc of flaggedDocs) {
+          try {
+            const detail = await api<BackendExtractionResult>(
+              `/documents/${doc.id}/result`,
+            );
+            for (const ex of detail.exceptions || []) {
+              const sev = String(ex.severity || "MEDIUM").toUpperCase();
+              const validSeverity: ExceptionSeverity =
+                sev === "HIGH" || sev === "LOW" ? sev : "MEDIUM";
+              const st = String(ex.status || "OPEN").toUpperCase();
+              const validStatus: ExceptionStatus =
+                st === "RESOLVED" || st === "IN_REVIEW" || st === "ASSIGNED"
+                  ? st
+                  : "OPEN";
+              aggregated.push({
+                id: String(ex.id || `EXC-${doc.id}-${ex.exception_code || "GEN"}`),
+                tenantId: String(ex.tenant_id || user.tenantId),
+                documentId: String(doc.id),
+                documentCode: doc.name,
+                originalFilename: doc.name,
+                type: String(ex.type || ex.exception_code || "VALIDATION_ERROR"),
+                severity: validSeverity,
+                status: validStatus,
+                assignedTo: ex.assigned_to ? String(ex.assigned_to) : user.id,
+                message: String(
+                  ex.message || "Document requires accountant review",
+                ),
+                createdAt: ex.created_at || doc.createdAt,
+                note: ex.resolved_at
+                  ? `Resolved at ${ex.resolved_at}`
+                  : ex.details || undefined,
+              });
+            }
+          } catch {
+            // Document result fetch failed
+          }
+        }
+        return aggregated;
+      }
+
+      // If server returned non-404 error (e.g. 500, 401, 403), throw so user sees real error
+      throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+    } catch (err) {
+      throw new Error(
+        `Unable to retrieve tenant exceptions: ${(err as Error).message}`,
+      );
+    }
   }
+
   const docs = await getDocuments(user);
   return readDb().exceptions.filter(
     (e) =>
@@ -474,11 +614,39 @@ export async function resolveException(
   return revalidateDocument(user, documentId, note);
 }
 
+export async function resolveExceptionDirect(
+  user: User,
+  exceptionId: string,
+  note = "Resolved by accountant",
+) {
+  if (!isFrontendMockEnabled) {
+    return api(
+      `/exceptions/${exceptionId}`,
+      { status: "resolved", note },
+      "PATCH",
+    );
+  }
+  mutate((db) => {
+    const exception = db.exceptions.find((e) => e.id === exceptionId);
+    if (!exception || exception.tenantId !== user.tenantId)
+      throw new Error("Exception not found.");
+    exception.status = "RESOLVED";
+    if (note) exception.note = note;
+  });
+}
+
 export async function assignException(
   user: User,
   exceptionId: string,
   userId: string,
 ) {
+  if (!isFrontendMockEnabled) {
+    return api(
+      `/exceptions/${exceptionId}`,
+      { assigned_to: userId, status: "assigned" },
+      "PATCH",
+    );
+  }
   requireRole(user, ["LOCAL_ADMIN"]);
   mutate((db) => {
     const exception = db.exceptions.find((e) => e.id === exceptionId);
@@ -506,8 +674,11 @@ export async function uploadDocument(
   kind: DocumentKind = documentKindFromName(file.name),
 ): Promise<Document> {
   if (!isFrontendMockEnabled) {
-    if (!/\.(pdf|png|jpe?g|tiff?|xlsx|csv)$/i.test(file.name))
-      throw new Error("Supported formats: PDF, PNG, JPG, JPEG, TIFF, TIF, XLSX, CSV.");
+    if (!/\.pdf$/i.test(file.name))
+      throw new Error(
+        "Unsupported format: Currently only PDF files (.pdf) are accepted for Docling neural extraction.",
+      );
+
     if (file.size === 0) throw new Error("This file is empty.");
     if (file.size > 20 * 1024 * 1024)
       throw new Error("Maximum file size is 20 MB.");

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "playwright test",
+    "test:browser": "playwright test tests/browser/accountant_integration.spec.ts",
+    "test:browser:all": "playwright test",
     "format": "prettier --write src tests *.json *.mjs"
   },
   "dependencies": {

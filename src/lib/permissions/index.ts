@@ -20,8 +20,18 @@ export function assertTenant(user: User, tenantId: string) {
     throw new Error("Company not available in this workspace.");
 }
 export function assertActive(db: Database, user: User) {
-  const current = db.users.find((u) => u.id === user.id);
-  if (!current || current.status !== "ACTIVE")
+  const current = db.users.find(
+    (u) =>
+      u.id === user.id ||
+      (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()),
+  );
+  if (!current) {
+    if (user.status === "ACTIVE") return;
+    throw new Error(
+      "This account is inactive. Please sign in with an active account.",
+    );
+  }
+  if (current.status !== "ACTIVE")
     throw new Error(
       "This account is inactive. Please sign in with an active account.",
     );

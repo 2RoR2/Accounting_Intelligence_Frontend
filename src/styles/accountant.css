@@ -361,6 +361,8 @@
 .shoebox-label em.high { color: #16a34a; }
 .shoebox-label em.med { color: #d97706; }
 .shoebox-label em.low { color: #dc2626; }
+.shoebox-label em.reviewed { color: #0284c7; }
+.shoebox-label em.unavailable { color: #64748b; font-weight: 500; font-size: 9.5px; }
 
 .shoebox-field input {
   border: 1px solid #e2e8f0;

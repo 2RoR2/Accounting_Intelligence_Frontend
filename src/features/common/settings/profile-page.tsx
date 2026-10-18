@@ -4,7 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Camera, UserRound } from "lucide-react";
 import type { User } from "@/types";
 import { updateOwnProfile } from "@/lib/api/user.service";
-import { changeOwnPassword, resetPassword } from "@/lib/api/auth.service";
+import { changeOwnPassword, isFrontendMockAuthEnabled, resetPassword } from "@/lib/api/auth.service";
 import { ErrorState, Field, PageHeader, Panel, Toast } from "@/components/common/ui";
 
 export function ProfilePage({ user }: { user: User }) {
@@ -15,6 +15,10 @@ export function ProfilePage({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
 
   function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    if (!isFrontendMockAuthEnabled) {
+      setFailure("Profile avatar changes are disabled pending backend endpoint deployment.");
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/") || file.size > 1024 * 1024) {
@@ -28,6 +32,10 @@ export function ProfilePage({ user }: { user: User }) {
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isFrontendMockAuthEnabled) {
+      setFailure("Profile updates are currently disabled pending Rachel's approved user-profile endpoint.");
+      return;
+    }
     setBusy(true);
     try {
       await updateOwnProfile(user, name, avatar);
@@ -39,6 +47,7 @@ export function ProfilePage({ user }: { user: User }) {
       setBusy(false);
     }
   }
+
 
   return (
     <>
@@ -76,7 +85,32 @@ export function ProfilePage({ user }: { user: User }) {
             <Field label="Role">
               <input value={user.role.replaceAll("_", " ")} disabled />
             </Field>
-            <button className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>
+            <button
+              className="btn primary"
+              disabled={busy || !isFrontendMockAuthEnabled}
+              title={
+                !isFrontendMockAuthEnabled
+                  ? "Profile updates disabled pending backend API integration"
+                  : undefined
+              }
+            >
+              {!isFrontendMockAuthEnabled
+                ? "Save profile (API pending)"
+                : busy
+                  ? "Saving…"
+                  : "Save profile"}
+            </button>
+            {!isFrontendMockAuthEnabled && (
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#64748b",
+                  marginTop: "8px",
+                }}
+              >
+                Self-service profile editing is currently disabled pending backend API endpoint deployment.
+              </p>
+            )}
           </form>
         </Panel>
         {user.role === "ACCOUNTANT" ? (
@@ -85,6 +119,12 @@ export function ProfilePage({ user }: { user: User }) {
               className="panel-body"
               onSubmit={async (event) => {
                 event.preventDefault();
+                if (!isFrontendMockAuthEnabled && !user.mustChangePassword) {
+                  setFailure(
+                    "Password change on active accounts is disabled by security policy. Use the email reset flow to update your credentials.",
+                  );
+                  return;
+                }
                 const form = new FormData(event.currentTarget);
                 try {
                   await changeOwnPassword(
@@ -109,30 +149,81 @@ export function ProfilePage({ user }: { user: User }) {
               <Field label="Confirm new password *">
                 <input name="confirmation" type="password" autoComplete="new-password" required minLength={8} />
               </Field>
-              <button className="btn primary">Change password</button>
+              <button
+                className="btn primary"
+                disabled={!isFrontendMockAuthEnabled && !user.mustChangePassword}
+                title={
+                  !isFrontendMockAuthEnabled && !user.mustChangePassword
+                    ? "Password changes on active accounts require email reset flow"
+                    : undefined
+                }
+              >
+                {!isFrontendMockAuthEnabled && !user.mustChangePassword
+                  ? "Change password (Disabled on active session)"
+                  : "Change password"}
+              </button>
+              {!isFrontendMockAuthEnabled && !user.mustChangePassword && (
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "#64748b",
+                    marginTop: "8px",
+                  }}
+                >
+                  Active session password changes require the email reset flow at sign-in until Rachel&apos;s approved credential update API is released.
+                </p>
+              )}
             </form>
           </Panel>
         ) : (
           <Panel title="Change my password">
-            <form className="panel-body" onSubmit={async (event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              try {
-                await resetPassword(String(form.get("password")), String(form.get("confirmation")));
-                setMessage("Password change recorded successfully.");
-                event.currentTarget.reset();
-              } catch (error) { setFailure((error as Error).message); }
-            }}>
+            <form
+              className="panel-body"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!isFrontendMockAuthEnabled) {
+                  setFailure("Password changes require the email reset flow.");
+                  return;
+                }
+                const form = new FormData(event.currentTarget);
+                try {
+                  await resetPassword(String(form.get("password")), String(form.get("confirmation")));
+                  setMessage("Password change recorded successfully.");
+                  event.currentTarget.reset();
+                } catch (error) {
+                  setFailure((error as Error).message);
+                }
+              }}
+            >
               <Field label="New password *" hint="Use uppercase, lowercase, number, and symbol.">
                 <input name="password" type="password" autoComplete="new-password" required minLength={8} />
               </Field>
               <Field label="Confirm new password *">
                 <input name="confirmation" type="password" autoComplete="new-password" required minLength={8} />
               </Field>
-              <button className="btn primary">Change password</button>
+              <button
+                className="btn primary"
+                disabled={!isFrontendMockAuthEnabled}
+              >
+                {!isFrontendMockAuthEnabled
+                  ? "Change password (API pending)"
+                  : "Change password"}
+              </button>
+              {!isFrontendMockAuthEnabled && (
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "#64748b",
+                    marginTop: "8px",
+                  }}
+                >
+                  Password changes require using the email reset flow at sign-in.
+                </p>
+              )}
             </form>
           </Panel>
         )}
+
       </div>
       <Toast message={message} />
     </>

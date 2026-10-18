@@ -13,9 +13,11 @@ export function PerformanceCards({ metrics }: { metrics: KPI[] }) {
         <div className="kpi-card" key={m.label}>
           <div className="kpi-label">
             {m.label}
-            <span className="kpi-check">
-              <Check size={12} />
-            </span>
+            {m.met && (
+              <span className="kpi-check">
+                <Check size={12} />
+              </span>
+            )}
           </div>
           <div className="kpi-value">
             {m.value}
@@ -24,23 +26,34 @@ export function PerformanceCards({ metrics }: { metrics: KPI[] }) {
           <div className="kpi-target">
             <span>Target {m.target}</span>
             <strong>
-              <Check size={12} /> Target met
+              {m.value === "Not measured" ? (
+                <span style={{ color: "#64748b", fontWeight: 500 }}>Unmeasured</span>
+              ) : m.met ? (
+                <>
+                  <Check size={12} /> Target met
+                </>
+              ) : (
+                <span style={{ color: "#d97706" }}>Review needed</span>
+              )}
             </strong>
           </div>
           <div className="kpi-bar">
             <span
               style={{
                 width:
-                  m.label === "Exception rate"
-                    ? "76%"
-                    : m.label === "Avg. processing time"
-                      ? "44%"
-                      : m.value,
+                  m.value === "Not measured"
+                    ? "0%"
+                    : m.label === "Exception rate"
+                      ? `${Math.min(100, Math.round(Number.parseFloat(m.value) * 5))}%`
+                      : m.label === "Avg. processing time"
+                        ? `${Math.min(100, Math.round((Number.parseFloat(m.value) / 20) * 100))}%`
+                        : "50%",
               }}
             />
           </div>
         </div>
       ))}
+
     </div>
   );
 }

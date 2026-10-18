@@ -7,3 +7,6 @@ test-results/
 .env*.local
 .npm-cache/
 .npm-ca.pem
+scratch/
+tests/fixtures/*.pdf
+dump.rdb

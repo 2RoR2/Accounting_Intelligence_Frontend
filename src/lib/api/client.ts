@@ -1,4 +1,4 @@
-﻿export class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
   }
@@ -6,9 +6,9 @@
 
 let refreshInProgress: Promise<boolean> | null = null;
 
-function request(path: string, body?: unknown) {
+function request(path: string, body?: unknown, method?: string) {
   return fetch(`/api${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method || (body === undefined ? "GET" : "POST"),
     credentials: "same-origin",
     cache: "no-store",
     headers: { "Content-Type": "application/json", "X-Requested-With": "AccountingIntelligence" },
@@ -31,12 +31,12 @@ function canRefresh(path: string) {
   return endpoint === "/auth/me" || endpoint === "/auth/authorize" || endpoint === "/auth/change-password";
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   let response: Response;
   try {
-    response = await request(path, body);
+    response = await request(path, body, method);
     if (response.status === 401 && canRefresh(path) && await refreshAccessToken()) {
-      response = await request(path, body);
+      response = await request(path, body, method);
     }
   } catch {
     throw new ApiError("Cannot reach the account service. Please try again shortly.", 0);
