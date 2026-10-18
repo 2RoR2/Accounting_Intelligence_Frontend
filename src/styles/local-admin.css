@@ -15,7 +15,7 @@
 .app-shell[data-role="local-admin"] .nav-item:hover,
 .app-shell[data-role="super-admin"] .nav-item:hover { background:rgba(255,255,255,.06); color:#fff; transform:none; }
 .app-shell[data-role="local-admin"] .nav-item.active,
-.app-shell[data-role="super-admin"] .nav-item.active { background:#0f172a; color:#fff; border-left:3px solid #0ea5e9; border-radius:0; box-shadow:none; }
+.app-shell[data-role="super-admin"] .nav-item.active { background:transparent; color:#cbd5e1; border-left:0; border-radius:0; box-shadow:none; }
 .app-shell[data-role="local-admin"] .workspace-icon,
 .app-shell[data-role="super-admin"] .workspace-icon { background:#0ea5e9; color:#fff; }
 .app-shell[data-role="local-admin"] .topbar,
