@@ -1,17 +1,16 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, CircleX, FileCheck2, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, CircleX, CheckCircle2, FileCheck2, RefreshCw } from "lucide-react";
 import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  advanceProcessing,
+  retryDocumentProcessing,
   getDocument,
   getExceptions,
   getExtraction,
-  getValidationResults,
+  getValidationReport,
   revalidateDocument,
-  resolveException,
   updateExtractedField,
 } from "@/lib/api/document.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
@@ -29,8 +28,9 @@ import {
   Panel,
   Toast,
   formatDate,
-  money,
 } from "@/components/common/ui";
+import { ApiError } from "@/lib/api/client";
+import { decimalDisplay as money } from "@/lib/api/document-contract";
 import { DocumentViewer } from "@/components/common/documents/document-viewer";
 import { InvoiceDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
@@ -45,46 +45,30 @@ import {
   type DocumentComment,
 } from "@/lib/api/workflow.service";
 
-function FormField({
-  field,
-  onSave,
-  onFocus,
-  readonly,
-}: {
-  field: ExtractedField;
-  onSave: (value: string) => Promise<void>;
-  onFocus?: () => void;
-  readonly: boolean;
+function FormField({ field, onSave, onFocus, readonly }: {
+  field: ExtractedField; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean;
 }) {
-  const [value, setValue] = useState(field.value);
+  const [value, setValue] = useState(field.value ?? "");
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  return (
-    <label className="shoebox-field">
-      <span className="shoebox-label">
-        {field.label}
-        <em className={`conf ${field.confidence >= 95 ? "high" : field.confidence >= 80 ? "med" : "low"}`}>
-          {field.correctedBy ? <Check size={11} /> : null}
-          {field.correctedBy ? "Reviewed" : `${field.confidence}%`}
-        </em>
-      </span>
-      <input
-        value={value}
-        disabled={readonly || saving}
-        onChange={(e) => setValue(e.target.value)}
-        onFocus={onFocus}
-        onBlur={async () => {
-          if (value !== field.value && !readonly) {
-            setSaving(true);
-            try {
-              await onSave(value);
-            } finally {
-              setSaving(false);
-            }
-          }
-        }}
-      />
+  const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
+  useEffect(() => { if (!dirty) setValue(field.value ?? ""); }, [field.value, dirty]);
+  return <div className="shoebox-field">
+    <label className="shoebox-label" htmlFor={"field-" + field.label}>{field.label}
+      <em className="conf">{field.correctedBy ? "Reviewed correction" : field.confidence === null ? "Confidence not provided" : (field.confidence * 100).toFixed(1) + "%"}</em>
     </label>
-  );
+    <input id={"field-" + field.label} aria-label={field.label} value={value} disabled={readonly || saving}
+      onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
+    <small>Raw: {field.rawValue ?? "Not provided"}<br/>Extracted: {field.original ?? "Not provided"}<br/>Saved: {field.value ?? "Not provided"} | {field.method ?? "Method not provided"}</small>
+    {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict} onClick={async () => {
+      setSaving(true); setError("");
+      try { await onSave(value); setDirty(false); }
+      catch (e) { setError((e as Error).message); setConflict(e instanceof ApiError && e.status === 409); }
+      finally { setSaving(false); }
+    }}>{saving ? "Saving..." : "Save field"}</button>}
+    {error && <p role="alert">{error}{conflict ? " Latest data refreshed; your draft is retained. Edit again after reviewing the saved value." : ""}</p>}
+  </div>;
 }
 
 export function DocumentReview({
@@ -101,6 +85,7 @@ export function DocumentReview({
         getDocument(user, documentId),
         getExtraction(user, documentId),
       ]);
+      const validationReport = ["UPLOADED","QUEUED","PROCESSING","FAILED"].includes(doc.status) ? null : await getValidationReport(user, documentId);
       const optional = async <T,>(request: Promise<T>, fallback: T) => {
         try {
           return await Promise.race([
@@ -111,15 +96,14 @@ export function DocumentReview({
           return fallback;
         }
       };
-      const [validation, exceptions, records, audit, comments, workflow] = await Promise.all([
-        optional(getValidationResults(user, documentId), []),
+      const [exceptions, records, audit, comments, workflow] = await Promise.all([
         optional(getExceptions(user).then((items) => items.filter((e) => e.documentId === documentId)), []),
         optional(getStandardisedRecords(user), []),
         optional(getAuditLogs(user), []),
         optional(getDocumentComments(documentId), []),
         optional(getDocumentKindWorkflow(documentId), { kind: "", fields: {}, overdue: false, duplicates: [], relatedNotes: [] }),
       ]);
-      return { doc, extraction, validation, exceptions, records, audit, comments, workflow };
+      return { doc, extraction, validation: validationReport?.results ?? [], validationReport, exceptions, records, audit, comments, workflow };
     },
     `${user.id}:${documentId}`,
   );
@@ -131,7 +115,7 @@ export function DocumentReview({
   const [comment, setComment] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
 
-  async function run(op: () => Promise<unknown>, message: string) {
+  async function run(op: () => Promise<unknown>, message: string, propagate = false) {
     setBusy(true);
     setFailure("");
     try {
@@ -140,15 +124,23 @@ export function DocumentReview({
       await refresh();
     } catch (e) {
       setFailure((e as Error).message);
+      if (e instanceof ApiError && e.status === 409) await refresh();
+      if (propagate) throw e;
     } finally {
       setBusy(false);
     }
   }
 
+  useEffect(() => {
+    if (!data || !["UPLOADED","QUEUED","PROCESSING"].includes(data.doc.status)) return;
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => window.clearInterval(timer);
+  }, [data, refresh]);
+
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
-  const readonly = data.doc.status === "COMPLETED";
+  const readonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !data.extraction.contentRevision;
   const extraction = data.extraction ?? { documentId, fields: {}, lineItems: [] };
   const workflow = data.workflow ?? { overdue: false, duplicates: [], relatedNotes: [] };
   const validation = data.validation ?? [];
@@ -176,6 +168,7 @@ export function DocumentReview({
       />
 
       {failure && <ErrorState message={failure} />}
+      {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge><p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {result.result}</strong> {result.message}</p>)}</div></Panel>}
 
       {data.doc.type === "INVOICE" && !failed && !pending && (
         <InvoiceDetailPreview doc={data.doc} extraction={extraction} />
@@ -191,16 +184,16 @@ export function DocumentReview({
             </p>
             <button
               className="btn primary"
-              disabled={busy}
+              disabled={busy || pending}
               onClick={() =>
                 run(
-                  () => advanceProcessing(user, documentId, "EXTRACTED"),
-                  "Extraction completed.",
+                  () => retryDocumentProcessing(user, documentId),
+                  "Extraction retry queued.",
                 )
               }
             >
               <RefreshCw size={16} />{" "}
-              {failed ? "Retry extraction" : "Complete extraction"}
+              {failed ? "Retry extraction" : "Waiting for Docling extraction"}
             </button>
           </div>
         </Panel>
@@ -230,14 +223,14 @@ export function DocumentReview({
                 <div className="shoebox-fields">
                   {Object.entries(extraction.fields).map(([key, field]) => (
                     <FormField
-                      key={`${key}:${field.value}:${field.correctedBy}`}
+                      key={key}
                       field={field}
                       readonly={readonly}
                       onFocus={() => setHighlightedField(key)}
                       onSave={(value) =>
                         run(
-                          () => updateExtractedField(user, documentId, key, value),
-                          "Field updated.",
+                          () => updateExtractedField(user, documentId, key, value, data.extraction.contentRevision!),
+                          "Correction saved with a new revision.", true,
                         )
                       }
                     />
@@ -248,12 +241,12 @@ export function DocumentReview({
                     <strong>Line items</strong>
                     <DataTable
                       rows={extraction.lineItems}
-                      rowKey={(r) => r.description}
+                      rowKey={(r) => r.id ?? r.description ?? "line"}
                       columns={[
                         { label: "Description", render: (r) => r.description },
                         { label: "Qty", render: (r) => r.quantity },
-                        { label: "Unit", render: (r) => money(r.unitPrice) },
-                        { label: "Amount", render: (r) => money(r.amount) },
+                        { label: "Unit", render: (r) => money(r.unitPrice, extraction.fields.currency?.value) },
+                        { label: "Amount", render: (r) => money(r.amount, extraction.fields.currency?.value) },
                       ]}
                     />
                   </div>
@@ -272,7 +265,7 @@ export function DocumentReview({
                       disabled={busy}
                       onClick={() =>
                         run(
-                          () => resolveException(user, documentId, note || "Reviewed"),
+                          () => revalidateDocument(user, documentId),
                           "Review saved and revalidated.",
                         )
                       }
@@ -282,7 +275,7 @@ export function DocumentReview({
                     <button className="btn" disabled={busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.") }>
                       Save draft
                     </button>
-                    {user.role === "ACCOUNTANT" && data.doc.status === "VALIDATED" && (
+                    {user.role === "ACCOUNTANT" && data.validationReport?.validationStatus === "PASS" && (
                       <button className="btn" disabled={busy} onClick={() => run(() => submitDocumentReview(documentId, "submitted", note || "Ready for approval", data.doc.contentRevision ?? 1), "Submitted for approval.")}>
                         Submit for approval
                       </button>
@@ -300,27 +293,8 @@ export function DocumentReview({
 
           {panel === "validation" && (
             <Panel title="Validation centre" subtitle="Confirm every extracted value before this document moves to standardisation.">
-              {(() => {
-                const pass = validation.filter((v) => v.result === "PASS").length;
-                const warnings = validation.filter((v) => v.result === "WARNING").length;
-                const fails = validation.filter((v) => v.result === "FAIL").length;
-                const checked = validation.length ? Math.round((pass / validation.length) * 100) : 0;
-                return <>
-                  <div className="validation-overview">
-                    <div className={`validation-score ${fails ? "has-fail" : warnings ? "has-warning" : "is-ready"}`}>
-                      <strong>{checked}%</strong><span>ready to standardise</span>
-                    </div>
-                    <div className="validation-progress"><span style={{ width: `${checked}%` }} /></div>
-                    <div className="validation-stat pass"><CheckCircle2 size={17} /><strong>{pass}</strong><span>Passed</span></div>
-                    <div className="validation-stat warning"><AlertTriangle size={17} /><strong>{warnings}</strong><span>Warnings</span></div>
-                    <div className="validation-stat fail"><CircleX size={17} /><strong>{fails}</strong><span>Blocking</span></div>
-                  </div>
-                  {fails > 0 && <div className="validation-callout fail"><CircleX size={18} /><div><strong>Action required before standardisation</strong><span>Resolve the failed rules below, then run validation again.</span></div></div>}
-                  {fails === 0 && warnings > 0 && <div className="validation-callout warning"><AlertTriangle size={18} /><div><strong>Review the warnings before approval</strong><span>Warnings do not block standardisation, but should be confirmed by a reviewer.</span></div></div>}
-                  {fails === 0 && warnings === 0 && validation.length > 0 && <div className="validation-callout success"><CheckCircle2 size={18} /><div><strong>All validation checks passed</strong><span>This document is ready for the next workflow step.</span></div></div>}
-                </>;
-              })()}
-              <div className="validation-results-head"><div><strong>Rule results</strong><span>{validation.length} checks run against the current revision</span></div><Badge>{data.doc.status}</Badge></div>
+              {data.validationReport && <div className="panel-body"><Badge>{data.validationReport.validationStatus}</Badge><p>{data.validationReport.passed} aggregate check passed ? {data.validationReport.failed} blocking findings ? {data.validationReport.warnings} warnings.</p><p>Human review and explicit approval remain required. This is not an extraction accuracy score.</p></div>}
+              <div className="validation-results-head"><div><strong>Rule results</strong><span>{validation.length} backend findings at the current revision</span></div><Badge>{data.doc.status}</Badge></div>
               <DataTable
                 rows={validation}
                 rowKey={(v) => v.rule}

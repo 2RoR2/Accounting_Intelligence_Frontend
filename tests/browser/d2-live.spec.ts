@@ -1,0 +1,110 @@
+import {test,expect,type Page} from "@playwright/test";
+import {readFileSync} from "node:fs";
+import {join,resolve} from "node:path";
+import {createHmac,randomUUID} from "node:crypto";
+const backend=resolve(process.cwd(),"../Accounting_Intelligence_Backend_V2");
+type SyntheticAccount={email:string;password:string;totp_secret:string;user_id:string};
+function totp(secret:string) {
+  const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits="";
+  for(const char of secret.replace(/=+$/,"").toUpperCase()) bits+=alphabet.indexOf(char).toString(2).padStart(5,"0");
+  const key=Buffer.from((bits.match(/.{8}/g)??[]).map(v=>parseInt(v,2)));
+  const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
+  const digest=createHmac("sha1",key).update(counter).digest();const offset=digest[digest.length-1]&15;
+  return String((digest.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0");
+}
+async function signIn(page:Page,account:SyntheticAccount) {
+  // Catch action errors here so credentials/OTP never appear in test call logs.
+  try {
+    await page.goto("/login");
+    await page.getByLabel("Company email *",{exact:true}).fill(account.email);
+    await page.getByLabel("Password *",{exact:true}).fill(account.password);
+    await page.getByRole("button",{name:"Continue with email"}).click();
+    await expect(page.getByLabel("Authenticator digit 1",{exact:true})).toBeVisible();
+    const code=totp(account.totp_secret);
+    for(let i=0;i<6;i++) await page.getByLabel("Authenticator digit "+(i+1),{exact:true}).fill(code[i]);
+    const response=page.waitForResponse(r=>r.url().includes("/api/auth/verify-mfa")&&r.request().method()==="POST");
+    await page.getByRole("button",{name:"Verify and continue"}).click();
+    expect((await response).status()).toBe(200);
+    await expect(page.getByRole("link",{name:"Continue to workspace"})).toBeVisible();
+    await page.getByRole("link",{name:"Continue to workspace"}).click();
+    const me=await page.request.get("/api/auth/me");expect(me.status()).toBe(200);
+    expect((await me.json()).id).toBe(account.user_id);
+  } catch {throw new Error("Real synthetic password/TOTP browser login failed; credentials omitted.");}
+}
+async function upload(page:Page,name:string,fixture:string) {
+  await page.goto("/company/upload");
+  const payload=Buffer.concat([readFileSync(join(backend,"runs/d1a/demo-ready",fixture)),Buffer.from("\n% D2 browser run "+randomUUID()+"\n")]);
+  await page.locator('input[type="file"]').setInputFiles({name,mimeType:"application/pdf",buffer:payload});
+  const response=page.waitForResponse(r=>r.url().includes("/api/documents?")&&r.request().method()==="POST");
+  await page.getByRole("button",{name:"Upload and process"}).click();
+  const uploaded=await response;expect(uploaded.status()).toBe(201);
+  const dto=await uploaded.json();expect(dto.queueJobId).toBeTruthy();
+  await expect(page.getByRole("link",{name:"Review extracted document"})).toBeVisible({timeout:180000});
+  await page.getByRole("link",{name:"Review extracted document"}).click();
+  await expect(page).toHaveURL(new RegExp("/company/documents/"+dto.id+"$"));
+  await expect(page.getByText("Backend validation",{exact:true})).toBeVisible();
+  return dto.id as string;
+}
+test("real website login, PDF extraction, blocking math, correction and stale revision",async({browser},info)=>{
+  expect(readFileSync(".env.local","utf8")).toMatch(/BACKEND_URL=http:\/\/127\.0\.0\.1:8002/);
+  const accounts=JSON.parse(readFileSync(join(backend,"runs/d1a/accounts.json"),"utf8")) as SyntheticAccount[];
+  expect(accounts.every(a=>a.email.endsWith("@example.test"))).toBeTruthy();
+  const first=await browser.newContext();const second=await browser.newContext();
+  const valid=await first.newPage();const bad=await second.newPage();
+  const pageErrors:string[]=[];for(const p of [valid,bad]) p.on("pageerror",e=>pageErrors.push(e.message));
+  await signIn(valid,accounts[0]);
+  const validId=await upload(valid,"D2-valid-"+Date.now()+".pdf","complete.pdf");
+  await expect(valid.getByText("PASS",{exact:true}).first()).toBeVisible();
+  await expect(valid.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("50.00");
+  await expect(valid.getByText(/Source classification: invoice/)).toBeVisible();
+  await valid.getByRole("textbox",{name:"Total",exact:true}).focus();
+  await expect(valid.locator('[aria-label="Source evidence"]')).toContainText("#/texts/");
+  await expect(valid.getByTitle("Original document")).toHaveAttribute("src",new RegExp("/api/documents/"+validId+"/file"));
+  const source = await valid.request.get("/api/documents/"+validId+"/file"); expect(source.status()).toBe(200); expect(source.headers()["content-type"]).toContain("application/pdf");
+  await valid.screenshot({path:info.outputPath("valid-1440.png"),fullPage:true});
+  await valid.setViewportSize({width:1366,height:768});
+  await valid.screenshot({path:info.outputPath("valid-1366.png"),fullPage:true});
+  await valid.setViewportSize({width:390,height:844});
+  await expect(valid.getByRole("textbox",{name:"Total",exact:true})).toBeVisible();
+  await valid.screenshot({path:info.outputPath("valid-mobile.png"),fullPage:true});
+  await signIn(bad,accounts[1]);
+  const badId=await upload(bad,"D2-incorrect-"+Date.now()+".pdf","incorrect.pdf");
+  await expect(bad.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("99.00");
+  await expect(bad.getByText(/subtotal \+ tax_amount - discount = 50.00 does not match total_amount = 99.00/).first()).toBeVisible();
+  await expect(bad.getByText(/EX-005/).first()).toBeVisible();
+  await bad.screenshot({path:info.outputPath("incorrect.png"),fullPage:true});
+  await bad.goto("/company/exceptions");
+  await expect(bad.getByRole("cell").filter({hasText:"VALIDATION:EX-005"}).first()).toBeVisible();
+  await bad.goto("/company/documents/"+badId);
+  await expect(bad.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("99.00");
+  const before=await (await bad.request.get("/api/documents/"+badId+"/extraction")).json();
+  const stale=await second.newPage();await stale.goto("/company/documents/"+badId);
+  await expect(stale.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("99.00");
+  await bad.getByRole("textbox",{name:"Total",exact:true}).fill("50.00");
+  const saved=bad.waitForResponse(r=>r.url().endsWith("/extraction/total")&&r.request().method()==="PATCH");
+  await bad.getByRole("button",{name:"Save Total",exact:true}).click();
+  const savedResponse=await saved;expect(savedResponse.status()).toBe(200);
+  expect(savedResponse.request().postDataJSON().expectedContentRevision).toBe(before.contentRevision);
+  const correction=await savedResponse.json();expect(correction.contentRevision).toBe(before.contentRevision+1);
+  await stale.getByRole("textbox",{name:"Total",exact:true}).fill("49.00");
+  const conflict=stale.waitForResponse(r=>r.url().endsWith("/extraction/total")&&r.request().method()==="PATCH");
+  await stale.getByRole("button",{name:"Save Total",exact:true}).click();expect((await conflict).status()).toBe(409);
+  await expect(stale.getByText(/your draft is retained/)).toBeVisible();
+  await expect(stale.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("49.00");
+  await expect(stale.getByRole("button",{name:"Save Total",exact:true})).toBeDisabled();
+  await stale.screenshot({path:info.outputPath("stale-revision.png"),fullPage:true});
+  await bad.getByRole("button",{name:"Save & revalidate",exact:true}).click();
+  await expect(bad.getByText("PASS",{exact:true}).first()).toBeVisible();
+  await bad.reload();await expect(bad.getByRole("textbox",{name:"Total",exact:true})).toHaveValue("50.00");
+  await expect(bad.getByText("Content revision "+correction.contentRevision,{exact:true})).toBeVisible();
+  const after=await (await bad.request.get("/api/documents/"+badId+"/extraction")).json();
+  const total=after.fields.find((f:{key:string})=>f.key==="total");
+  expect(total.normalizedValue).toBe("99.00");expect(total.currentValue).toBe("50.00");
+  const report=await (await bad.request.get("/api/documents/"+badId+"/validation")).json();
+  expect(report.validationStatus).toBe("PASS");expect(report.reviewRequired).toBe(true);
+  expect(report.accountingApprovalPerformed).toBe(false);
+  await bad.screenshot({path:info.outputPath("corrected-reloaded.png"),fullPage:true});
+  expect(pageErrors).toEqual([]);
+  console.log(JSON.stringify({valid:{id:validId,status:"EXTRACTED",validation:"PASS",total:"50.00"},incorrect:{id:badId,initialTotal:"99.00",rule:"EX-005"},correction:{revision:correction.contentRevision,currentValue:total.currentValue,originalValue:total.normalizedValue},staleStatus:409}));
+  await first.close();await second.close();
+});

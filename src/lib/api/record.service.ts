@@ -1,5 +1,6 @@
-import type { Document, StandardisedRecord, User } from "@/types";
+import type { Document, User } from "@/types";
 import { requireRole } from "../permissions";
+import { mapRecord, type RecordResponse } from "./document-contract";
 import { api, get } from "./client";
 export async function standardiseDocument(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
@@ -8,7 +9,7 @@ export async function standardiseDocument(user: User, documentId: string) {
 }
 export async function getStandardisedRecords(user: User) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return get<StandardisedRecord[]>("/api/records");
+  return (await get<RecordResponse[]>("/api/records")).map(mapRecord);
 }
 export async function getRecordMetadata(user: User, tenantId?: string) {
   requireRole(user, ["SUPER_ADMIN"]);
@@ -25,7 +26,7 @@ export async function openSupportView(
   requireRole(user, ["SUPER_ADMIN"]);
   if (reason.trim().length < 5)
     throw new Error("Provide a support reason of at least 5 characters.");
-  return api<StandardisedRecord>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) });
+  return mapRecord(await api<RecordResponse>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) }));
 }
 export function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows

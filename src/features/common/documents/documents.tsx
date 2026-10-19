@@ -15,6 +15,7 @@ import type { DocumentKind, RecordCategory, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   getDocuments,
+  getDocument,
   uploadDocument,
 } from "@/lib/api/document.service";
 import { getProcessingJob } from "@/lib/api/processing.service";
@@ -34,6 +35,7 @@ import {
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
+const digitalOnly = process.env.NEXT_PUBLIC_DEMO_DIGITAL_PDF_ONLY === "true";
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
@@ -65,7 +67,7 @@ export function DocumentList({ user }: { user: User }) {
     };
     return typeByTab[selectedTab] ? data.filter((document) => document.type === typeByTab[selectedTab]) : data;
   }, [data, selectedTab]);
-  const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Purchase Bills", "purchase-bills"], ["Receipts", "receipts"], ["Credit Notes", "credit-notes"], ["Debit Notes", "debit-notes"]];
+  const documentTabs = [["All Documents", "all"], ["Invoices", "sales-invoices"], ["Purchase Bills", "purchase-bills"], ["Receipts", "receipts"], ["Credit Notes", "credit-notes"], ["Debit Notes", "debit-notes"]];
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   return (
@@ -184,16 +186,17 @@ export function UploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
-  const [scenario, setScenario] = useState("mismatch");
+  const scenario = "real";
   const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
   const [kind, setKind] = useState<DocumentKind>("INVOICE");
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [camera, setCamera] = useState(() => searchParams.get("source") === "camera");
+  const [camera, setCamera] = useState(() => !digitalOnly && searchParams.get("source") === "camera");
   const [batch, setBatch] = useState<{ id: string; name: string; status: string } | null>(null);
-  const allowedExtensions = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "xlsx", "csv"];
+  const [uploaded, setUploaded] = useState<Array<{id: string; name: string; status: string}>>([]);
+  const allowedExtensions = digitalOnly ? ["pdf"] : ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "xlsx", "csv"];
   const addFiles = (incoming: File[]) => {
     const invalid = incoming.find((file) => {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -220,6 +223,7 @@ export function UploadPage({ user }: { user: User }) {
         setStage(`Uploading ${file.name}`);
         const doc = await uploadDocument(user, file, scenario, category, kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
         documentIds.push(doc.id);
+        if (!doc.queueJobId) throw new Error("The file was stored but dispatch failed. Open Documents to retry processing; do not upload it again.");
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
         let consecutivePollErrors = 0;
@@ -230,7 +234,7 @@ export function UploadPage({ user }: { user: User }) {
             consecutivePollErrors = 0;
             setStage(`${file.name} · ${job.status.toLowerCase()}`);
             terminal = ["SUCCEEDED", "FAILED", "CANCELLED"].includes(job.status.toUpperCase());
-            if (job.status.toUpperCase() === "FAILED") {
+            if (["FAILED","CANCELLED"].includes(job.status.toUpperCase())) {
               throw new Error(`PROCESSING_TERMINAL_FAILURE:${job.lastError || `${file.name} processing failed.`}`);
             }
           } catch (error) {
@@ -254,9 +258,11 @@ export function UploadPage({ user }: { user: User }) {
           }
         }
         if (!terminal) throw new Error(`${file.name} processing timed out while waiting for the backend worker.`);
+        const actual = await getDocument(user, doc.id);
+        setUploaded(current => [...current, {id: doc.id, name: file.name, status: actual.status}]);
       }
-      setBatch(await createDocumentBatch(`${kind} upload`, documentIds));
-      setStage("Batch created and queued.");
+      if (documentIds.length > 1) setBatch(await createDocumentBatch(`${kind} upload`, documentIds));
+      setStage("Extraction finished. Open the document to review the real results.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -267,7 +273,7 @@ export function UploadPage({ user }: { user: User }) {
     <>
       <PageHeader
         title="Upload a document"
-        description="Bring invoices, bills, receipts, credit notes, and debit notes into one consistent workflow."
+        description="Upload a digital PDF invoice for real CPU Docling extraction, validation and human review."
       />
       <div className="upload-layout">
         <Panel
@@ -280,7 +286,7 @@ export function UploadPage({ user }: { user: User }) {
               <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
                 <UploadCloud size={16} /> Upload from device
               </button>
-              <button type="button" className="btn primary" disabled={busy} onClick={() => setCamera(true)}>
+              <button type="button" className="btn primary" title={digitalOnly ? "Camera/OCR is not verified for this demo" : undefined} disabled={busy || digitalOnly} onClick={() => setCamera(true)}>
                 <Camera size={16} /> Use camera
               </button>
             </div>
@@ -323,11 +329,10 @@ export function UploadPage({ user }: { user: User }) {
               </span>
               <strong>Drag, drop, paste, or browse your documents</strong>
               <span>
-                Press Ctrl+V for a copied image or file, or <b>browse files</b>
+                Paste a digital PDF file, or <b>browse files</b>
               </span>
               <small>
-                PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per
-                file
+                Digital PDF invoices · Maximum 20 MB per file
               </small>
             </button>
             )}
@@ -337,7 +342,7 @@ export function UploadPage({ user }: { user: User }) {
               hidden
               multiple
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
+              accept={digitalOnly ? ".pdf" : ".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"}
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
             />
             {files.length > 0 && <div className="upload-queue-header"><strong>Ready to upload</strong><span>{files.length} file{files.length === 1 ? "" : "s"}</span></div>}
@@ -369,10 +374,10 @@ export function UploadPage({ user }: { user: User }) {
                 onChange={(e) => setKind(e.target.value as DocumentKind)}
               >
                 <option value="INVOICE">Invoice</option>
-                <option value="BILL">Bill</option>
-                <option value="RECEIPT">Receipt</option>
-                <option value="CREDIT_NOTE">Credit note</option>
-                <option value="DEBIT_NOTE">Debit note</option>
+                <option disabled={digitalOnly} value="BILL">Bill</option>
+                <option disabled={digitalOnly} value="RECEIPT">Receipt</option>
+                <option disabled={digitalOnly} value="CREDIT_NOTE">Credit note</option>
+                <option disabled={digitalOnly} value="DEBIT_NOTE">Debit note</option>
               </select>
             </Field>
             </div>
@@ -393,25 +398,7 @@ export function UploadPage({ user }: { user: User }) {
                 </option>
               </select>
             </Field>
-            <Field
-              label="Extraction scenario"
-              hint="The selected scenario generates sample extraction data; no OCR or AI is performed."
-            >
-              <select
-                value={scenario}
-                disabled={busy}
-                onChange={(e) => setScenario(e.target.value)}
-              >
-                <option value="mismatch">
-                  Total mismatch · correction workflow
-                </option>
-                <option value="success">Successful invoice</option>
-                <option value="low">Low-confidence reference</option>
-                <option value="missing">Missing invoice number</option>
-                <option value="duplicate">Duplicate invoice</option>
-                <option value="failed">Processing failure</option>
-              </select>
-            </Field>
+{uploaded.map(document => <div key={document.id} className="notice success"><Badge>{document.status}</Badge> {document.name} <Link className="btn" href={(user.role === "LOCAL_ADMIN" ? "/company" : "/workspace") + "/documents/" + document.id}>Review extracted document</Link></div>)}
             {stage && (
               <div className="processing-banner" role="status">
                 <span className="pulse-dot" />
@@ -431,8 +418,8 @@ export function UploadPage({ user }: { user: User }) {
         <Panel title="From upload to clarity">
           <div className="panel-body upload-guide">
             {[
-              ["01", "Upload", "Add your invoice, bill, or receipt."],
-              ["02", "Extract", "Review the simulated extracted fields."],
+              ["01", "Upload", "Add your digital invoice PDF."],
+              ["02", "Extract", "Review fields from actual CPU Docling extraction."],
               [
                 "03",
                 "Validate",
@@ -454,8 +441,7 @@ export function UploadPage({ user }: { user: User }) {
             ))}
             <div className="info-box">
               <CheckCircle2 size={18} />
-              Uploaded file contents stay local. This prototype shows a labelled
-              sample document preview.
+              Original PDFs are retained privately by the local backend. Review the actual source alongside extracted fields.
             </div>
           </div>
         </Panel>
