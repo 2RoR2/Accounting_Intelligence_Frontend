@@ -1,14 +1,12 @@
-﻿# Five-minute lecturer demo - D2.2 (19 October 2026)
+# Five-minute lecturer demo — D4-A verified, 19 October 2026
 
-Verified real Chrome password/TOTP login -> authenticated PDF upload -> RQ/CPU Docling -> persisted extraction/evidence -> backend validation -> correction/reload/stale revision. No mocked routes, injected cookies, fabricated extraction or automatic approvals. Frontend_V2 / feature/accounting-v2; backend source/schema unchanged.
+Real Chrome password/TOTP login → PDF upload → RQ/CPU Docling → persisted fields/evidence → deterministic validation → revision-aware correction. No parser mocks, injected sessions, automatic approval or payment inference. Local acceptance is not production/Vercel certification.
 
-## Start / verify
+## Startup and local URLs
 
 Frontend: http://127.0.0.1:3000 | Backend: http://127.0.0.1:8002
-Both are left running. Frontend /api/health returns 200 through the same-origin proxy.
-Ignored .env.local retains BACKEND_URL=http://127.0.0.1:8002 and NEXT_PUBLIC_DEMO_DIGITAL_PDF_ONLY=true. PDF-only now includes invoices, bills, receipts and review of unknown content; camera/other formats remain disabled. Never put authentication secrets in NEXT_PUBLIC settings.
 
-If stopped, reuse the existing isolated services; do not initialize databases or start duplicates. In separate terminals:
+Reuse running services. Only if stopped, from Backend_V2 in separate terminals:
 ```powershell
 docker start saic-v2-d1a-postgres18 saic-v2-d1a-redis
 wsl -d Ubuntu --cd /mnt/c/Users/60103/Documents/GitHub/Accounting_Intelligence_Backend_V2 --exec /home/donut99/.venvs/accounting-intelligence/bin/python -B scripts/d1a.py api
@@ -19,63 +17,54 @@ From Frontend_V2:
 $env:NEXT_BUILD_DIR='.next-d22-dev'
 npm run dev -- --port 3000 --hostname 127.0.0.1
 ```
-The backend launcher checks its isolated database/server identity. CPU Docling requires the existing SSD model directory visible in WSL at /mnt/d/Jonathan Files/AccountingIntelligence_SSD_Starter/AccountingIntelligence/models/docling. Restore its existing mount if unavailable; do not download models or change shared services.
+Ignored `.env.local` uses `BACKEND_URL=http://127.0.0.1:8002` and `NEXT_PUBLIC_DEMO_DIGITAL_PDF_ONLY=true`. Keep secrets out of public variables. The backend launcher checks the existing isolated PostgreSQL 18 identity (loopback 55434, accounting_intelligence_v2_demo) and Redis 6382. Do not initialize schemas or start duplicate/shared services. CPU Docling reuses the SSD models at `/mnt/d/Jonathan Files/AccountingIntelligence_SSD_Starter/AccountingIntelligence/models/docling`; no model download is needed.
 
-## Accounts and fixtures
+## Synthetic accounts, fixtures and saved records
 
-Use the existing two synthetic LOCAL_ADMIN accounts, credentials/TOTP seeds privately in backend runs/d1a/accounts.json. First account: valid invoice and four new kinds/layouts. Second account: deliberately incorrect invoice. Use separate browser profiles/contexts, real password and six-digit TOTP. No credentials in this document, logs, screenshots or browser console.
+Three synthetic LOCAL_ADMIN accounts: main reviewer, exception/correction reviewer, controlled vendor-catalogue reviewer. Private credentials/TOTP seeds remain exclusively in Backend_V2 `runs/d4a/814d04e9829648768ce4d28eb3a268e3/accounts.json`, in that order. Use separate browser profiles with real login/TOTP; never capture credentials or MFA screens.
 
-Six fresh, unused synthetic PDFs are prepared in frontend test-results/demo-ready/:
-SYN-001.pdf, SYN-BAD-001.pdf, invoice_b.pdf, utility_bill.pdf, retail_receipt.pdf, unknown.pdf.
-These preserve the backend fixture bytes plus harmless unique PDF comments to avoid duplicate hashes. They have not been uploaded by this acceptance run. Use each once; a repeated exact file correctly returns 409.
-Original fixtures remain in Backend_V2: tests/extraction/data/development/synthetic_invoice_001.pdf; runs/d1a/demo-ready/incorrect.pdf; tests/extraction/data/multidocument/{invoice_b,utility_bill,retail_receipt,unknown}.pdf.
+The same ignored directory contains the 20 PDF fixtures used by acceptance. `runs/d4a/manifest.json` records their hashes and locations. **They have already been uploaded.** Exact reuploads can return 409; repeated business references can correctly produce EX-007. Use saved records for the timed demo; do not call them fresh uploads. Original layout fixtures remain in Backend_V2 `tests/extraction/data/development/synthetic_invoice_001.pdf` and `tests/extraction/data/multidocument/{invoice_b,utility_bill,retail_receipt,unknown}.pdf`.
+
+Open `/company/documents/{id}` under the indicated account:
+
+| Scenario / account | Verified document ID | Actual result |
+| --- | --- | --- |
+| Valid invoice / main | 0e841af7-8269-487e-8835-bccb3f218e30 | 50.00, EXTRACTED / PASS, human review required |
+| Incorrect invoice / exception | 9f7885dd-7633-4868-877f-c794ee2fd17a | 99.00, EXCEPTION / EX-005, left incorrect |
+| Alternate invoice / main | de4e5729-6c7e-4b1d-89f5-f1a66aeb30f0 | 48.00, EXTRACTED / PASS |
+| Utility bill / main | 885ca455-cd17-474e-a625-97df0ecf7b98 | 80.00, REVIEW_REQUIRED; field/date/period PASS, reconciliation NOT_CHECKED |
+| Retail receipt / main | 12172914-a86f-480d-9b08-5c38ca1d9ba2 | 10.60, PASS including line/subtotal/total; still human review |
+| Unknown / main | 45a885ab-3648-4af4-9367-5c9f9d1a76ae | EXCEPTION / review required; no accounting fields or lines |
+| Saved correction / exception | c6745a2d-fc6d-4553-850a-efbf3c07895e | Original 99.00, current 50.00, revision 3, revalidated PASS |
+| Business duplicate / main | 0e946471-d0a0-4bc4-be20-2ad5250217a2 | EX-007 high; links a9c705a2-9e16-4e7b-849a-31face286928 |
+| Vendor suggestion / catalogue | 64102188-bb5a-46db-8ae9-937448caa09e | EX-008 medium; actual candidate/name similarity, not extraction confidence |
 
 ## Five-minute walkthrough
 
-Prepare a second signed-in browser context before presenting. For a strict five minutes, use the verified saved document links below for the four additional examples; all were uploaded through the real website during acceptance.
+Prepare main and exception profiles before presenting. These saved examples were all uploaded through the real website, not seeded extraction records.
 
-1. 0:00-0:45: Sign in as first synthetic reviewer with TOTP. Open Upload. Show Auto-detect / unsure, enabled Invoice/Bill/Receipt options and explicit AP/AR intake category. Type selection is a hint; source contents determine classification.
-2. 0:45-1:30: Upload fresh SYN-001.pdf with explicit Accounts Payable. Watch real processing, open Review. Show invoice 50.00 / EXTRACTED / PASS, line 2 x 25.00, nullable confidence and human-review requirement. Focus Total for real page/ref/box evidence; Open original source retrieves the private PDF.
-3. 1:30-2:20: Open the verified bill and receipt links. Bill shows issuer, bill/account reference, billing period, due date and 80.00; absent tax/subtotal/quantity/unit price say Not provided. Receipt shows merchant, reference, transaction date/time, evidenced Card payment method and total 10.60. Show Validation: REVIEW REQUIRED, NOT CHECKED rows and disabled standardisation; neither is labelled PASS or paid.
-4. 2:20-3:00: Open Unknown: Unknown / Needs Review, actual classification explanation, retained original source, EX-002, empty accounting fields and blocked standardisation. Open Invoice B: customer/due date, subtotal 50.00 - discount 5.00 + tax 3.00 = 48.00 / PASS.
-5. 3:00-4:15: In the second account upload fresh SYN-BAD-001.pdf. Show total 99.00 / EXCEPTION / EX-005 and actual backend arithmetic explanation. Change Total to 50.00, Save field, show new revision 3 and original extracted 99.00 retained. Save & revalidate; PASS still requires human review.
-6. 4:15-5:00: Reload: saved 50.00/revision 3 persists. Explain or demonstrate a tab opened at revision 2: stale save returns 409, preserves draft and requires reviewing refreshed values. Stop without approving or creating a record.
+1. 0:00–0:45: Main profile: show Upload, Auto-detect, explicit intake category and real processing history. Open the valid invoice. Show 50.00, two units × 25.00, source classification, nullable confidence and human-review requirement. Focus Total to show actual text/page references and available boxes.
+2. 0:45–1:30: Open alternate invoice: subtotal 50.00 − discount 5.00 + tax 3.00 = 48.00 / PASS. Open original source. Authenticated PDF delivery and uploaded-byte SHA256 were verified; headless Chrome showed a blank native PDF viewer, so visual PDF rendering remains a manual browser check.
+3. 1:30–2:30: Bill: issuer/reference/account/period/due date and 80.00. Explain PASS for executed checks and NOT_CHECKED for unsupported balance/payment/credit reconciliation. Receipt: merchant/date/time, evidenced Card method, items and 10.60 / PASS. Neither classification nor PASS proves payment or approval.
+4. 2:30–3:30: Exception profile: incorrect invoice 99.00 / EX-005; show actual field, high severity and arithmetic explanation. Open the separate saved correction: original 99.00 retained, current 50.00, revision 3 after revalidation. Reload. Recorded two-tab stale save returned 409, retained draft 49.00 and prevented overwrite. Do not replay corrections against these preserved examples merely to recreate the screenshot.
+5. 3:30–4:30: Main profile: show EX-007 related-document link and multiple EX-001 findings as distinct rows. Catalogue profile if prepared: show actual EX-008 candidate, similarity and method explicitly labelled as name matching. EX-001–EX-008 were independently browser-tested.
+6. 4:30–5:00: Unknown: actual explanation, original retained, empty financial fields, blocked standardisation. Stop without approving or creating a standardised record.
 
-## Final browser evidence
+## Executed acceptance and preservation
 
-All six cases used new website uploads and real processing. Open /company/documents/{id} under the account indicated:
+- `npx playwright test --config playwright.d4a.config.ts`: exit 0, **20 passed**, 0 failed/skipped, 4.3 minutes. Real Chrome UI password/TOTP in three contexts; real upload/Docling/API data, no injected cookies or mocked extraction. Do not rerun against the already-used fixture set without a newly isolated synthetic run.
+- Six document workflows, EX-001–EX-008, distinct missing-field rows, receipt mismatch/missing tax, bill period error, saved correction/reload/real stale 409 and authenticated source-tab delivery passed. All 20 uploaded source PDFs matched their submitted SHA256.
+- `npm test`: exit 0, **15 passed**, 0 failed/skipped (12 contract/mock-fetch tests and 3 live read-only checks; these are not extraction proof).
+- `npm run typecheck` and `npm run lint`: exit 0. `NEXT_BUILD_DIR=.next-d22-build; npm run build` (PowerShell environment assignment as below): exit 0, **40/40 pages**. Existing session 97552 completion recovered; no duplicate build required.
+- Separate production build: `$env:NEXT_BUILD_DIR='.next-d22-build'; npm run build`. Existing prebuild cleanup is confined to this repository's selected build directory; keep dev output separate. Committed next-env.d.ts/tsconfig.json contain local build-path references; clean CI/default-build portability remains a pre-integration check.
+- Screenshots: **71** in `test-results/d4a/2026-10-19T12-46-30-864Z/`; sanitized responses, IDs and diagnostics in `evidence.json`. Includes 1440×900, 1366×768 and 390×844. No body horizontal overflow; mobile content pane exceeds 370 px.
+- Zero page errors or unexpected console messages. Expected stale 409 and observed Next development warnings (sticky auto-scroll, smooth-scroll guidance, logo aspect ratio) are recorded separately, not concealed.
+- Post-browser read-only check: from Backend_V2 run the WSL Python command above with `runs/d4a-after.py`. Inspected script/helpers use SELECTs plus Redis PING and local report writes; no schema/data mutation. Exit 0: **68 protected documents unchanged**, 20 D4-A synthetic documents, **0 approvals / 0 standardised records** in D4-A tenants. Evidence: Backend_V2 `runs/d4a/post-browser-database-check.json`.
 
-| PDF / account | ID | Actual result |
-| --- | --- | --- |
-| SYN-001 / first | b9412b3c-df41-4241-a197-d6fd59dc2332 | invoice, 50.00, EXTRACTED/PASS |
-| SYN-BAD-001 / second | dfa56e13-4620-4ab8-be84-4b709ecbf37e | original 99.00, EXCEPTION/EX-005; now corrected 50.00, revision 3, PASS still review-required |
-| invoice_b.pdf / first | e5663203-05ec-4a01-9bf1-67a97c7213f2 | invoice, 48.00, EXTRACTED/PASS |
-| utility_bill.pdf / first | d6259a8c-20e4-431c-be63-411670d37d74 | bill, 80.00, EXTRACTED/REVIEW_REQUIRED, required-field/math NOT_CHECKED |
-| retail_receipt.pdf / first | 96fcf2ff-97e3-40c6-9b65-7b7ca1be10bf | receipt, 10.60, EXTRACTED/REVIEW_REQUIRED, required-field/math NOT_CHECKED |
-| unknown.pdf / first | 5e7c7ab9-1dc9-4ab1-9b1a-ca8c8a812c54 | unknown, EXCEPTION/REVIEW_REQUIRED, no financial fields/lines |
+## Limits and recovery
 
-PATCH returned 200 with expectedContentRevision=2/new contentRevision=3; stale PATCH returned 409 and retained draft 49.00. Reloaded API values: normalizedValue=99.00/currentValue=50.00. All source-file HTTP requests returned authenticated 200/application/pdf. Zero page errors. No approval/record-creation mutation was used.
+Only tested labelled English digital PDFs/simple tables are supported here. No arbitrary scan/OCR/layout, Qwen inference, production login or deployed-backend compatibility claim. Source blocks can be broader than individual field spans; absent values stay null. List pages show stored intake kind; detail uses verified classification. Bills retain unsupported reconciliation checks; receipt PASS applies to supported evidenced arithmetic, not payment status. Vendor/PO checks remain NOT_CHECKED when authorised reference data is absent.
 
-13 screenshots retained (no login/TOTP captures, traces or videos):
-test-results/d2-live/d2-live-real-multi-documen-5600c-ion-and-revision-correction/
-Key files: valid-1440.png, valid-1366.png, valid-mobile.png, incorrect.png, stale-revision.png, corrected-reloaded.png, invoice-review.png, bill-review.png, bill-not-checked.png, receipt-review.png, receipt-not-checked.png, receipt-mobile.png, unknown-review.png.
-Screenshots inspected for invoice, bill NOT_CHECKED, unknown and mobile receipt. Main pane fills mobile viewport after correcting the existing mobile shell width; screenshots cover 1440x900, 1366x768 and 390x844.
+On exact-file 409 open the saved document. On uncertain upload/save failure inspect current document/revision before retrying. Stale 409 requires reviewing refreshed values; never force overwrite. If private source is unavailable, inspect the authenticated file response; do not draw a fake preview. Preserve all screenshots and private ignored run resources. Do not migrate/reset/reseed, approve records, change shared services, or merge/deploy for recovery.
 
-## Executed checks
-
-- npm run typecheck -> exit 0.
-- npm run lint -> exit 0.
-- npm test -> exit 0; 15 passed, 0 failed/skipped (12 contract tests, 3 real read-only backend checks). Contract tests use synthetic DTOs/mock fetch, not extraction proof.
-- With NEXT_BUILD_DIR=.next-d22-build, npm run build -> exit 0, 40 pages generated. Build directory was verified inside Frontend_V2 before existing prebuild cleanup; dev build remained separate. Next-generated next-env.d.ts/tsconfig includes reflect these local build directories.
-- npx playwright test --config playwright.d2.config.ts -> exit 0; 1 full six-PDF real Chrome workflow passed (1.5m), 0 failed/skipped; actual password/TOTP, no auth/parser mocks or injected sessions.
-- git diff --check -> exit 0. Frontend/backend health endpoints -> 200.
-- Earlier verification attempts exposed a test syntax/JSX-runner mismatch and a badge locator mismatch. Unit tests now exercise DTO contracts in the existing runner; real rendering is verified by Chrome. Final full browser run passed after the screenshot-confirmed mobile width fix.
-- Legacy unrelated browser suites with hardcoded accounts were not run. Full backend concurrency/immutability and new bill/receipt validation are not claimed verified.
-
-## Contract and recovery limits
-
-Source classification (including unknown) takes precedence over stored kind in detail headings/labels. Original intake identifier, stored kind and category remain visible. The list API lacks source classification: its column explicitly says Stored kind; open Review for source classification. Unknowns retain the backend invoice intake placeholder without being displayed as invoices in detail.
-Bill/receipt checks remain genuinely NOT_CHECKED until backend/Aina implements their policies; standardisation and approval controls require actual PASS and existing review state. Missing monetary values never become zero; no payment/settlement inference or confidence fabrication.
-Digital PDFs with supported explicit English labels/simple tables only; OCR/scans/camera/arbitrary layouts remain unsupported. Source boxes may cover an entire merged block: UI retains text spans and labels that scope. Embedded PDF rendering depends on browser support (headless Chrome screenshots show a blank native viewer); Open original source works and source bytes were verified. No synthetic preview is drawn.
-On duplicate 409 open the existing document. On uncertain upload/correction failure inspect Documents/current revision before retrying; do not replay mutations blindly. Backend's re-extraction-over-correction guard and existing immutable-record trigger limits remain backend concerns; do not demonstrate amendments or approval as verified.
-Stop after D2.2. Next smallest task is lecturer review of the preserved local workflow; backend bill/receipt validation is a separate follow-up.
+D4-A is complete for the stated local checks, with native PDF visual rendering still unverified. Production integration is **NO-GO pending compatibility review**: latest remote backend features contains a bank route absent from V2; Vercel production branch/environment and deployed backend contract are unverified. A laptop loopback backend is unavailable to Vercel. Do not push or merge automatically.
