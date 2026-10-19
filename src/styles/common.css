@@ -5903,7 +5903,7 @@ dialog {
 .brand-mark { display: none; }
 
 .sidebar {
-  position: relative;
+  position: fixed;
   transition: width 0.2s var(--ease-smooth);
 }
 
