@@ -1,0 +1,49 @@
+import type { Document, StandardisedRecord, User } from "@/types";
+import { requireRole } from "../permissions";
+import { api, get } from "./client";
+export async function standardiseDocument(user: User, documentId: string) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  const record = await api<{ id: string }>(`/api/records/from-document/${documentId}`, { method: "POST" });
+  return record.id;
+}
+export async function getStandardisedRecords(user: User) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return get<StandardisedRecord[]>("/api/records");
+}
+export async function getRecordMetadata(user: User, tenantId?: string) {
+  requireRole(user, ["SUPER_ADMIN"]);
+  return get<Array<{ id: string; documentId: string; tenantId: string; createdAt: string; category: string; validation: string; status: string; document?: Document }>>(`/api/records/metadata${tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : ""}`);
+}
+export async function getStandardisedRecord(user: User, recordId: string) {
+  return (await getStandardisedRecords(user)).find((r) => r.id === recordId);
+}
+export async function openSupportView(
+  user: User,
+  recordId: string,
+  reason: string,
+) {
+  requireRole(user, ["SUPER_ADMIN"]);
+  if (reason.trim().length < 5)
+    throw new Error("Provide a support reason of at least 5 characters.");
+  return api<StandardisedRecord>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) });
+}
+export function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows
+    .map((row) =>
+      row
+        .map(
+          (value) =>
+            `"${(/^[=+@\-\t\r]/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`,
+        )
+        .join(","),
+    )
+    .join("\r\n");
+  const url = URL.createObjectURL(
+    new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
