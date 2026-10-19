@@ -47,33 +47,34 @@ import {
 
 
 const DEMO_FIELDS: Record<string, ExtractedField> = {
-  invoiceNumber: { label: "Invoice number", value: "INV-2026-1043", original: "INV-2026-1043", confidence: 98 },
+  invoice: { label: "Invoice number", value: "INV-2026-1043", original: "INV-2026-1043", confidence: 98 },
   supplier: { label: "Supplier", value: "Sarawak Office Supplies Sdn Bhd", original: "Sarawak Office Supplies Sdn Bhd", confidence: 96 },
-  invoiceDate: { label: "Invoice date", value: "12 Oct 2026", original: "12 Oct 2026", confidence: 94 },
+  date: { label: "Invoice date", value: "12 Oct 2026", original: "12 Oct 2026", confidence: 94 },
   dueDate: { label: "Due date", value: "11 Nov 2026", original: "11 Nov 2026", confidence: 91 },
   currency: { label: "Currency", value: "MYR", original: "MYR", confidence: 99 },
   subtotal: { label: "Subtotal", value: "1,250.00", original: "1,250.00", confidence: 97 },
   tax: { label: "Tax (SST)", value: "75.00", original: "75.00", confidence: 93 },
+  discount: { label: "Discount", value: "0.00", original: "0.00", confidence: 99 },
   total: { label: "Total", value: "1,325.00", original: "1,325.00", confidence: 97 },
-  poNumber: { label: "PO number", value: "PO-88421", original: "PO-88421", confidence: 88 },
 };
 
 const DEMO_LINES = [
-  { description: "A4 paper (10 reams)", quantity: "10", unitPrice: "45.00", amount: "450.00" },
-  { description: "Printer toner", quantity: "2", unitPrice: "280.00", amount: "560.00" },
-  { description: "Stapler set", quantity: "5", unitPrice: "48.00", amount: "240.00" },
+  { description: "A4 paper (10 reams)", quantity: 10, unitPrice: 45, amount: 450 },
+  { description: "Printer toner", quantity: 2, unitPrice: 280, amount: 560 },
+  { description: "Stapler set", quantity: 5, unitPrice: 48, amount: 240 },
 ];
 
 const DEMO_VALIDATION = [
-  { rule: "Required fields present", status: "PASSED", message: "Invoice number, supplier, date, and total are present." },
-  { rule: "Total matches line items", status: "PASSED", message: "Line items sum to subtotal; tax and total are consistent." },
-  { rule: "Duplicate check", status: "WARNING", message: "Similar supplier invoice found last month. Please confirm it is not a duplicate." },
-  { rule: "Confidence threshold", status: "PASSED", message: "All key fields are above 85% confidence." },
+  { rule: "Required fields present", result: "PASS", message: "Invoice number, supplier, date, and total are present." },
+  { rule: "Total matches line items", result: "PASS", message: "Line items sum to subtotal; tax and total are consistent." },
+  { rule: "Duplicate check", result: "WARNING", message: "Similar supplier invoice found last month. Please confirm it is not a duplicate." },
+  { rule: "Confidence threshold", result: "PASS", message: "All key fields are above 85% confidence." },
 ];
 
 const DEMO_RECORD = {
   id: "demo-record",
   documentId: "",
+  tenantId: "demo-tenant",
   createdAt: new Date().toISOString(),
   category: "ACCOUNTS_PAYABLE",
   validation: "PASSED",
