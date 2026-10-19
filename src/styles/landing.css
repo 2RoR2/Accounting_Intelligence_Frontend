@@ -768,10 +768,7 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 48px clamp(28px, 5vw, 64px) 56px;
-  background:
-    radial-gradient(620px 320px at 12% 8%, color-mix(in srgb, #a8d3f0 70%, white), transparent 64%),
-    linear-gradient(145deg, #d7f1ff, #f6f1e8 58%, #f6f1e8);
-  background-position: center;
+  background-position: center bottom;
   background-repeat: no-repeat;
   background-size: cover;
   border-right: 1px solid color-mix(in srgb, #a8d3f0 55%, white);
@@ -783,7 +780,7 @@
   inset: 0;
   z-index: -1;
   content: "";
-  background: linear-gradient(180deg, rgba(246, 241, 232, 0.18), rgba(215, 241, 255, 0.28));
+  background: linear-gradient(180deg, rgba(246, 241, 232, 0.72), rgba(215, 241, 255, 0.62));
 }
 
 .welcome-brand-panel > img,
