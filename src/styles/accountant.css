@@ -514,8 +514,8 @@
 
 .review-toolbar button.active,
 .review-toolbar button:hover {
-  background: #0ea5e9;
-  color: #fff;
+  background: #2a3a4a;
+  color: #f6f1e8;
 }
 
 @media (max-width: 1000px) {
