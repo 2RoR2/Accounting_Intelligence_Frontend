@@ -54,8 +54,9 @@
 }
 
 .app-shell[data-role="accountant"] .workspace-icon {
-  background: #0ea5e9;
-  color: #fff;
+  background: #d7f1ff;
+  color: #2a3a4a;
+  border: 1px solid #a8d3f0;
 }
 
 .app-shell[data-role="accountant"] .nav-item {
