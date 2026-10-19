@@ -34,7 +34,6 @@ import {
 import { DocumentViewer } from "@/components/common/documents/document-viewer";
 import { InvoiceDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
-import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import {
   addDocumentComment,
   decideDocumentReview,
@@ -473,7 +472,6 @@ export function DocumentReview({
                 ]}
               />
             </Panel>
-            <WorkflowControls user={user} documentId={documentId} />
             </>
           )}
         </>
