@@ -3585,6 +3585,7 @@ dialog {
   height: 170px;
 
   text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif;
 
   animation:
     saic-wordmark-breathe
@@ -3598,25 +3599,26 @@ dialog {
 }
 
 .saic-wordmark-top {
-  color: #2a3a4a;
+  color: #5e7384;
 
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 
   line-height: 1;
 
-  letter-spacing: -0.035em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .saic-wordmark-bottom {
   margin-top: 5px;
 
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 700;
 
   line-height: 1;
 
-  letter-spacing: -0.05em;
+  letter-spacing: -0.03em;
 
   background:
     linear-gradient(
@@ -3683,10 +3685,11 @@ dialog {
 
   color: #5e7384;
 
-  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif;
+  font-size: 13px;
   font-weight: 500;
 
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .saic-loader-progress {
