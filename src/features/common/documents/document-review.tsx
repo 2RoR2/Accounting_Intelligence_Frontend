@@ -170,7 +170,7 @@ export function DocumentReview({
       />
 
       {failure && <ErrorState message={failure} />}
-      {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge>{data.validationReport.coverageComplete === false && <Badge>NOT_CHECKED</Badge>}<p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {validationState(result)}</strong> {result.field && <span>Field: {result.field}. </span>}{result.severity && <span>Severity: {result.severity}. </span>}{result.message}</p>)}</div></Panel>}
+      {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge>{validation.some(result => result.checkStatus === "NOT_CHECKED") && <Badge>NOT_CHECKED</Badge>}<p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {validationState(result)}</strong> {result.field && <span>Field: {result.field}. </span>}{result.severity && <span>Severity: {result.severity}. </span>}{result.message}</p>)}</div></Panel>}
 
       {!failed && !pending && (
         <DocumentDetailPreview doc={data.doc} extraction={extraction} />
@@ -301,13 +301,16 @@ export function DocumentReview({
               <div className="validation-results-head"><div><strong>Rule results</strong><span>{validation.length} backend findings at the current revision</span></div><Badge>{data.doc.status}</Badge></div>
               <DataTable
                 rows={validation}
-                rowKey={(v) => v.rule}
+                rowKey={(v) => JSON.stringify([v.rule, v.field ?? null, validation.indexOf(v)])}
                 columns={[
                   { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{v.rule}</strong></div> },
                   { label: "Result", render: (v) => <Badge>{validationState(v)}</Badge> },
                   { label: "Field", render: (v) => v.field ?? "Not provided" },
                   { label: "Severity", render: (v) => v.severity ?? "Not provided" },
-                  { label: "What to do", render: (v) => <span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span> },
+                  { label: "What to do", render: (v) => <div><span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span>
+                    {v.duplicate_of && <p><Link href={`${base}/documents/${encodeURIComponent(v.duplicate_of)}`}>Related document: {v.duplicate_of}</Link></p>}
+                    {v.vendor_candidate && <p>Vendor suggestion: {v.vendor_candidate.vendor_name ?? "Not provided"}<br />Similarity: {v.vendor_candidate.similarity ?? "Not provided"} (name matching, not extraction confidence)<br />Method: {v.vendor_candidate.score_method ?? "Not provided"}</p>}
+                  </div> },
                 ]}
               />
               <div className="panel-body actions validation-actions">
