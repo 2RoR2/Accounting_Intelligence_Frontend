@@ -2698,7 +2698,7 @@ tbody tr:last-child td {
 .invoice-review-actions { display: flex; gap: 10px; }
 .invoice-tabs { display: flex; gap: 25px; overflow-x: auto; border-bottom: 1px solid #e4e9f0; white-space: nowrap; }
 .invoice-tabs a { padding: 13px 0; color: #5e7384; text-decoration: none; font-weight: 600; }
-.invoice-tabs a.active { color: #2a3a4a; border-bottom: 3px solid #8fa3b5; }
+.invoice-tabs a.active { color: #2a3a4a; border-bottom: 3px solid #2a3a4a; }
 .invoice-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-top: 22px; }
 .invoice-detail-card { border: 1px solid #e4e9f0; border-radius: 10px; padding: 20px; background: #fff; }
 .invoice-detail-card h3 { margin: 0 0 5px; color: #13233d; font-size: 19px; }
