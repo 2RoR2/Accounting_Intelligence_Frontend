@@ -783,7 +783,7 @@
 .welcome-brand-panel > img, .welcome-brand-copy { position: relative; z-index: 1; }
 .welcome-brand-panel > img { width: 180px; height: auto; object-fit: contain; object-position: left; }
 .welcome-brand-copy { max-width: 360px; margin-top: 100px; }
-.welcome-brand-copy h1 { margin: 0 0 22px; color: #061433; font-size: clamp(30px, 3.1vw, 42px); line-height: 1.08; font-weight: 600; letter-spacing: -.035em; }
+.welcome-brand-copy h1 { margin: 0 0 22px; color: #061433; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif; font-size: clamp(2.7rem, 5vw, 3.75rem); line-height: 1.02; font-weight: 700; letter-spacing: -0.035em; }
 .welcome-brand-copy p { color: #526b88; font-size: 16px; line-height: 1.6; font-weight: 500; }
 .welcome-brand-copy ul { display: grid; gap: 26px; margin: 56px 0 0; padding: 0; list-style: none; }
 .welcome-brand-copy li { display: flex; gap: 16px; align-items: flex-start; }
