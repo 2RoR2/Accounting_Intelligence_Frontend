@@ -362,7 +362,7 @@ export function AppShell({
           </Link>
           <button
             type="button"
-            className="sidebar-pin sidebar-pin-outside"
+            className="sidebar-pin"
             aria-pressed={pinned}
             aria-label={pinned ? "Unextend sidebar" : "Extend sidebar"}
             title={pinned ? "Unextend sidebar" : "Extend sidebar"}
