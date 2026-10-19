@@ -396,20 +396,12 @@ export function UploadPage({ user }: { user: User }) {
             {[
               ["01", "Upload", "Add your invoice, bill, or receipt."],
               ["02", "Extract", "Review the simulated extracted fields."],
-              [
-                "03",
-                "Validate",
-                "Check totals, required fields, and confidence.",
-              ],
-              [
-                "04",
-                "Standardise",
-                "Resolve exceptions and create a consistent record.",
-              ],
-            ].map(([n, t, d]) => (
-              <div key={n}>
-                <span>{n}</span>
-                <div>
+              ["03", "Validate", "Check totals, required fields, and confidence."],
+              ["04", "Standardise", "Resolve exceptions and create a consistent record."],
+            ].map(([n, t, d], i) => (
+              <div key={n} className={`step-item${i === 0 ? " is-active" : ""}`}>
+                <span className="step-dot" />
+                <div className="step-body">
                   <strong>{t}</strong>
                   <p>{d}</p>
                 </div>
