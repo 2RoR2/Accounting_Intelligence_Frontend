@@ -284,7 +284,7 @@ select:disabled {
 }
 
 select option {
-  color: #061433;
+  color: #2a3a4a;
   background: #ffffff;
   padding: 10px;
 }
@@ -330,7 +330,7 @@ hr {
   font-weight: 600;
   white-space: nowrap;
   min-height: 38px;
-  color: #061433;
+  color: #2a3a4a;
   box-shadow: var(--shadow-xs);
   transition: all var(--transition-normal);
 }
@@ -406,7 +406,7 @@ hr {
 .field label {
   font-size: 11.5px;
   font-weight: 600;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .field-required {
@@ -631,7 +631,7 @@ hr {
   letter-spacing: -2.5px;
   line-height: 1.12;
   margin: 21px 0 24px;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .landing-copy h1 em {
@@ -706,7 +706,7 @@ hr {
   border-radius: 12px;
   background: linear-gradient(135deg, #022fa2 0%, #061433 100%);
   color: white;
-  box-shadow: 0 4px 14px rgba(2, 47, 162, 0.35);
+  box-shadow: 0 4px 14px rgba(42, 58, 74, 0.3);
 }
 
 .invoice-mock > small {
@@ -720,7 +720,7 @@ hr {
   font-size: 22px;
   font-weight: 700;
   margin: 10px 0 28px;
-  color: #061433;
+  color: #2a3a4a;
   letter-spacing: -0.7px;
 }
 
@@ -742,7 +742,7 @@ hr {
 
 .invoice-grid strong {
   font-size: 11px;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .invoice-lines {
@@ -756,7 +756,7 @@ hr {
 
 .invoice-lines strong {
   font-weight: 600;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .invoice-total {
@@ -764,14 +764,14 @@ hr {
   justify-content: space-between;
   align-items: center;
   padding: 21px 0;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12px;
 }
 
 .invoice-total strong {
   font-size: 24px;
   font-weight: 700;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .verified {
@@ -852,7 +852,7 @@ hr {
   border: 1px solid #e1ecf8;
   border-radius: 12px;
   padding: 14px 18px;
-  color: #061433;
+  color: #2a3a4a;
   box-shadow: var(--shadow-xs);
   transition: all var(--transition-normal);
 }
@@ -917,7 +917,7 @@ hr {
 }
 
 .footer-help-link:hover {
-  border-bottom-color: rgba(2, 47, 162, 0.35);
+  border-bottom-color: rgba(42, 58, 74, 0.3);
 }
 
 .project-overview {
@@ -936,7 +936,7 @@ hr {
 .project-overview-header h2 {
   font-size: clamp(28px, 3vw, 40px);
   line-height: 1.15;
-  color: #061433;
+  color: #2a3a4a;
   letter-spacing: -1px;
 }
 
@@ -962,7 +962,7 @@ hr {
 .project-keywords:hover {
   transform: translateY(-2px);
   border-color: #b7d6fb;
-  box-shadow: 0 12px 32px rgba(6, 20, 51, 0.07);
+  box-shadow: 0 12px 32px rgba(42, 58, 74, 0.08);
 }
 
 .project-card h3,
@@ -1026,7 +1026,7 @@ hr {
 
 .criteria-item strong {
   font-size: 17px;
-  color: #061433;
+  color: #2a3a4a;
   line-height: 1.3;
 }
 
@@ -1088,7 +1088,7 @@ hr {
 
 .activity-list strong {
   display: block;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12px;
   font-weight: 700;
   text-transform: capitalize;
@@ -1143,7 +1143,7 @@ hr {
   border-radius: 999px;
   background: linear-gradient(135deg, #eaf5ff 0%, #f4f9ff 100%);
   border: 1px solid #cde2fb;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12px;
   font-weight: 600;
   transition: all var(--transition-fast);
@@ -1378,7 +1378,7 @@ hr {
   left: 32px;
   display: inline-flex;
   align-items: center;
-  color: #061433;
+  color: #2a3a4a;
   font-weight: 600;
   transition: color var(--transition-fast);
   z-index: 2;
@@ -1745,7 +1745,7 @@ hr {
 .profile-menu strong {
   display: block;
   padding: 6px 10px 8px;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 11px;
   border-bottom: 1px solid #edf3fa;
   margin-bottom: 6px;
@@ -1802,7 +1802,7 @@ hr {
 }
 
 .notification-heading strong {
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12.5px;
 }
 
@@ -1847,7 +1847,7 @@ hr {
 }
 
 .notification-item strong {
-  color: #061433;
+  color: #2a3a4a;
   font-size: 11.5px;
   text-transform: capitalize;
 }
@@ -1971,7 +1971,7 @@ hr {
   border-radius: 50%;
   background: linear-gradient(135deg, #022fa2 0%, #061433 100%);
   color: #ffffff;
-  box-shadow: 0 10px 28px rgba(2, 47, 162, 0.35);
+  box-shadow: 0 10px 28px rgba(42, 58, 74, 0.3);
   animation: rise-in 0.2s var(--ease-smooth);
   transition: all var(--transition-normal);
 }
@@ -2056,7 +2056,7 @@ hr {
 
 .attention-banner strong {
   display: block;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12.5px;
 }
 
@@ -2173,7 +2173,7 @@ hr {
 .stat-value,
 .kpi-value {
   margin: 12px 0 10px;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 32px;
   font-weight: 700;
   letter-spacing: -1.4px;
@@ -2291,7 +2291,7 @@ hr {
   padding: 8px 42px 8px 12px;
   border: 1px solid #cfe1f7;
   background-color: #ffffff;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 10.5px;
   font-weight: 500;
   box-shadow: var(--shadow-xs);
@@ -2935,7 +2935,7 @@ dialog {
   backdrop-filter: blur(24px) saturate(140%);
   box-shadow:
     0 45px 100px rgba(16, 54, 112, 0.2),
-    0 10px 30px rgba(2, 47, 162, 0.09),
+    0 10px 30px rgba(122, 168, 200, 0.18),
     inset 0 1px 0 white;
 }
 
@@ -3169,7 +3169,7 @@ dialog {
 
   margin: 10px 0 0;
 
-  color: #061433;
+  color: #2a3a4a;
 
   font-size: clamp(30px, 4vw, 44px);
 
@@ -3215,7 +3215,7 @@ dialog {
   border: 1px solid #dce2ea;
   border-radius: 999px;
 
-  color: #061433;
+  color: #2a3a4a;
   background: #ffffff;
 
   font-size: 13px;
@@ -3243,7 +3243,7 @@ dialog {
 }
 
 .landing-final-cta:hover .btn.primary {
-  color: #061433;
+  color: #2a3a4a;
 
   background: #ffffff;
 
@@ -3342,18 +3342,18 @@ dialog {
   background:
     radial-gradient(
       circle at 50% 44%,
-      rgba(234, 245, 255, 0.9) 0%,
-      rgba(243, 248, 254, 0.52) 24%,
+      rgba(215, 241, 255, 0.85) 0%,
+      rgba(246, 241, 232, 0.5) 24%,
       rgba(255, 255, 255, 0) 52%
     ),
     linear-gradient(
       145deg,
       #ffffff 0%,
-      #f9fbff 48%,
-      #f2f7ff 100%
+      #f6f1e8 48%,
+      #d7f1ff 100%
     );
 
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .saic-loader-ambient {
@@ -3375,7 +3375,7 @@ dialog {
 
   border-radius: 50%;
 
-  background: rgba(143, 197, 255, 0.42);
+  background: rgba(168, 211, 240, 0.45);
 
   filter: blur(95px);
 
@@ -3397,7 +3397,7 @@ dialog {
 
   border-radius: 50%;
 
-  background: rgba(183, 203, 255, 0.42);
+  background: rgba(215, 241, 255, 0.4);
 
   filter: blur(110px);
 
@@ -3447,13 +3447,13 @@ dialog {
   width: 326px;
   height: 326px;
 
-  border: 1px solid rgba(2, 47, 162, 0.09);
+  border: 1px solid rgba(122, 168, 200, 0.18);
 
   background:
     linear-gradient(
       135deg,
       rgba(255, 255, 255, 0.25),
-      rgba(18, 77, 235, 0.015)
+      rgba(122, 168, 200, 0.04)
     );
 
   animation:
@@ -3476,9 +3476,9 @@ dialog {
       from 0deg,
       transparent 0deg,
       transparent 235deg,
-      rgba(143, 197, 255, 0.12) 270deg,
-      rgba(18, 77, 235, 0.75) 305deg,
-      rgba(2, 47, 162, 0.35) 330deg,
+      rgba(168, 211, 240, 0.2) 270deg,
+      rgba(122, 168, 200, 0.7) 305deg,
+      rgba(42, 58, 74, 0.3) 330deg,
       transparent 360deg
     );
 
@@ -3598,7 +3598,7 @@ dialog {
 }
 
 .saic-wordmark-top {
-  color: #061433;
+  color: #2a3a4a;
 
   font-size: 17px;
   font-weight: 500;
@@ -3621,12 +3621,12 @@ dialog {
   background:
     linear-gradient(
       90deg,
-      #061433 0%,
-      #022fa2 35%,
-      #124deb 60%,
-      #8fc5ff 76%,
-      #022fa2 90%,
-      #061433 100%
+      #2a3a4a 0%,
+      #7aa8c8 35%,
+      #5e7384 60%,
+      #a8d3f0 76%,
+      #7aa8c8 90%,
+      #2a3a4a 100%
     );
 
   background-size: 220% auto;
@@ -3654,13 +3654,13 @@ dialog {
   background:
     linear-gradient(
       90deg,
-      #022fa2,
-      #124deb,
-      #8fc5ff
+      #2a3a4a,
+      #7aa8c8,
+      #d7f1ff
     );
 
   box-shadow:
-    0 2px 8px rgba(18, 77, 235, 0.16);
+    0 2px 8px rgba(122, 168, 200, 0.2);
 
   animation:
     saic-wordmark-line
@@ -3681,7 +3681,7 @@ dialog {
 .saic-loader-copy p {
   margin: 0;
 
-  color: rgba(6, 20, 51, 0.46);
+  color: #5e7384;
 
   font-size: 11px;
   font-weight: 500;
@@ -3701,7 +3701,7 @@ dialog {
 
   border-radius: 999px;
 
-  background: rgba(6, 20, 51, 0.07);
+  background: rgba(42, 58, 74, 0.08);
 }
 
 
@@ -3719,15 +3719,15 @@ dialog {
     linear-gradient(
       90deg,
       transparent,
-      #8fc5ff,
-      #124deb,
-      #022fa2,
-      #124deb,
+      #d7f1ff,
+      #7aa8c8,
+      #2a3a4a,
+      #7aa8c8,
       transparent
     );
 
   box-shadow:
-    0 0 10px rgba(18, 77, 235, 0.25);
+    0 0 10px rgba(122, 168, 200, 0.28);
 
   animation:
     saic-progress-slide
@@ -4424,7 +4424,7 @@ dialog {
 .record-fields strong {
   text-align: right;
   overflow-wrap: anywhere;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .service-status {
@@ -4484,7 +4484,7 @@ dialog {
 }
 
 .processing-ring strong {
-  color: #061433;
+  color: #2a3a4a;
   font-size: 36px;
   line-height: 1.05;
   font-weight: 700;
@@ -4518,7 +4518,7 @@ dialog {
 }
 
 .processing-legend strong {
-  color: #061433;
+  color: #2a3a4a;
   font-size: 14px;
   font-weight: 700;
 }
@@ -4621,7 +4621,7 @@ dialog {
   max-width: 65%;
   text-align: right;
   overflow-wrap: anywhere;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .account-usage {
@@ -4630,7 +4630,7 @@ dialog {
 
 .account-usage strong {
   font-size: 22px;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .account-usage span,
@@ -4716,7 +4716,7 @@ dialog::backdrop {
   justify-content: space-between;
   padding: 18px 24px;
   border-bottom: 1px solid #edf4fc;
-  background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #f6f1e8 0%, #ffffff 100%);
   position: relative;
   text-align: center;
 }
@@ -5526,7 +5526,7 @@ dialog {
   padding: 48px 20px;
 }
 .loading-state strong {
-  color: #061433;
+  color: #2a3a4a;
   font-size: 15px;
   letter-spacing: -0.2px;
 }
@@ -5558,12 +5558,12 @@ dialog {
   background:
     radial-gradient(
       circle at 50% 42%,
-      rgba(234, 245, 255, 0.9) 0%,
+      rgba(215, 241, 255, 0.85) 0%,
       rgba(243, 248, 254, 0.4) 28%,
       transparent 55%
     ),
     #ffffff;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .not-found-page::before {
@@ -5597,7 +5597,7 @@ dialog {
   width: 270px;
   height: 300px;
   margin-bottom: 12px;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .not-found-face {
@@ -5664,7 +5664,7 @@ dialog {
 .not-found-copy h1 {
   max-width: 540px;
   margin: 0;
-  color: #061433;
+  color: #2a3a4a;
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
   line-height: 1.04;
@@ -5863,7 +5863,7 @@ dialog {
       transparent 56%
     ),
     #ffffff;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .access-denied-page::before {
@@ -5898,7 +5898,7 @@ dialog {
   width: 270px;
   height: 270px;
   margin-bottom: 20px;
-  color: #061433;
+  color: #2a3a4a;
 }
 
 .access-denied-face-container::before {
@@ -6133,7 +6133,7 @@ dialog {
 .access-denied-copy h1 {
   max-width: 540px;
   margin: 0;
-  color: #061433;
+  color: #2a3a4a;
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
   line-height: 1.04;
@@ -6557,7 +6557,7 @@ dialog {
 
 .processing-summary-card > div { display: grid; gap: 3px; }
 .processing-summary-label { color: #64748b; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-.processing-summary-card strong { color: #061433; font-size: 1.2rem; line-height: 1.1; }
+.processing-summary-card strong { color: #2a3a4a; font-size: 1.2rem; line-height: 1.1; }
 .processing-summary-detail { color: #64748b; font-size: 0.85rem; }
 
 @media (max-width: 720px) {
