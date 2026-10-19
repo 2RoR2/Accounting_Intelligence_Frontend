@@ -5926,19 +5926,7 @@ dialog {
   color: inherit;
 }
 
-.sidebar-pin.sidebar-pin-outside {
-  position: absolute;
-  top: 16px;
-  right: -14px;
-  z-index: 60;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #ffffff;
-  color: #2a3a4a;
-  box-shadow: 0 2px 8px rgba(42, 58, 74, 0.18);
-  border: 1px solid #e2e8f0;
-}
+
 
 .sidebar-pin:hover { background: rgba(255, 255, 255, 0.12); }
 
