@@ -4120,45 +4120,88 @@ dialog {
 }
 
 .upload-guide {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 8px;
 }
 
-.upload-guide > div:not(.info-box) {
+.upload-guide .step-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #edf4fc;
+  align-items: flex-start;
+  position: relative;
+  padding-bottom: 22px;
 }
 
-..upload-guide > div > span {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.upload-guide .step-item:last-of-type {
+  padding-bottom: 8px;
+}
+
+.upload-guide .step-item::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
   background: #d7f1ff;
-  color: #2a3a4a;
-  font-size: 10.5px;
-  font-weight: 700;
-  border: 1px solid #a8d3f0;
 }
 
-.upload-guide strong {
+.upload-guide .step-item:last-of-type::before {
+  display: none;
+}
+
+.upload-guide .step-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #a8d3f0;
+  margin-top: 3px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 4px #ffffff;
+}
+
+.upload-guide .step-item.is-active .step-dot {
+  background: #2a3a4a;
+  border-color: #2a3a4a;
+  box-shadow: 0 0 0 4px #d7f1ff;
+}
+
+.upload-guide .step-item.is-done .step-dot {
+  background: #7aa8c8;
+  border-color: #7aa8c8;
+  box-shadow: 0 0 0 4px #ffffff;
+}
+
+.upload-guide .step-body strong {
   display: block;
   color: #2a3a4a;
-  font-size: 12.5px;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.3;
 }
 
-.upload-guide p {
-  margin-top: 3px;
-  font-size: 10.5px;
+.upload-guide .step-body p {
+  margin: 4px 0 0;
+  color: #5e7384;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.upload-guide .step-item.is-active .step-body {
+  background: #f6f1e8;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: -6px 0 0;
 }
 
 .upload-guide .info-box {
-  margin-top: 2px;
+  margin-top: 12px;
   color: #5e7384;
 }
 
