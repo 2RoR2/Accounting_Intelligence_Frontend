@@ -127,7 +127,7 @@ select:focus-visible,
 textarea:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(2, 47, 162, 0.25);
-  border-color: #022fa2;
+  border-color: #7aa8c8;
 }
 
 h1,
@@ -200,7 +200,7 @@ textarea:hover {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   box-shadow: 0 0 0 3px rgba(2, 47, 162, 0.15);
   outline: none;
 }
@@ -859,7 +859,7 @@ hr {
 
 .workflow-strip > div:hover {
   transform: translateY(-2px);
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   box-shadow: 0 8px 24px rgba(2, 47, 162, 0.1);
 }
 
@@ -1012,7 +1012,7 @@ hr {
 
 .criteria-item:hover {
   transform: translateY(-2px);
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   box-shadow: 0 6px 18px rgba(2, 47, 162, 0.08);
 }
 
@@ -1099,7 +1099,7 @@ hr {
   align-items: center;
   gap: 6px;
   margin-top: 4px;
-  color: #657894;
+  color: #5e7384;
   font-size: 11px;
   line-height: 1.4;
   overflow: hidden;
@@ -1112,7 +1112,7 @@ hr {
 }
 
 .activity-list time {
-  color: #798da8;
+  color: #5e7384;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -1150,7 +1150,7 @@ hr {
 }
 
 .keyword-pill:hover {
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   color: #022fa2;
   transform: translateY(-1px);
 }
@@ -1312,7 +1312,7 @@ hr {
 }
 
 .password-setup-heading span {
-  color: #657894;
+  color: #5e7384;
   font-size: 12px;
 }
 
@@ -1808,7 +1808,7 @@ hr {
 
 .notification-heading span {
   margin-top: 3px;
-  color: #798da8;
+  color: #5e7384;
   font-size: 10px;
 }
 
@@ -1871,7 +1871,7 @@ hr {
   padding: 24px 18px;
   text-align: center;
   font-size: 11.5px;
-  color: #798da8;
+  color: #5e7384;
 }
 
 .notification-footer {
@@ -2180,7 +2180,7 @@ hr {
 }
 
 .stat-foot {
-  color: #798da8;
+  color: #5e7384;
   font-size: 9.5px;
 }
 
@@ -2494,7 +2494,7 @@ tbody tr:last-child td {
 .company-cell small {
   display: block;
   margin-top: 2px;
-  color: #798da8;
+  color: #5e7384;
   font-size: 9.5px;
 }
 
@@ -2539,7 +2539,7 @@ tbody tr:last-child td {
 
 .pagination button:hover:not(:disabled) {
   background: #eaf5ff;
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   color: #022fa2;
 }
 
@@ -2549,8 +2549,8 @@ tbody tr:last-child td {
   gap: 12px;
   flex-wrap: wrap;
   padding: 18px 22px;
-  border-bottom: 1px solid #edf4fc;
-  background: #fbfdff;
+  border-bottom: 1px solid #a8d3f0;
+  background: #ffffff;
 }
 
 .filter-bar select,
@@ -2569,15 +2569,15 @@ tbody tr:last-child td {
   gap: 9px;
   min-width: 240px;
   padding: 0 12px;
-  border: 1px solid #d9e5f5;
+  border: 1px solid #a8d3f0;
   border-radius: 8px;
   background: white;
-  color: #798da8;
+  color: #5e7384;
   transition: all var(--transition-fast);
 }
 
 .search:focus-within {
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   box-shadow: 0 0 0 3px rgba(2, 47, 162, 0.15);
 }
 
@@ -2599,7 +2599,7 @@ tbody tr:last-child td {
   place-items: center;
   gap: 10px;
   padding: 50px 20px;
-  color: #798da8;
+  color: #5e7384;
   text-align: center;
 }
 
@@ -2699,8 +2699,8 @@ tbody tr:last-child td {
 .invoice-status { display: inline-flex; border: 1px solid #f2b65f; border-radius: 7px; color: #c76d00; padding: 6px 11px; font-size: 13px; }
 .invoice-review-actions { display: flex; gap: 10px; }
 .invoice-tabs { display: flex; gap: 25px; overflow-x: auto; border-bottom: 1px solid #e4e9f0; white-space: nowrap; }
-.invoice-tabs a { padding: 13px 0; color: #667085; text-decoration: none; font-weight: 600; }
-.invoice-tabs a.active { color: #1476f3; border-bottom: 3px solid #1476f3; }
+.invoice-tabs a { padding: 13px 0; color: #5e7384; text-decoration: none; font-weight: 600; }
+.invoice-tabs a.active { color: #2a3a4a; border-bottom: 3px solid #7aa8c8; }
 .invoice-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-top: 22px; }
 .invoice-detail-card { border: 1px solid #e4e9f0; border-radius: 10px; padding: 20px; background: #fff; }
 .invoice-detail-card h3 { margin: 0 0 5px; color: #13233d; font-size: 19px; }
@@ -3237,7 +3237,7 @@ dialog {
 
   background: #022fa2;
 
-  border-color: #022fa2;
+  border-color: #7aa8c8;
 
   box-shadow: 0 8px 20px rgba(2, 47, 162, 0.18);
 }
@@ -4249,7 +4249,7 @@ dialog {
   display: grid;
   gap: 6px;
   text-align: center;
-  color: #798da8;
+  color: #5e7384;
   font-size: 9.5px;
 }
 
@@ -4348,7 +4348,7 @@ dialog {
 
 .paper-note,
 .viewer-note {
-  color: #798da8;
+  color: #5e7384;
   font-size: 10.5px;
 }
 
@@ -4368,7 +4368,7 @@ dialog {
 }
 
 .extraction-field:focus-within {
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   background: #ffffff;
   box-shadow: 0 2px 10px rgba(2, 47, 162, 0.08);
 }
@@ -5182,7 +5182,7 @@ dialog {
 }
 .timeline > div.current > span {
   background: #022fa2;
-  border-color: #022fa2;
+  border-color: #7aa8c8;
   color: #ffffff;
 }
 .viewer-toolbar > span:first-of-type {
