@@ -498,20 +498,20 @@ hr {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #022fa2;
-  box-shadow: 0 0 0 0 rgba(2, 47, 162, 0.4);
+  background: #7aa8c8;
+  box-shadow: 0 0 0 0 rgba(122, 168, 200, 0.4);
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(2, 47, 162, 0.5);
+    box-shadow: 0 0 0 0 rgba(122, 168, 200, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(2, 47, 162, 0);
+    box-shadow: 0 0 0 10px rgba(122, 168, 200, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(2, 47, 162, 0);
+    box-shadow: 0 0 0 0 rgba(122, 168, 200, 0);
   }
 }
 
@@ -4124,22 +4124,22 @@ dialog {
   border-bottom: 1px solid #edf4fc;
 }
 
-.upload-guide > div > span {
+..upload-guide > div > span {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #eaf5ff;
-  color: #022fa2;
+  background: #d7f1ff;
+  color: #2a3a4a;
   font-size: 10.5px;
   font-weight: 700;
-  border: 1px solid rgba(2, 47, 162, 0.15);
+  border: 1px solid #a8d3f0;
 }
 
 .upload-guide strong {
   display: block;
-  color: #061433;
+  color: #2a3a4a;
   font-size: 12.5px;
 }
 
@@ -4150,7 +4150,7 @@ dialog {
 
 .upload-guide .info-box {
   margin-top: 2px;
-  color: #4f6385;
+  color: #5e7384;
 }
 
 .selected-file,
@@ -4158,9 +4158,9 @@ dialog {
 .info-box,
 .processing-banner {
   padding: 16px;
-  border: 1px solid #e1ebf8;
+  border: 1px solid #a8d3f0;
   border-radius: 12px;
-  background: #fbfdff;
+  background: #ffffff;
 }
 
 .selected-file {
@@ -4177,9 +4177,9 @@ dialog {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #022fa2;
-  background: #eaf5ff;
-  border-color: #c7e0fb;
+  color: #2a3a4a;
+  background: #d7f1ff;
+  border-color: #a8d3f0;
   font-weight: 600;
 }
 
