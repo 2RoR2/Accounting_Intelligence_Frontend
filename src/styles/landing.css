@@ -851,6 +851,7 @@
   line-height: 1.55;
   max-width: 28rem;
   margin: 0 auto 32px;
+  text-align: center;
 }
 .welcome-details {
   display: grid;
