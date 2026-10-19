@@ -522,7 +522,15 @@ hr {
   font-weight: 700;
   letter-spacing: -0.03em;
 }
-.saic-brand img { display: block; width: auto; height: 40px; object-fit: contain; }
+.saic-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.saic-brand img { display: block; width: auto; height: 36px; object-fit: contain; }
 
 .brand-mark {
   display: inline-flex;
@@ -1485,18 +1493,14 @@ hr {
 
 .workspace-label {
   display: grid;
-  grid-template-columns: 34px 1fr 14px;
+  grid-template-columns: 34px 1fr;
   align-items: center;
   gap: 10px;
   margin: 26px 2px 22px;
   padding: 11px 10px;
-  border: 1px solid rgba(234, 245, 255, 0.12);
+  border: 1px solid rgba(168, 211, 240, 0.25);
   border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(234, 245, 255, 0.08) 0%,
-    rgba(2, 47, 162, 0.25) 100%
-  );
+  background: rgba(215, 241, 255, 0.08);
   backdrop-filter: blur(8px);
 }
 
@@ -1525,13 +1529,9 @@ hr {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  color: var(--role-accent-soft);
-  background: linear-gradient(
-    135deg,
-    var(--role-accent) 0%,
-    color-mix(in srgb, var(--role-accent) 40%, transparent) 100%
-  );
-  border: 1px solid rgba(234, 245, 255, 0.2);
+  color: #2a3a4a;
+  background: #d7f1ff;
+  border: 1px solid #a8d3f0;
 }
 
 .nav-label {
@@ -5894,6 +5894,7 @@ dialog {
 .brand-mark { display: none; }
 
 .sidebar {
+  position: relative;
   transition: width 0.2s var(--ease-smooth);
 }
 
@@ -5914,6 +5915,20 @@ dialog {
   border-radius: 10px;
   background: transparent;
   color: inherit;
+}
+
+.sidebar-pin.sidebar-pin-outside {
+  position: absolute;
+  top: 14px;
+  right: -18px;
+  z-index: 50;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #2a3a4a;
+  box-shadow: 0 2px 8px rgba(42, 58, 74, 0.18);
+  border: 1px solid #e2e8f0;
 }
 
 .sidebar-pin:hover { background: rgba(255, 255, 255, 0.12); }
