@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import saicLogo from "@/images/saic_logo.png";
+import welcomeBackground from "@/images/welcome_bg.png";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowRight,
@@ -319,7 +320,10 @@ export function PublicPage({ page }: { page: string }) {
         }
       >
         {page === "welcome" && (
-          <aside className="welcome-brand-panel">
+          <aside
+            className="welcome-brand-panel"
+            style={{ backgroundImage: `url(${welcomeBackground.src})` }}
+          >
             <Image src={saicLogo} alt="SAIC Accounting Intelligence" width={180} height={55} priority />
             <div className="welcome-brand-copy">
               <h1>Smarter<br />Accounting<br />Starts Here</h1>
