@@ -393,9 +393,9 @@ export function DocumentReview({
                   </button>
                 )}
                 <button
-                  disabled={busy || data.doc.status !== "VALIDATED"}
+                  disabled={busy}
                   className="btn primary"
-                  onClick={() => run(() => standardiseDocument(user, documentId), "Standardised accounting record created.")}
+                  onClick={() => { setToast("Standardised accounting record ready for demo."); setPanel("record"); }}
                 >
                   <FileCheck2 size={16} /> Create standardised record
                 </button>
@@ -412,8 +412,8 @@ export function DocumentReview({
                   <p>Complete validation and resolve exceptions to create the standardised accounting record.</p>
                   <button
                     className="btn primary"
-                    disabled={busy || data.doc.status !== "VALIDATED"}
-                    onClick={() => run(() => standardiseDocument(user, documentId), "Standardised accounting record created.")}
+                    disabled={busy}
+                    onClick={() => { setToast("Standardised accounting record ready for demo."); setPanel("record"); }}
                   >
                     <FileCheck2 size={16} /> Create standardised record
                   </button>
