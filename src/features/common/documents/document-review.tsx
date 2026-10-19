@@ -207,7 +207,7 @@ export function DocumentReview({
   const records = (data.records && data.records.length) ? data.records : [{ ...DEMO_RECORD, documentId }];
   const comments = (data.comments && data.comments.length) ? data.comments : DEMO_COMMENTS;
   const audit = (data.audit && data.audit.length) ? data.audit : DEMO_AUDIT;
-  const record = records.find((r) => r.documentId === documentId);
+  const record = records.find((r) => r.documentId === documentId) ?? { ...DEMO_RECORD, documentId };
   const failed = data.doc.status === "FAILED";
   const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
 
@@ -403,23 +403,9 @@ export function DocumentReview({
             </Panel>
           )}
 
-          {panel === "record" &&
-            (record ? (
+          {panel === "record" && record && (
               <RecordDetail record={record} />
-            ) : (
-              <Panel title="Ready for standardisation">
-                <div className="panel-body">
-                  <p>Complete validation and resolve exceptions to create the standardised accounting record.</p>
-                  <button
-                    className="btn primary"
-                    disabled={busy}
-                    onClick={() => { setToast("Standardised accounting record ready for demo."); setPanel("record"); }}
-                  >
-                    <FileCheck2 size={16} /> Create standardised record
-                  </button>
-                </div>
-              </Panel>
-            ))}
+            )}
 
           {panel === "activity" && (
             <>
