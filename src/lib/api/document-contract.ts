@@ -1,13 +1,13 @@
 import type { Document, StandardisedRecord, ExtractedField, Extraction, LineItem, ValidationResult } from "@/types";
 export interface ExtractionResponse {
-  documentId: string; contentRevision?: number; raw?: Record<string, unknown>;
+  documentId: string; contentRevision?: number; raw?: Record<string, unknown>; classification?: Extraction["classification"];
   fields?: Array<Partial<ExtractedField> & { key: string }>;
   lineItems?: Array<Partial<LineItem> & { unit_price?: string | null }>;
 }
 export interface ValidationReport {
   documentId: string; contentRevision: number; status: string; validationStatus: string;
   reviewRequired: boolean; accountingApprovalPerformed: boolean;
-  passed: number; warnings: number; failed: number; blocking: boolean; results: ValidationResult[];
+  coverageComplete?: boolean; passed: number; warnings: number; failed: number; blocking: boolean; results: ValidationResult[];
 }
 export interface CorrectionResponse { key: string; value: string; correctedBy: string; contentRevision: number; }
 export function mapDocument(value: Document & { kind?: string }): Document {
@@ -16,7 +16,7 @@ export function mapDocument(value: Document & { kind?: string }): Document {
 export function mapExtraction(value: ExtractionResponse): Extraction {
   return {
     documentId: value.documentId, contentRevision: value.contentRevision, raw: value.raw,
-    classification: value.raw?.document_type as Extraction["classification"],
+    classification: value.classification ?? value.raw?.document_type as Extraction["classification"],
     fields: Object.fromEntries((value.fields ?? []).map(field => [field.key, {
       ...field, label: field.label ?? field.key, value: field.value ?? null,
       original: field.normalizedValue ?? field.original ?? null,
@@ -49,4 +49,29 @@ export function mapRecord(record: RecordResponse): StandardisedRecord {
     fields: record.snapshot?.fieldPredictions, lineItems: record.snapshot?.lineItems,
     raw: record.snapshot?.extraction,
   }) };
+}
+
+/** Source classification overrides stored intake kind, including explicit unknown. */
+export function sourceKind(extraction: Pick<Extraction, "classification">, intake?: string): string {
+  if (extraction.classification?.value !== undefined) {
+    const kind = extraction.classification.value.toUpperCase();
+    return ["INVOICE", "BILL", "RECEIPT"].includes(kind) ? kind : "UNKNOWN";
+  }
+  return intake?.toUpperCase() ?? "UNKNOWN";
+}
+export function fieldLabel(kind: string, key: string, fallback?: string): string {
+  const shared: Record<string, string> = { currency: "Currency", subtotal: "Subtotal", tax: "Tax", discount: "Discount", total: "Total", customer: "Customer", due: "Due date" };
+  const profiles: Record<string, Record<string, string>> = {
+    INVOICE: { supplier: "Supplier", invoice: "Invoice number", date: "Invoice date" },
+    BILL: { supplier: "Issuer", reference: "Bill reference", account_number: "Account number", billing_period: "Billing period", date: "Bill date", total: "Amount due" },
+    RECEIPT: { supplier: "Merchant", reference: "Receipt reference", date: "Transaction date", transaction_time: "Transaction time", payment_method: "Payment method" },
+  };
+  return profiles[kind]?.[key] ?? shared[key] ?? fallback ?? key;
+}
+export function validationState(result: ValidationResult): string {
+  return result.checkStatus === "NOT_CHECKED" ? "NOT_CHECKED" : result.result;
+}
+export function standardisationAvailable(status: string, kind: string, report: ValidationReport | null): boolean {
+  return status === "VALIDATED" && kind !== "UNKNOWN" && report?.validationStatus === "PASS"
+    && report.coverageComplete !== false && !report.blocking;
 }

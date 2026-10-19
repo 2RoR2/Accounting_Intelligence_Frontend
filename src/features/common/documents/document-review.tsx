@@ -30,9 +30,9 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { ApiError } from "@/lib/api/client";
-import { decimalDisplay as money } from "@/lib/api/document-contract";
-import { DocumentViewer } from "@/components/common/documents/document-viewer";
-import { InvoiceDetailPreview } from "@/features/common/documents/invoice-detail-preview";
+import { decimalDisplay as money, fieldLabel, sourceKind, standardisationAvailable, validationState } from "@/lib/api/document-contract";
+import { DocumentViewer, SourceEvidenceList } from "@/components/common/documents/document-viewer";
+import { DocumentDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
 import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import {
@@ -140,8 +140,10 @@ export function DocumentReview({
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
-  const readonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !data.extraction.contentRevision;
   const extraction = data.extraction ?? { documentId, fields: {}, lineItems: [] };
+  const kind = sourceKind(extraction, data.doc.type);
+  const readonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !extraction.contentRevision || kind === "UNKNOWN";
+  const canStandardise = standardisationAvailable(data.doc.status, kind, data.validationReport);
   const workflow = data.workflow ?? { overdue: false, duplicates: [], relatedNotes: [] };
   const validation = data.validation ?? [];
   const records = data.records ?? [];
@@ -168,10 +170,10 @@ export function DocumentReview({
       />
 
       {failure && <ErrorState message={failure} />}
-      {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge><p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {result.result}</strong> {result.message}</p>)}</div></Panel>}
+      {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge>{data.validationReport.coverageComplete === false && <Badge>NOT_CHECKED</Badge>}<p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {validationState(result)}</strong> {result.field && <span>Field: {result.field}. </span>}{result.severity && <span>Severity: {result.severity}. </span>}{result.message}</p>)}</div></Panel>}
 
-      {data.doc.type === "INVOICE" && !failed && !pending && (
-        <InvoiceDetailPreview doc={data.doc} extraction={extraction} />
+      {!failed && !pending && (
+        <DocumentDetailPreview doc={data.doc} extraction={extraction} />
       )}
 
       {failed || pending ? (
@@ -212,7 +214,7 @@ export function DocumentReview({
                 <DocumentViewer name={data.doc.name} extraction={extraction} highlightedField={highlightedField} />
               </div>
               <div className="shoebox-form">
-                <div className="shoebox-form-head">Extracted fields</div>
+                <div className="shoebox-form-head">{kind === "UNKNOWN" ? "Unknown / Needs Review" : kind[0] + kind.slice(1).toLowerCase() + " fields"}</div>
                 {(workflow.overdue || workflow.duplicates.length > 0 || workflow.relatedNotes.length > 0) && (
                   <div className="panel-body">
                     {workflow.overdue && <Badge>Overdue</Badge>}
@@ -221,10 +223,11 @@ export function DocumentReview({
                   </div>
                 )}
                 <div className="shoebox-fields">
+                  {Object.keys(extraction.fields).length === 0 && <p>No accounting fields available. Review the original source.</p>}
                   {Object.entries(extraction.fields).map(([key, field]) => (
                     <FormField
                       key={key}
-                      field={field}
+                      field={{ ...field, label: fieldLabel(kind, key, field.label) }}
                       readonly={readonly}
                       onFocus={() => setHighlightedField(key)}
                       onSave={(value) =>
@@ -238,17 +241,18 @@ export function DocumentReview({
                 </div>
                 {extraction.lineItems.length > 0 && (
                   <div className="shoebox-lines">
-                    <strong>Line items</strong>
+                    <strong>{kind === "BILL" ? "Charges / line items" : kind === "RECEIPT" ? "Receipt items" : "Line items"}</strong>
                     <DataTable
                       rows={extraction.lineItems}
                       rowKey={(r) => r.id ?? r.description ?? "line"}
                       columns={[
-                        { label: "Description", render: (r) => r.description },
-                        { label: "Qty", render: (r) => r.quantity },
+                        { label: "Description", render: (r) => r.description ?? "Not provided" },
+                        { label: "Qty", render: (r) => r.quantity ?? "Not provided" },
                         { label: "Unit", render: (r) => money(r.unitPrice, extraction.fields.currency?.value) },
                         { label: "Amount", render: (r) => money(r.amount, extraction.fields.currency?.value) },
                       ]}
                     />
+                    <details><summary>Line item source evidence</summary>{extraction.lineItems.map((line, i) => <div key={line.id ?? i}><strong>Line {i + 1}</strong>{Object.entries(line.evidence ?? {}).map(([key, evidence]) => <div key={key}><p>{key}</p><SourceEvidenceList evidence={evidence} documentId={documentId} /></div>)}</div>)}</details>
                   </div>
                 )}
                 {!readonly && (
@@ -280,7 +284,7 @@ export function DocumentReview({
                         Submit for approval
                       </button>
                     )}
-                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && (
+                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && data.validationReport?.validationStatus === "PASS" && data.validationReport.coverageComplete !== false && (
                       <button className="btn primary" disabled={busy} onClick={() => run(() => decideDocumentReview(documentId, "approved", note || "Approved", data.doc.contentRevision ?? 1), "Document approved.")}>
                         Approve document
                       </button>
@@ -300,7 +304,9 @@ export function DocumentReview({
                 rowKey={(v) => v.rule}
                 columns={[
                   { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{v.rule}</strong></div> },
-                  { label: "Result", render: (v) => <Badge>{v.result}</Badge> },
+                  { label: "Result", render: (v) => <Badge>{validationState(v)}</Badge> },
+                  { label: "Field", render: (v) => v.field ?? "Not provided" },
+                  { label: "Severity", render: (v) => v.severity ?? "Not provided" },
                   { label: "What to do", render: (v) => <span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span> },
                 ]}
               />
@@ -315,7 +321,7 @@ export function DocumentReview({
                   </button>
                 )}
                 <button
-                  disabled={busy || data.doc.status !== "VALIDATED"}
+                  disabled={busy || !canStandardise}
                   className="btn primary"
                   onClick={() => run(() => standardiseDocument(user, documentId), "Standardised accounting record created.")}
                 >
@@ -331,10 +337,10 @@ export function DocumentReview({
             ) : (
               <Panel title="Ready for standardisation">
                 <div className="panel-body">
-                  <p>Complete validation and resolve exceptions to create the standardised accounting record.</p>
+                  <p>Complete supported validation and explicit human approval before creating a record. Unknown documents and NOT_CHECKED validation cannot be standardised.</p>
                   <button
                     className="btn primary"
-                    disabled={busy || data.doc.status !== "VALIDATED"}
+                    disabled={busy || !canStandardise}
                     onClick={() => run(() => standardiseDocument(user, documentId), "Standardised accounting record created.")}
                   >
                     <FileCheck2 size={16} /> Create standardised record

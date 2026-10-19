@@ -95,7 +95,7 @@ export async function uploadDocument(
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   if (!/\.pdf$/i.test(file.name))
     throw new Error(
-      "The verified AI workflow accepts digital PDF invoices.",
+      "The verified AI workflow accepts digital PDF invoices, bills and receipts; unknown content requires review.",
     );
   if (file.size === 0) throw new Error("This file is empty.");
   if (file.size > 20 * 1024 * 1024)

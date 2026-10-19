@@ -4806,6 +4806,7 @@ dialog::backdrop {
   }
   .app-main {
     margin-left: 0;
+    width: 100%;
   }
   .mobile-close {
     position: absolute;

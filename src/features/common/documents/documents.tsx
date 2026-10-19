@@ -76,7 +76,7 @@ export function DocumentList({ user }: { user: User }) {
         title={
           user.role === "ACCOUNTANT" ? "My documents" : "Company documents"
         }
-        description="Follow every document from upload through standardisation."
+        description="Follow each document from upload through review. Open Review for source classification; stored kind is intake metadata."
         actions={
           <div className="new-document-menu">
             <Link className="btn primary new-document-main" href={`${base}/upload`}>
@@ -160,11 +160,11 @@ export function DocumentList({ user }: { user: User }) {
                 </Link>
               ),
             },
-            { label: "Type", render: (d) => d.type },
+            { label: "Stored kind", render: (d) => d.type },
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
             {
               label: "Processing",
-              render: (d) => (d.status === "FAILED" ? "—" : `${d.seconds} sec`),
+              render: (d) => (d.status === "FAILED" ? "—" : d.seconds == null ? "Not measured" : `${d.seconds} sec`),
             },
             { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
             {
@@ -188,7 +188,7 @@ export function UploadPage({ user }: { user: User }) {
   const [files, setFiles] = useState<File[]>([]);
   const scenario = "real";
   const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
-  const [kind, setKind] = useState<DocumentKind>("INVOICE");
+  const [kind, setKind] = useState<DocumentKind | "AUTO">("AUTO");
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
@@ -221,7 +221,7 @@ export function UploadPage({ user }: { user: User }) {
       const documentIds: string[] = [];
       for (const file of files) {
         setStage(`Uploading ${file.name}`);
-        const doc = await uploadDocument(user, file, scenario, category, kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
+        const doc = await uploadDocument(user, file, scenario, category, kind === "AUTO" ? "INVOICE" : kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
         documentIds.push(doc.id);
         if (!doc.queueJobId) throw new Error("The file was stored but dispatch failed. Open Documents to retry processing; do not upload it again.");
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
@@ -273,7 +273,7 @@ export function UploadPage({ user }: { user: User }) {
     <>
       <PageHeader
         title="Upload a document"
-        description="Upload a digital PDF invoice for real CPU Docling extraction, validation and human review."
+        description="Upload a digital PDF invoice, bill or receipt. Source content determines its type; unknown documents require review."
       />
       <div className="upload-layout">
         <Panel
@@ -332,7 +332,7 @@ export function UploadPage({ user }: { user: User }) {
                 Paste a digital PDF file, or <b>browse files</b>
               </span>
               <small>
-                Digital PDF invoices · Maximum 20 MB per file
+                Digital PDF invoices, bills and receipts | Maximum 20 MB per file
               </small>
             </button>
             )}
@@ -366,16 +366,17 @@ export function UploadPage({ user }: { user: User }) {
             <div className="upload-form-grid">
             <Field
               label="Document type"
-              hint="Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
+              hint="This is an intake hint. The detected type comes from source content, including Unknown / Needs Review."
             >
               <select
                 value={kind}
                 disabled={busy}
-                onChange={(e) => setKind(e.target.value as DocumentKind)}
+                onChange={(e) => setKind(e.target.value as DocumentKind | "AUTO")}
               >
+                <option value="AUTO">Auto-detect / unsure</option>
                 <option value="INVOICE">Invoice</option>
-                <option disabled={digitalOnly} value="BILL">Bill</option>
-                <option disabled={digitalOnly} value="RECEIPT">Receipt</option>
+                <option value="BILL">Bill</option>
+                <option value="RECEIPT">Receipt</option>
                 <option disabled={digitalOnly} value="CREDIT_NOTE">Credit note</option>
                 <option disabled={digitalOnly} value="DEBIT_NOTE">Debit note</option>
               </select>
@@ -383,7 +384,7 @@ export function UploadPage({ user }: { user: User }) {
             </div>
             <Field
               label="Accounting category"
-              hint="Choose whether this invoice was sent to a customer or received from a supplier."
+              hint="Confirm the accounting direction for this document. It is not inferred from source type or payment method."
             >
               <select
                 value={category}
@@ -391,10 +392,10 @@ export function UploadPage({ user }: { user: User }) {
                 onChange={(e) => setCategory(e.target.value as RecordCategory)}
               >
                 <option value="ACCOUNTS_PAYABLE">
-                  Accounts Payable · Invoice from supplier
+                  Accounts Payable | Received from supplier
                 </option>
                 <option value="ACCOUNTS_RECEIVABLE">
-                  Accounts Receivable · Invoice to customer
+                  Accounts Receivable | Sent to customer
                 </option>
               </select>
             </Field>
@@ -418,17 +419,17 @@ export function UploadPage({ user }: { user: User }) {
         <Panel title="From upload to clarity">
           <div className="panel-body upload-guide">
             {[
-              ["01", "Upload", "Add your digital invoice PDF."],
+              ["01", "Upload", "Add your digital financial-document PDF."],
               ["02", "Extract", "Review fields from actual CPU Docling extraction."],
               [
                 "03",
                 "Validate",
-                "Check totals, required fields, and confidence.",
+                "See actual checks; unavailable checks are marked NOT_CHECKED.",
               ],
               [
                 "04",
                 "Standardise",
-                "Resolve exceptions and create a consistent record.",
+                "Only after supported validation and explicit human approval.",
               ],
             ].map(([n, t, d]) => (
               <div key={n}>
