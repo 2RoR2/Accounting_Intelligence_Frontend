@@ -11,7 +11,7 @@ import {
   Camera,
   CheckCircle2,
 } from "lucide-react";
-import type { DocumentKind, RecordCategory, User } from "@/types";
+import type { DocumentKind, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   getDocuments,
@@ -184,8 +184,6 @@ export function UploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
-  const [scenario, setScenario] = useState("mismatch");
-  const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
   const [kind, setKind] = useState<DocumentKind>("INVOICE");
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState("");
@@ -218,7 +216,7 @@ export function UploadPage({ user }: { user: User }) {
       const documentIds: string[] = [];
       for (const file of files) {
         setStage(`Uploading ${file.name}`);
-        const doc = await uploadDocument(user, file, scenario, category, kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
+        const doc = await uploadDocument(user, file, "success", "ACCOUNTS_PAYABLE", kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
         documentIds.push(doc.id);
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
@@ -376,42 +374,7 @@ export function UploadPage({ user }: { user: User }) {
               </select>
             </Field>
             </div>
-            <Field
-              label="Accounting category"
-              hint="Choose whether this invoice was sent to a customer or received from a supplier."
-            >
-              <select
-                value={category}
-                disabled={busy}
-                onChange={(e) => setCategory(e.target.value as RecordCategory)}
-              >
-                <option value="ACCOUNTS_PAYABLE">
-                  Accounts Payable · Invoice from supplier
-                </option>
-                <option value="ACCOUNTS_RECEIVABLE">
-                  Accounts Receivable · Invoice to customer
-                </option>
-              </select>
-            </Field>
-            <Field
-              label="Extraction scenario"
-              hint="The selected scenario generates sample extraction data; no OCR or AI is performed."
-            >
-              <select
-                value={scenario}
-                disabled={busy}
-                onChange={(e) => setScenario(e.target.value)}
-              >
-                <option value="mismatch">
-                  Total mismatch · correction workflow
-                </option>
-                <option value="success">Successful invoice</option>
-                <option value="low">Low-confidence reference</option>
-                <option value="missing">Missing invoice number</option>
-                <option value="duplicate">Duplicate invoice</option>
-                <option value="failed">Processing failure</option>
-              </select>
-            </Field>
+
             {stage && (
               <div className="processing-banner" role="status">
                 <span className="pulse-dot" />
