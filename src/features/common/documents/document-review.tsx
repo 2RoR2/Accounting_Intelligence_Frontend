@@ -78,6 +78,7 @@ const DEMO_RECORD: StandardisedRecord = {
   validation: "PASSED",
   status: "COMPLETED",
   extraction: {
+    documentId: "",
     fields: DEMO_FIELDS,
     lineItems: DEMO_LINES,
   },

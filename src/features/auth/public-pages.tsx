@@ -56,7 +56,6 @@ export function PublicPage({ page }: { page: string }) {
   const [mfaSecondsLeft, setMfaSecondsLeft] = useState(0);
   const [mfaResending, setMfaResending] = useState(false);
   const [mfaRecoveryOpen, setMfaRecoveryOpen] = useState(false);
-  const [mfaRecoveryReason, setMfaRecoveryReason] = useState("");
   const [mfaRecoveryMode, setMfaRecoveryMode] = useState(false);
   const [mfaRecoveryComplete, setMfaRecoveryComplete] = useState(false);
   const [mfaRecoveryPassword, setMfaRecoveryPassword] = useState("");
