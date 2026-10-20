@@ -85,9 +85,9 @@ const DEMO_RECORD: StandardisedRecord = {
 };
 
 const DEMO_AUDIT = [
-  { id: "a1", timestamp: new Date(Date.now() - 3600000).toISOString(), user: "Demo Accountant 2", action: "UPLOADED", details: "Document uploaded for processing." },
-  { id: "a2", timestamp: new Date(Date.now() - 1800000).toISOString(), user: "System", action: "EXTRACTION_COMPLETED", details: "Demo extraction data prepared for review." },
-  { id: "a3", timestamp: new Date(Date.now() - 900000).toISOString(), user: "Demo Accountant 2", action: "REVIEW_STARTED", details: "Opened document for field review." },
+  { id: "a1", timestamp: new Date(Date.now() - 3600000).toISOString(), user: "Demo Accountant 2", action: "UPLOADED", resource: "", details: "Document uploaded for processing." },
+  { id: "a2", timestamp: new Date(Date.now() - 1800000).toISOString(), user: "System", action: "EXTRACTION_COMPLETED", resource: "", details: "Demo extraction data prepared for review." },
+  { id: "a3", timestamp: new Date(Date.now() - 900000).toISOString(), user: "Demo Accountant 2", action: "REVIEW_STARTED", resource: "", details: "Opened document for field review." },
 ];
 
 const DEMO_COMMENTS = [
