@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/common/layout/app-shell";
 import { AccessDenied } from "@/components/common/errors/access-denied";
-import { LoadingState } from "@/components/common/ui";
+import { ErrorState, LoadingState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { AUTH_IDENTITY_CONTRACT, getCurrentUser } from "@/lib/api/auth.service";
 import { isAllowedWorkspaceRoute, isPublicRoute } from "@/lib/constants/routes";

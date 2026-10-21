@@ -33,7 +33,7 @@ import {
   money,
 } from "@/components/common/ui";
 import { DocumentViewer } from "@/components/common/documents/document-viewer";
-import { InvoiceDetailPreview } from "@/features/common/documents/invoice-detail-preview";
+import { DocumentDetailPreview as InvoiceDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
 import {
   addDocumentComment,
@@ -57,24 +57,24 @@ function FormField({
   onFocus?: () => void;
   readonly: boolean;
 }) {
-  const [value, setValue] = useState(field.value);
+  const [value, setValue] = useState(field.value ?? "");
   const [saving, setSaving] = useState(false);
   return (
     <label className="shoebox-field">
       <span className="shoebox-label">
         {field.label}
-        <em className={`conf ${field.confidence >= 95 ? "high" : field.confidence >= 80 ? "med" : "low"}`}>
+        <em className={`conf ${(field.confidence ?? 0) >= 95 ? "high" : (field.confidence ?? 0) >= 80 ? "med" : "low"}`}>
           {field.correctedBy ? <Check size={11} /> : null}
-          {field.correctedBy ? "Reviewed" : `${field.confidence}%`}
+          {field.correctedBy ? "Reviewed" : `${field.confidence ?? 0}%`}
         </em>
       </span>
       <input
-        value={value}
+        value={value ?? ""}
         disabled={readonly || saving}
         onChange={(e) => setValue(e.target.value)}
         onFocus={onFocus}
         onBlur={async () => {
-          if (value !== field.value && !readonly) {
+          if (value !== (field.value ?? "") && !readonly) {
             setSaving(true);
             try {
               await onSave(value);
@@ -251,12 +251,12 @@ export function DocumentReview({
                     <strong>Line items</strong>
                     <DataTable
                       rows={extraction.lineItems}
-                      rowKey={(r) => r.description}
+                      rowKey={(r) => r.description ?? r.id ?? "line"}
                       columns={[
-                        { label: "Description", render: (r) => r.description },
-                        { label: "Qty", render: (r) => r.quantity },
-                        { label: "Unit", render: (r) => money(r.unitPrice) },
-                        { label: "Amount", render: (r) => money(r.amount) },
+                        { label: "Description", render: (r) => r.description ?? "" },
+                        { label: "Qty", render: (r) => r.quantity ?? "" },
+                        { label: "Unit", render: (r) => money(r.unitPrice ?? "") },
+                        { label: "Amount", render: (r) => money(r.amount ?? "") },
                       ]}
                     />
                   </div>

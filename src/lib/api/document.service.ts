@@ -106,7 +106,7 @@ export function validateExtraction(
     "An invoice with this number and supplier already exists.",
   );
   const low = Object.values(f).filter(
-    (field) => field.confidence < rules.threshold && !field.correctedBy,
+    (field) => (field.confidence ?? 0) < rules.threshold && !field.correctedBy,
   );
   results.push({
     rule: "Confidence Check",
@@ -124,13 +124,18 @@ export async function getValidationResults(user: User, documentId: string) {
   }>(`/api/documents/${documentId}/validation`);
   return response.results ?? [];
 }
+export async function getValidationReport(user: User, documentId: string) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return get<{ results: ValidationResult[]; validationStatus?: string; blocking?: boolean }>(`/api/documents/${documentId}/validation`);
+}
 export async function updateExtractedField(
   user: User,
   documentId: string,
   key: string,
   value: string,
+  expectedContentRevision?: number,
 ) {
-  await api(`/api/documents/${documentId}/extraction/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify({ value }) }); /*
+  return api<{ contentRevision?: number; value?: string }>(`/api/documents/${documentId}/extraction/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify({ value, ...(expectedContentRevision === undefined ? {} : { expectedContentRevision }) }) }); /*
   mutate((db) => {
     const doc = documentFor(db, user, documentId, true);
     const field = db.extractions.find((e) => e.documentId === documentId)
@@ -234,7 +239,7 @@ export async function revalidateDocument(
 
 export async function retryDocumentProcessing(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return api<{ documentId: string; jobId?: string; status: string }>(`/api/documents/${documentId}/retry`, { method: "POST" });
+  return api<{ documentId: string; id?: string; jobId?: string; queueJobId?: string | null; jobStatus?: string; status: string }>(`/api/documents/${documentId}/retry`, { method: "POST" });
 }
 export async function getExceptions(user: User) {
   void user;
