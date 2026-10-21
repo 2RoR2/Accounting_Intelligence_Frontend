@@ -8,7 +8,7 @@ import type {
 import type { DocumentKind } from "@/types";
 import { requireRole } from "../permissions";
 import { api, get } from "./client";
-import { mapDocument, mapExtraction, type ExtractionResponse, type ValidationReport, type CorrectionResponse } from "./document-contract";
+import { mapDocument, mapExtraction, type ExtractionResponse, type ValidationReport, type RevalidationResponse, type CorrectionResponse } from "./document-contract";
 export type DocumentSearch = {
   q?: string;
   status?: string;
@@ -48,12 +48,28 @@ export async function updateExtractedField(user: User, documentId: string, key: 
 export async function revalidateDocument(user: User, documentId: string, note = "") {
   void note;
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return api<ValidationReport>("/api/documents/" + documentId + "/revalidate", { method: "POST" });
+  return api<RevalidationResponse>("/api/documents/" + documentId + "/revalidate", { method: "POST" });
 }
 
-export async function retryDocumentProcessing(user: User, documentId: string) {
+/** Dispatch acceptance is separate from worker or accounting success. */
+export interface RetryDispatchResponse {
+  id: string;
+  jobId: string;
+  queueJobId?: string | null;
+  status: string;
+  jobStatus: string;
+  dispatchAccepted: true;
+}
+export async function retryDocumentProcessing(user: User, documentId: string): Promise<RetryDispatchResponse> {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return api<{ documentId: string; jobId?: string; status: string }>(`/api/documents/${documentId}/retry`, { method: "POST" });
+  const result = await api<RetryDispatchResponse>(`/api/documents/${documentId}/retry`, { method: "POST" });
+  if (!result || result.id !== documentId || typeof result.jobId !== "string" || !result.jobId.trim()
+    || typeof result.status !== "string" || !result.status.trim() || typeof result.jobStatus !== "string" || !result.jobStatus.trim()
+    || result.dispatchAccepted !== true
+    || (result.queueJobId != null && (typeof result.queueJobId !== "string" || !result.queueJobId.trim()))) {
+    throw new Error("Retry dispatch was not confirmed by a supported protocol. Refresh processing status before trying again.");
+  }
+  return result;
 }
 export async function getExceptions(user: User) {
   void user;

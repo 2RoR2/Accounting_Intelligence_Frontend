@@ -32,10 +32,8 @@ import {
   SearchInput,
   formatDate,
 } from "@/components/common/ui";
-import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
-const digitalOnly = process.env.NEXT_PUBLIC_DEMO_DIGITAL_PDF_ONLY === "true";
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
@@ -96,9 +94,7 @@ export function DocumentList({ user }: { user: User }) {
                 <Link href={`${base}/upload`} onClick={() => setNewMenuOpen(false)}>
                   <UploadCloud size={16} /> Upload document
                 </Link>
-                <Link href={`${base}/upload?source=camera`} onClick={() => setNewMenuOpen(false)}>
-                  <Camera size={16} /> Use camera
-                </Link>
+                <button type="button" disabled title="Camera capture is unavailable. Upload a digital PDF."><Camera size={16} /> Camera unavailable</button>
               </div>
             )}
           </div>
@@ -184,7 +180,6 @@ export function DocumentList({ user }: { user: User }) {
 }
 export function UploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
-  const searchParams = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
   const scenario = "real";
   const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
@@ -193,10 +188,9 @@ export function UploadPage({ user }: { user: User }) {
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [camera, setCamera] = useState(() => !digitalOnly && searchParams.get("source") === "camera");
   const [batch, setBatch] = useState<{ id: string; name: string; status: string } | null>(null);
   const [uploaded, setUploaded] = useState<Array<{id: string; name: string; status: string}>>([]);
-  const allowedExtensions = digitalOnly ? ["pdf"] : ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "xlsx", "csv"];
+  const allowedExtensions = ["pdf"];
   const addFiles = (incoming: File[]) => {
     const invalid = incoming.find((file) => {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -286,20 +280,10 @@ export function UploadPage({ user }: { user: User }) {
               <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
                 <UploadCloud size={16} /> Upload from device
               </button>
-              <button type="button" className="btn primary" title={digitalOnly ? "Camera/OCR is not verified for this demo" : undefined} disabled={busy || digitalOnly} onClick={() => setCamera(true)}>
-                <Camera size={16} /> Use camera
+              <button type="button" className="btn primary" title="Camera capture is unavailable. Upload a digital PDF." disabled>
+                <Camera size={16} /> Camera unavailable
               </button>
             </div>
-            {camera ? (
-              <CameraCapture
-                onClose={() => setCamera(false)}
-                onConfirm={(file) => {
-                  addFiles([file]);
-                  setCamera(false);
-                  setError("");
-                }}
-              />
-            ) : (
             <button
               type="button"
               className={`drop-zone ${dragging ? "dragging" : ""}`}
@@ -335,14 +319,13 @@ export function UploadPage({ user }: { user: User }) {
                 Digital PDF invoices, bills and receipts | Maximum 20 MB per file
               </small>
             </button>
-            )}
             {batch && <div className="notice success">Batch {batch.name} · {batch.status} <button type="button" className="btn small" onClick={() => cancelAccountantBatch(batch.id).then(() => setBatch({ ...batch, status: "CANCELLED" }))}>Cancel pending batch</button></div>}
             <input
               ref={input}
               hidden
               multiple
               type="file"
-              accept={digitalOnly ? ".pdf" : ".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"}
+              accept=".pdf"
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
             />
             {files.length > 0 && <div className="upload-queue-header"><strong>Ready to upload</strong><span>{files.length} file{files.length === 1 ? "" : "s"}</span></div>}
@@ -377,8 +360,8 @@ export function UploadPage({ user }: { user: User }) {
                 <option value="INVOICE">Invoice</option>
                 <option value="BILL">Bill</option>
                 <option value="RECEIPT">Receipt</option>
-                <option disabled={digitalOnly} value="CREDIT_NOTE">Credit note</option>
-                <option disabled={digitalOnly} value="DEBIT_NOTE">Debit note</option>
+                <option disabled value="CREDIT_NOTE">Credit note</option>
+                <option disabled value="DEBIT_NOTE">Debit note</option>
               </select>
             </Field>
             </div>
@@ -431,10 +414,10 @@ export function UploadPage({ user }: { user: User }) {
                 "Standardise",
                 "Only after supported validation and explicit human approval.",
               ],
-            ].map(([n, t, d]) => (
-              <div key={n}>
-                <span>{n}</span>
-                <div>
+            ].map(([n, t, d], i) => (
+              <div key={n} className={`step-item${i === 0 ? " is-active" : ""}`}>
+                <span className="step-dot" />
+                <div className="step-body">
                   <strong>{t}</strong>
                   <p>{d}</p>
                 </div>

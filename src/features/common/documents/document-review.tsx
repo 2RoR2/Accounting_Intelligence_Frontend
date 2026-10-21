@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CircleX, CheckCircle2, FileCheck2, RefreshCw } from "lucide-react";
 import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   retryDocumentProcessing,
+  type RetryDispatchResponse,
   getDocument,
   getExceptions,
   getExtraction,
@@ -29,6 +30,10 @@ import {
   Toast,
   formatDate,
 } from "@/components/common/ui";
+import { loadReviewResource } from "@/lib/api/review-resource";
+import { canEditDocument, canDecideReview, hasCurrentApproval } from "@/lib/permissions/document-review";
+import { retryErrorMessage } from "@/lib/api/retry-error";
+import { LineItemCorrectionField } from "./line-item-correction";
 import { ApiError } from "@/lib/api/client";
 import { decimalDisplay as money, fieldLabel, sourceKind, standardisationAvailable, validationState } from "@/lib/api/document-contract";
 import { DocumentViewer, SourceEvidenceList } from "@/components/common/documents/document-viewer";
@@ -37,6 +42,9 @@ import { RecordDetail } from "@/features/common/records/records";
 import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import {
   addDocumentComment,
+  correctLineItem,
+  getDocumentReviews,
+  type LineFieldKey,
   decideDocumentReview,
   getDocumentKindWorkflow,
   getDocumentComments,
@@ -46,7 +54,7 @@ import {
 } from "@/lib/api/workflow.service";
 
 function FormField({ field, onSave, onFocus, readonly }: {
-  field: ExtractedField; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean;
+  field: ExtractedField; onSave: (value: string) => Promise<unknown>; onFocus?: () => void; readonly: boolean;
 }) {
   const [value, setValue] = useState(field.value ?? "");
   const [dirty, setDirty] = useState(false);
@@ -79,31 +87,27 @@ export function DocumentReview({
   documentId: string;
 }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
-  const { data, error, loading, refresh } = useResource(
+  const { data, error, loading, refresh, setData } = useResource(
     async () => {
       const [doc, extraction] = await Promise.all([
         getDocument(user, documentId),
         getExtraction(user, documentId),
       ]);
       const validationReport = ["UPLOADED","QUEUED","PROCESSING","FAILED"].includes(doc.status) ? null : await getValidationReport(user, documentId);
-      const optional = async <T,>(request: Promise<T>, fallback: T) => {
-        try {
-          return await Promise.race([
-            request,
-            new Promise<T>((resolve) => window.setTimeout(() => resolve(fallback), 4000)),
-          ]);
-        } catch {
-          return fallback;
-        }
-      };
-      const [exceptions, records, audit, comments, workflow] = await Promise.all([
-        optional(getExceptions(user).then((items) => items.filter((e) => e.documentId === documentId)), []),
-        optional(getStandardisedRecords(user), []),
-        optional(getAuditLogs(user), []),
-        optional(getDocumentComments(documentId), []),
-        optional(getDocumentKindWorkflow(documentId), { kind: "", fields: {}, overdue: false, duplicates: [], relatedNotes: [] }),
+      const [exceptionResult, recordResult, auditResult, commentResult, workflowResult, reviewResult] = await Promise.all([
+        loadReviewResource(getExceptions(user).then((items) => items.filter((e) => e.documentId === documentId)), "Exceptions", []),
+        loadReviewResource(getStandardisedRecords(user), "Standardised records", []),
+        loadReviewResource(getAuditLogs(user), "Audit history", []),
+        loadReviewResource(getDocumentComments(documentId), "Comments", []),
+        loadReviewResource(getDocumentKindWorkflow(documentId), "Document workflow", { kind: "", fields: {}, overdue: false, duplicates: [], relatedNotes: [] }),
+        loadReviewResource(getDocumentReviews(documentId), "Review history", null),
       ]);
-      return { doc, extraction, validation: validationReport?.results ?? [], validationReport, exceptions, records, audit, comments, workflow };
+      return { doc, extraction, validation: validationReport?.results ?? [], validationReport,
+        exceptions: exceptionResult.data, records: recordResult.data, audit: auditResult.data,
+        comments: commentResult.data, workflow: workflowResult.data, reviews: reviewResult.data,
+        resourceErrors: [exceptionResult, recordResult, auditResult, commentResult, workflowResult, reviewResult].flatMap(result => result.error ? [result.error] : []),
+        recordError: recordResult.error, commentError: commentResult.error, auditError: auditResult.error,
+      };
     },
     `${user.id}:${documentId}`,
   );
@@ -112,21 +116,53 @@ export function DocumentReview({
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const retryInFlight = useRef(false);
+  const [retryDispatch, setRetryDispatch] = useState<RetryDispatchResponse | null>(null);
   const [comment, setComment] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
 
-  async function run(op: () => Promise<unknown>, message: string, propagate = false) {
+  async function run<T,>(op: () => Promise<T>, message: string, propagate = false) {
     setBusy(true);
     setFailure("");
+    setToast("");
     try {
-      await op();
+      const result = await op();
       setToast(message);
       await refresh();
+      return result;
     } catch (e) {
       setFailure((e as Error).message);
       if (e instanceof ApiError && e.status === 409) await refresh();
       if (propagate) throw e;
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveLine(lineId: string, fieldKey: LineFieldKey, value: string): Promise<string> {
+    const result = await run(async () => {
+      const confirmed = await correctLineItem(documentId, lineId, fieldKey, value, data?.extraction.contentRevision ?? 0);
+      const property = fieldKey === "unit_price" ? "unitPrice" : fieldKey;
+      setData(current => current ? { ...current,
+        doc: { ...current.doc, contentRevision: confirmed.contentRevision },
+        extraction: { ...current.extraction, contentRevision: confirmed.contentRevision,
+          lineItems: current.extraction.lineItems.map(line => line.id === confirmed.lineItemId ? { ...line, [property]: confirmed.value } : line) },
+        validationReport: null, validation: [], reviews: null,
+      } : current);
+      return confirmed;
+    }, "Line correction confirmed by the backend. Revalidate before review.", true);
+    if (!result) throw new Error("The line correction was not confirmed.");
+    return result.value;
+  }
+  async function requestRetry() {
+    if (retryInFlight.current) return;
+    retryInFlight.current = true;
+    setBusy(true); setFailure(""); setToast(""); setRetryDispatch(null);
+    try { setRetryDispatch(await retryDocumentProcessing(user, documentId)); }
+    catch (error) { setFailure(retryErrorMessage(error)); }
+    finally {
+      await refresh();
+      retryInFlight.current = false;
       setBusy(false);
     }
   }
@@ -138,12 +174,19 @@ export function DocumentReview({
   }, [data, refresh]);
 
   if (loading) return <LoadingState />;
-  if (error || !data) return <ErrorState message={error} retry={refresh} />;
+  if (!data) return <ErrorState message={error} retry={refresh} />;
 
   const extraction = data.extraction ?? { documentId, fields: {}, lineItems: [] };
   const kind = sourceKind(extraction, data.doc.type);
-  const readonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !extraction.contentRevision || kind === "UNKNOWN";
-  const canStandardise = standardisationAvailable(data.doc.status, kind, data.validationReport);
+  const hasRecord = data.records.some(record => record.documentId === documentId);
+  const canReview = canEditDocument(user, data.doc, hasRecord);
+  const revision = extraction.contentRevision;
+  const currentRevision = !!revision && Number.isInteger(revision) && data.doc.contentRevision === revision;
+  const approved = hasCurrentApproval(data.reviews, revision);
+  const readonly = !canReview || !!error || !!data.recordError || !currentRevision || kind === "UNKNOWN";
+  const validationReady = currentRevision && data.validationReport?.contentRevision === revision && data.validationReport.validationStatus === "PASS" && data.validationReport.coverageComplete !== false && !data.validationReport.blocking;
+  const canStandardise = !readonly && approved && validationReady && standardisationAvailable(data.doc.status, kind, data.validationReport);
+  const canApprove = !readonly && validationReady && canDecideReview(user, data.doc, data.reviews);
   const workflow = data.workflow ?? { overdue: false, duplicates: [], relatedNotes: [] };
   const validation = data.validation ?? [];
   const records = data.records ?? [];
@@ -152,6 +195,13 @@ export function DocumentReview({
   const record = records.find((r) => r.documentId === documentId);
   const failed = data.doc.status === "FAILED";
   const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
+
+  function lineField(lineId: string | undefined, key: LineFieldKey, label: string, value: string | number | null, displayValue?: string) {
+    if (!lineId) return displayValue ?? value ?? "Not provided";
+    const number = extraction.lineItems.findIndex(line => line.id === lineId) + 1;
+    return <LineItemCorrectionField label={"Line " + number + " " + label} value={value} displayValue={displayValue}
+      readonly={readonly} busy={busy} onSave={draft => saveLine(lineId, key, draft)} />;
+  }
 
   return (
     <>
@@ -169,7 +219,10 @@ export function DocumentReview({
         }
       />
 
+      {retryDispatch && <div role="status" className="panel-body"><p>Retry dispatch confirmed. Processing completion has not been confirmed by this response.</p><p>Document: {retryDispatch.id} | Processing job: {retryDispatch.jobId} | Reported job status: {retryDispatch.jobStatus}</p>{retryDispatch.queueJobId && <p>Queue job: {retryDispatch.queueJobId}</p>}</div>}
       {failure && <ErrorState message={failure} />}
+      {error && <ErrorState message={error} retry={refresh} />}
+      {data.resourceErrors.map(message => <ErrorState key={message} message={message} retry={refresh} />)}
       {data.validationReport && <Panel title="Backend validation"><div className="panel-body" role="status"><Badge>{data.validationReport.validationStatus}</Badge>{validation.some(result => result.checkStatus === "NOT_CHECKED") && <Badge>NOT_CHECKED</Badge>}<p>Human review required | No automatic approval</p><p>Content revision {data.extraction.contentRevision}</p>{validation.map((result,index) => <p key={index}><strong>{result.rule} | {validationState(result)}</strong> {result.field && <span>Field: {result.field}. </span>}{result.severity && <span>Severity: {result.severity}. </span>}{result.message}</p>)}</div></Panel>}
 
       {!failed && !pending && (
@@ -186,13 +239,8 @@ export function DocumentReview({
             </p>
             <button
               className="btn primary"
-              disabled={busy || pending}
-              onClick={() =>
-                run(
-                  () => retryDocumentProcessing(user, documentId),
-                  "Extraction retry queued.",
-                )
-              }
+              disabled={busy || pending || !canReview || !!error}
+              onClick={requestRetry}
             >
               <RefreshCw size={16} />{" "}
               {failed ? "Retry extraction" : "Waiting for Docling extraction"}
@@ -228,7 +276,7 @@ export function DocumentReview({
                     <FormField
                       key={key}
                       field={{ ...field, label: fieldLabel(kind, key, field.label) }}
-                      readonly={readonly}
+                      readonly={readonly || busy}
                       onFocus={() => setHighlightedField(key)}
                       onSave={(value) =>
                         run(
@@ -246,10 +294,10 @@ export function DocumentReview({
                       rows={extraction.lineItems}
                       rowKey={(r) => r.id ?? r.description ?? "line"}
                       columns={[
-                        { label: "Description", render: (r) => r.description ?? "Not provided" },
-                        { label: "Qty", render: (r) => r.quantity ?? "Not provided" },
-                        { label: "Unit", render: (r) => money(r.unitPrice, extraction.fields.currency?.value) },
-                        { label: "Amount", render: (r) => money(r.amount, extraction.fields.currency?.value) },
+                        { label: "Description", render: (r) => lineField(r.id, "description", "Description", r.description) },
+                        { label: "Qty", render: (r) => lineField(r.id, "quantity", "Quantity", r.quantity) },
+                        { label: "Unit", render: (r) => lineField(r.id, "unit_price", "Unit price", r.unitPrice, money(r.unitPrice, extraction.fields.currency?.value)) },
+                        { label: "Amount", render: (r) => lineField(r.id, "amount", "Amount", r.amount, money(r.amount, extraction.fields.currency?.value)) },
                       ]}
                     />
                     <details><summary>Line item source evidence</summary>{extraction.lineItems.map((line, i) => <div key={line.id ?? i}><strong>Line {i + 1}</strong>{Object.entries(line.evidence ?? {}).map(([key, evidence]) => <div key={key}><p>{key}</p><SourceEvidenceList evidence={evidence} documentId={documentId} /></div>)}</div>)}</details>
@@ -270,7 +318,7 @@ export function DocumentReview({
                       onClick={() =>
                         run(
                           () => revalidateDocument(user, documentId),
-                          "Review saved and revalidated.",
+                          "Backend validation completed.",
                         )
                       }
                     >
@@ -279,16 +327,17 @@ export function DocumentReview({
                     <button className="btn" disabled={busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.") }>
                       Save draft
                     </button>
-                    {user.role === "ACCOUNTANT" && data.validationReport?.validationStatus === "PASS" && (
-                      <button className="btn" disabled={busy} onClick={() => run(() => submitDocumentReview(documentId, "submitted", note || "Ready for approval", data.doc.contentRevision ?? 1), "Submitted for approval.")}>
+                    {!approved && validationReady && ["EXTRACTED", "CORRECTED", "EXCEPTION", "IN_REVIEW", "VALIDATED"].includes(data.doc.status) && (
+                      <button className="btn" disabled={busy} onClick={() => run(() => submitDocumentReview(documentId, "submitted", note || "Ready for approval", data.extraction.contentRevision!), "Submitted for approval.")}>
                         Submit for approval
                       </button>
                     )}
-                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && data.validationReport?.validationStatus === "PASS" && data.validationReport.coverageComplete !== false && (
-                      <button className="btn primary" disabled={busy} onClick={() => run(() => decideDocumentReview(documentId, "approved", note || "Approved", data.doc.contentRevision ?? 1), "Document approved.")}>
+                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && (
+                      <button className="btn primary" disabled={busy || !canApprove} onClick={() => run(() => decideDocumentReview(documentId, "approved", note || "Approved", data.extraction.contentRevision!), "Document approved.")}>
                         Approve document
                       </button>
                     )}
+                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && data.reviews?.submissions[0]?.submittedBy === user.id && <p>A different local administrator must decide this submission.</p>}
                   </div>
                 )}
               </div>
@@ -335,10 +384,10 @@ export function DocumentReview({
           )}
 
           {panel === "record" &&
-            (record ? (
+            (data.recordError ? <ErrorState message={data.recordError} retry={refresh} /> : record ? (
               <RecordDetail record={record} />
             ) : (
-              <Panel title="Ready for standardisation">
+              <Panel title="No standardised record">
                 <div className="panel-body">
                   <p>Complete supported validation and explicit human approval before creating a record. Unknown documents and NOT_CHECKED validation cannot be standardised.</p>
                   <button
@@ -365,7 +414,7 @@ export function DocumentReview({
                 </Field>
                 <button
                   className="btn primary"
-                  disabled={busy || !comment.trim()}
+                  disabled={busy || !!error || !canReview || !comment.trim()}
                   onClick={() =>
                     run(
                       async () => {
@@ -379,6 +428,7 @@ export function DocumentReview({
                   Add comment
                 </button>
               </div>
+              {!data.commentError && comments.length === 0 && <p className="empty-state">No comments yet.</p>}
               {comments.length > 0 && (
                 <DataTable
                   rows={comments as DocumentComment[]}
@@ -390,7 +440,7 @@ export function DocumentReview({
                   ]}
                 />
               )}
-              <DataTable
+              {!data.auditError && <DataTable
                 rows={audit.filter(
                   (a) => a.resource === data.doc.name || a.resource === documentId || a.resource === record?.id,
                 )}
@@ -401,7 +451,7 @@ export function DocumentReview({
                   { label: "Action", render: (a) => a.action.replaceAll("_", " ") },
                   { label: "Details", render: (a) => a.details },
                 ]}
-              />
+              />}
             </Panel>
             <WorkflowControls user={user} documentId={documentId} />
             </>

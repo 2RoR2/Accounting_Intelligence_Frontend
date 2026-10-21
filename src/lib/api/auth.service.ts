@@ -1,5 +1,5 @@
 import type { User } from "@/types";
-import { get, post } from "./client";
+import { ApiError, get, post } from "./client";
 
 export type BackendUser = {
   id: string;
@@ -7,11 +7,14 @@ export type BackendUser = {
   email: string;
   role: string;
   tenantId: string | null;
+  tenantCode?: string | null;
   tenantName?: string;
   status: string;
   mustChangePassword: boolean;
   lastLogin?: string;
 };
+
+export const AUTH_IDENTITY_CONTRACT = "canonical-tenant-uuid-v1";
 
 const mapUser = (user: BackendUser): User => ({
   id: user.id,
@@ -19,6 +22,7 @@ const mapUser = (user: BackendUser): User => ({
   email: user.email,
   role: user.role as User["role"],
   tenantId: user.tenantId,
+  tenantCode: user.tenantCode ?? null,
   status: user.status as User["status"],
   mustChangePassword: user.mustChangePassword,
   invitedBy: "",
@@ -58,8 +62,9 @@ export async function getCurrentUser() {
   try {
     const response = await get<BackendUser>("/api/auth/me");
     return mapUser(response);
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
   }
 }
 export async function logout() {

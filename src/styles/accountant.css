@@ -54,8 +54,9 @@
 }
 
 .app-shell[data-role="accountant"] .workspace-icon {
-  background: #0ea5e9;
-  color: #fff;
+  background: #d7f1ff;
+  color: #2a3a4a;
+  border: 1px solid #a8d3f0;
 }
 
 .app-shell[data-role="accountant"] .nav-item {
@@ -110,14 +111,15 @@
 }
 
 .app-shell[data-role="accountant"] .btn.primary {
-  background: #0ea5e9;
-  color: #fff;
+  background: #2a3a4a;
+  background-image: none;
+  color: #f6f1e8;
   box-shadow: none;
 }
 
 .app-shell[data-role="accountant"] .btn.primary:hover {
-  background: #0284c7;
-  color: #fff;
+  background: #7aa8c8;
+  color: #2a3a4a;
 }
 
 .app-shell[data-role="accountant"] .panel,
@@ -185,30 +187,31 @@
    administrator workspaces. */
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .upload-sources .btn.primary,
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .upload-layout .btn.primary {
-  background: #0ea5e9;
+  background: #2a3a4a;
   background-image: none;
-  color: #fff;
+  color: #f6f1e8;
   box-shadow: none;
 }
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .upload-sources .btn.primary:hover,
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .upload-layout .btn.primary:hover {
-  background: #0284c7;
+  background: #7aa8c8;
+  color: #2a3a4a;
 }
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .drop-zone {
-  background: #f1f5f9;
-  color: #64748b;
+  background: linear-gradient(180deg, #ffffff 0%, #d7f1ff 100%);
+  color: #5e7384;
 }
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .drop-zone:hover,
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .drop-zone.dragging {
-  background: #e0f2fe;
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
+  background: #d7f1ff;
+  border-color: #7aa8c8;
+  box-shadow: 0 0 0 4px rgba(122, 168, 200, 0.18);
 }
 .app-shell:is([data-role="local-admin"], [data-role="super-admin"]) .upload-icon {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #bfdbfe;
-  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.1);
+  background: #d7f1ff;
+  color: #2a3a4a;
+  border-color: #a8d3f0;
+  box-shadow: 0 4px 14px rgba(42, 58, 74, 0.08);
 }
 
 /* Document viewer (Bukku-style) */
@@ -511,8 +514,8 @@
 
 .review-toolbar button.active,
 .review-toolbar button:hover {
-  background: #0ea5e9;
-  color: #fff;
+  background: #2a3a4a;
+  color: #f6f1e8;
 }
 
 @media (max-width: 1000px) {
@@ -770,3 +773,10 @@
 /* Keep all real line-item values reachable in the document review pane. */
 .shoebox-lines table { min-width: 0; width: 100%; }
 .shoebox-lines th, .shoebox-lines td { padding-inline: 8px; }
+
+/* Revision-aware line editors stay within the existing review pane. */
+.shoebox-lines table:has(.line-correction-field) { table-layout: fixed; }
+.shoebox-lines .line-correction-field { min-width: 0; }
+.shoebox-lines .line-correction-field input { min-width: 0; width: 100%; max-width: 100%; }
+.shoebox-lines .line-correction-field :is(label, small, p) { overflow-wrap: anywhere; white-space: normal; }
+.shoebox-lines .line-correction-field .btn { white-space: normal; }

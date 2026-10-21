@@ -4,7 +4,7 @@ import { AppShell } from "@/components/common/layout/app-shell";
 import { AccessDenied } from "@/components/common/errors/access-denied";
 import { ErrorState, LoadingState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { getCurrentUser } from "@/lib/api/auth.service";
+import { AUTH_IDENTITY_CONTRACT, getCurrentUser } from "@/lib/api/auth.service";
 import { isAllowedWorkspaceRoute, isPublicRoute } from "@/lib/constants/routes";
 import { roleHome } from "@/lib/permissions";
 import { PublicPage } from "@/features/auth/public-pages";
@@ -17,11 +17,13 @@ export function Application({ path }: { path: string[] }) {
     data: user,
     error,
     loading,
-  } = useResource(getCurrentUser, path.join("/"));
+    refresh,
+  } = useResource(getCurrentUser, `${AUTH_IDENTITY_CONTRACT}:${path.join("/")}`);
   const [area] = path;
   if (isPublicRoute(path)) return <PublicPage page={area} />;
   if (loading) return <LoadingState />;
-  if (error || !user)
+  if (error) return <main className="access-gate"><ErrorState message={error} retry={refresh} /></main>;
+  if (!user)
     return (
       <main className="access-gate">
         <ErrorState

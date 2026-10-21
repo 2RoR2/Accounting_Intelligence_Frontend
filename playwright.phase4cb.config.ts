@@ -1,0 +1,2 @@
+import { defineConfig } from "@playwright/test";
+export default defineConfig({testDir:'./tests/browser',testMatch:'phase4cb-retry.spec.ts',outputDir:'test-results/phase4cb-20261021/mocked-browser',workers:1,retries:0,timeout:45000,reporter:'list',webServer:{command:'node node_modules/next/dist/bin/next dev --port 3118 --hostname 127.0.0.1',url:'http://127.0.0.1:3118',reuseExistingServer:false,timeout:60000,env:{NEXT_BUILD_DIR:'.next-p4cb-mocked',BACKEND_URL:'http://127.0.0.1:9'}},use:{baseURL:'http://127.0.0.1:3118',channel:'chrome',headless:true}});

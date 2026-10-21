@@ -10,7 +10,7 @@ import {
   getStandardisedRecords,
   openSupportView,
 } from "@/lib/api/record.service";
-import { decimalDisplay as money } from "@/lib/api/document-contract";
+import { decimalDisplay as money, type SupportViewRecord } from "@/lib/api/document-contract";
 import { getTenants } from "@/lib/api/tenant.service";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { createExport, downloadExport, getExports } from "@/lib/api/workflow.service";
@@ -31,7 +31,7 @@ export function RecordDetail({
   record,
   support = false,
 }: {
-  record: StandardisedRecord;
+  record: StandardisedRecord | SupportViewRecord;
   support?: boolean;
 }) {
   return (
@@ -43,16 +43,16 @@ export function RecordDetail({
             ? "READ-ONLY SUPPORT VIEW"
             : "STANDARDISED ACCOUNTING RECORD"}
         </span>
-        <Badge>
+        {"category" in record && <Badge>
           {record.category === "ACCOUNTS_RECEIVABLE"
             ? "ACCOUNTS RECEIVABLE"
             : "ACCOUNTS PAYABLE"}
-        </Badge>
-        <Badge>{record.validation}</Badge>
+        </Badge>}
+        {"validation" in record && <Badge>{record.validation}</Badge>}
       </div>
       <Panel
         title={record.id}
-        subtitle={`Document ${record.documentId} · Processed ${formatDate(record.createdAt)}`}
+        subtitle={`Document ${record.documentId}${"createdAt" in record ? " | Processed " + formatDate(record.createdAt) : ""}`}
       >
         <div className="record-fields">
           {Object.entries(record.extraction.fields).map(([key, f]) => (
@@ -105,7 +105,7 @@ export function RecordsPage({
   const [date, setDate] = useState("");
   const [validation, setValidation] = useState("");
   const [status, setStatus] = useState("");
-  const [detail, setDetail] = useState<StandardisedRecord>();
+  const [detail, setDetail] = useState<StandardisedRecord | SupportViewRecord>();
   const [support, setSupport] = useState("");
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState("");

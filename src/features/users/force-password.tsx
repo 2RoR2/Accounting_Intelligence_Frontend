@@ -11,6 +11,7 @@ import {
   passwordChecks,
 } from "@/lib/api/auth.service";
 import { ErrorState, Field } from "@/components/common/ui";
+import { roleHome } from "@/lib/permissions";
 import Image from "next/image";
 import saicLogo from "@/images/saic_logo.png";
 
@@ -43,6 +44,7 @@ export function ForcePasswordChange({ user }: { user: User }) {
         password,
         String(new FormData(event.currentTarget).get("confirmation")),
       );
+      router.push(`/welcome?name=${encodeURIComponent(user.name)}&home=${encodeURIComponent(roleHome(user.role))}`);
     } catch (error) {
       setFailure((error as Error).message);
       setBusy(false);

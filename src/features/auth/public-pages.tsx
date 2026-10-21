@@ -16,9 +16,10 @@ import {
   Building2,
   CalendarDays,
   UserRound,
+  X,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
-import { Badge, Field, ErrorState } from "@/components/common/ui";
+import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
 import { HelpCenter } from "@/features/common/help/help-center";
 import {
   activateAccount,
@@ -31,6 +32,7 @@ import {
   requestPasswordReset,
   resetPassword,
   getCurrentUser,
+  AUTH_IDENTITY_CONTRACT,
 } from "@/lib/api/auth.service";
 import { requestEnterpriseAccess } from "@/lib/api/tenant.service";
 import { roleHome } from "@/lib/permissions";
@@ -61,7 +63,9 @@ export function PublicPage({ page }: { page: string }) {
   const [resetEmail, setResetEmail] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [otpRejected, setOtpRejected] = useState(false);
-  const [welcomeUser, setWelcomeUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
+  const { data: welcomeUser, error: welcomeError, loading: welcomeLoading, refresh: refreshWelcome } = useResource(
+    () => page === "welcome" ? getCurrentUser() : Promise.resolve(null), `${AUTH_IDENTITY_CONTRACT}:welcome:${page}`,
+  );
   const titles: Record<string, string> = {
     login: "Welcome back",
     welcome: "Welcome!",
@@ -72,10 +76,6 @@ export function PublicPage({ page }: { page: string }) {
     help: "Help & support",
   };
   const selected = accounts?.find((a) => a.id === activation);
-  useEffect(() => {
-    if (page !== "welcome") return;
-    getCurrentUser().then(setWelcomeUser);
-  }, [page]);
   useEffect(() => {
     if (!otpStep) return;
     const timer = window.setInterval(() => {
@@ -195,6 +195,10 @@ export function PublicPage({ page }: { page: string }) {
     setError("");
     try {
       const user = await verifyMfa(mfaCode.trim());
+      if (user.mustChangePassword) {
+        router.push(roleHome(user.role));
+        return;
+      }
       router.push(`/welcome?name=${encodeURIComponent(user.name)}&home=${encodeURIComponent(roleHome(user.role))}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Verification failed.");
@@ -428,14 +432,14 @@ export function PublicPage({ page }: { page: string }) {
                 <div className="form-bottom">
                   <strong>Authenticator setup</strong>
                   <p>Scan the QR code with your authenticator app. If you cannot scan it, use the manual setup key.</p>
-                  {otpauthUrl && <QRCodeSVG value={otpauthUrl} size={190} level="M" includeMargin aria-label="Authenticator QR code" />}
+                  {otpauthUrl && <div style={{ display: "flex", justifyContent: "center", margin: "18px 0" }}><QRCodeSVG value={otpauthUrl} size={220} level="M" includeMargin aria-label="Authenticator QR code" /></div>}
                   {totpSecret && <button type="button" className="totp-manual-secret" onClick={() => setShowTotpSecret((visible) => !visible)} aria-label="Show or hide manual TOTP setup key">
                     <span>Manual setup key</span>
                     <input type={showTotpSecret ? "text" : "password"} readOnly value={totpSecret} aria-label="Manual TOTP setup key" tabIndex={-1} />
                   </button>}
                 </div>
               )}
-              {error && <ErrorState message={error} />}
+              {error && <div role="alert" style={{ position: "relative", margin: "12px 0", padding: "14px 42px 14px 14px", borderRadius: 10, border: "1px solid #efb4b4", background: "#fff4f4", color: "#8f1d1d" }}><strong>{error}</strong><button type="button" onClick={() => setError("")} aria-label="Close error" style={{ position: "absolute", top: 8, right: 8, border: 0, background: "transparent", color: "inherit", cursor: "pointer" }}><X size={18} /></button></div>}
               <Field label="Authenticator code *">
                 <div className="mfa-code-boxes" aria-label="Six-digit authenticator code">
                   {Array.from({ length: 6 }, (_, index) => (
@@ -445,6 +449,7 @@ export function PublicPage({ page }: { page: string }) {
               </Field>
               <button className="btn primary full" type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify and continue"} <ArrowRight size={16} /></button>
               {mfaMethod === "email" && <button type="button" className="otp-resend" onClick={resendMfaCode} disabled={mfaSecondsLeft > 0 || mfaResending}>{mfaResending ? "Sending a new code..." : mfaSecondsLeft > 0 ? `Resend code in ${mfaSecondsLeft}s` : "Resend code"}</button>}
+              {mfaMethod !== "email" && !mfaEnrollment && <p className="form-bottom">Lost access to your authenticator? Self-service reset is unavailable. Contact your administrator for assistance with the approved recovery policy.</p>}
             </form>
           ) : page === "forgot-password" && otpStep && (
             <form className="otp-wait" onSubmit={continueReset}>
@@ -488,13 +493,14 @@ export function PublicPage({ page }: { page: string }) {
               </p>
             </form>
           )}
-          {page === "welcome" && welcomeUser ? (
+          {page === "welcome" && welcomeLoading ? <LoadingState /> : page === "welcome" && welcomeError ? <ErrorState message={welcomeError} retry={refreshWelcome} /> : page === "welcome" && welcomeUser ? (
             <div className="welcome-confirmation">
               <span className="welcome-check"><Check size={42} strokeWidth={2.4} /></span>
               <p className="hp-eyebrow">SIGN IN SUCCESSFUL</p>
               <h2>Welcome, {welcomeUser.name}</h2>
               <p className="welcome-lead">Your identity has been verified and you’ve successfully signed in to your workspace.</p>
               <div className="welcome-details">
+                {welcomeUser.tenantCode && <div><Building2 size={22} /><span>Company code</span><strong>{welcomeUser.tenantCode}</strong></div>}
                 <div><Building2 size={22} /><span>Company</span><strong>{welcomeUser.tenantName || (welcomeUser.role === "SUPER_ADMIN" ? "SAIC Platform" : "Company workspace")}</strong></div>
                 <div><UserRound size={22} /><span>Role</span><strong>{welcomeUser.role.replaceAll("_", " ")}</strong></div>
                 <div><CalendarDays size={22} /><span>Last sign in</span><strong>{welcomeUser.lastLogin ? new Date(welcomeUser.lastLogin).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</strong></div>
@@ -507,9 +513,9 @@ export function PublicPage({ page }: { page: string }) {
           ) : page === "welcome" ? (
             <div className="welcome-session-error">
               <p className="hp-eyebrow">Session unavailable</p>
-              <h2>You’re signed in.</h2>
+              <h2>Sign in to continue</h2>
               <p>
-                Your session could not be loaded. Please sign in again.
+                No authenticated session is available. Please sign in to continue.
               </p>
               <Link
                 className="btn primary"

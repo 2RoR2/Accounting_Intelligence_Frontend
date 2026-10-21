@@ -1,10 +1,13 @@
 import type { Document, User } from "@/types";
 import { requireRole } from "../permissions";
-import { mapRecord, type RecordResponse } from "./document-contract";
+import { mapRecord, mapSupportView, type SupportViewResponse, type RecordResponse } from "./document-contract";
 import { api, get } from "./client";
 export async function standardiseDocument(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   const record = await api<{ id: string }>(`/api/records/from-document/${documentId}`, { method: "POST" });
+  if (!record || typeof record.id !== "string" || !record.id.trim()) {
+    throw new Error("The server did not confirm a standardised record. Refresh records before trying again.");
+  }
   return record.id;
 }
 export async function getStandardisedRecords(user: User) {
@@ -26,7 +29,7 @@ export async function openSupportView(
   requireRole(user, ["SUPER_ADMIN"]);
   if (reason.trim().length < 5)
     throw new Error("Provide a support reason of at least 5 characters.");
-  return mapRecord(await api<RecordResponse>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) }));
+  return mapSupportView(await api<SupportViewResponse>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) }));
 }
 export function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows

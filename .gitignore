@@ -7,3 +7,4 @@ test-results/
 .env*.local
 .npm-cache/
 .npm-ca.pem
+node_modules.partial/

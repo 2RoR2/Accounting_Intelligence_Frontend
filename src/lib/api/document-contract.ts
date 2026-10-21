@@ -9,6 +9,13 @@ export interface ValidationReport {
   reviewRequired: boolean; accountingApprovalPerformed: boolean;
   coverageComplete?: boolean; passed: number; warnings: number; failed: number; blocking: boolean; results: ValidationResult[];
 }
+/** POST revalidate returns errors/checks; GET validation supplies the full report. */
+export interface RevalidationResponse {
+  documentId: string; contentRevision: number; status: string; validationStatus: string;
+  reviewRequired: boolean; accountingApprovalPerformed: boolean; coverageComplete: boolean;
+  errors: Array<{ code: string; field: string; message: string; severity?: string }>;
+  checks: ValidationResult[];
+}
 export interface CorrectionResponse { key: string; value: string; correctedBy: string; contentRevision: number; }
 export function mapDocument(value: Document & { kind?: string }): Document {
   return { ...value, type: value.kind ?? value.type };
@@ -48,6 +55,16 @@ export function mapRecord(record: RecordResponse): StandardisedRecord {
     documentId: record.documentId, contentRevision: record.snapshot?.contentRevision,
     fields: record.snapshot?.fieldPredictions, lineItems: record.snapshot?.lineItems,
     raw: record.snapshot?.extraction,
+  }) };
+}
+
+/** Support response omits category, validation and createdAt; never synthesize them. */
+export type SupportViewResponse = Pick<RecordResponse, "id" | "documentId" | "tenantId" | "status" | "snapshot">;
+export type SupportViewRecord = Pick<StandardisedRecord, "id" | "documentId" | "tenantId" | "status"> & { extraction: Extraction };
+export function mapSupportView(record: SupportViewResponse): SupportViewRecord {
+  return { ...record, extraction: mapExtraction({
+    documentId: record.documentId, contentRevision: record.snapshot?.contentRevision,
+    fields: record.snapshot?.fieldPredictions, lineItems: record.snapshot?.lineItems, raw: record.snapshot?.extraction,
   }) };
 }
 

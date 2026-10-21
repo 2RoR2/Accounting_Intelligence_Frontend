@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   Bell,
   Building2,
+  Briefcase,
   ChartNoAxesCombined,
   ChevronDown,
   CircleHelp,
@@ -379,23 +380,22 @@ export function AppShell({
         </button>
         <div className="workspace-label">
           <span className="workspace-icon">
-            <Building2 size={17} />
+            <Briefcase size={17} />
           </span>
           <div>
             <strong>
               {isAdmin
                 ? "SAIC Platform"
-                : (tenant?.name ?? "Company workspace")}
+                : (user.tenantName || tenant?.name || "Company workspace")}
             </strong>
             <span>
               {isAdmin
-                ? "Super Admin Workspace"
+                ? "Super Admin"
                 : user.role === "LOCAL_ADMIN"
-                  ? "Company Administration"
-                  : "Accounting Workspace"}
+                  ? "Company Admin"
+                  : "Accountant"}{user.tenantCode ? ` | ${user.tenantCode}` : ""}
             </span>
           </div>
-          <ShieldCheck size={15} />
         </div>
         <div className="nav-label">WORKSPACE</div>
         <nav>

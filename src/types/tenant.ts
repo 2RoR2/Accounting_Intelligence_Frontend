@@ -1,3 +1,4 @@
+/** Tenant.id is the canonical UUID. Display codes never grant access. */
 export type TenantStatus = "ACTIVE" | "SUSPENDED";
 export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export interface Tenant { id: string; name: string; registration: string; adminEmail: string; accountLimit: number; status: TenantStatus; createdAt: string; }
