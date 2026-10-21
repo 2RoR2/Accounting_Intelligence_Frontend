@@ -131,12 +131,31 @@ export function EmptyState({
 }
 export function LoadingState() {
   return (
-    <div className="loading-state" role="status" aria-live="polite">
-      <span className="loading-orb" aria-hidden="true" />
+    <div className="loading-state" role="status" aria-live="polite" aria-busy="true">
+      <div className="loading-skeleton-grid" aria-hidden="true">
+        <div className="loading-skeleton-card loading-skeleton-wide"><i /><i /><b /><b /><em /><em /><em /></div>
+        <div className="loading-skeleton-card"><i /><i /><b /><b /><em /><em /></div>
+        <div className="loading-skeleton-card"><i /><i /><b /><b /><em /><em /></div>
+      </div>
       <strong>Preparing your workspace</strong>
       <span>Loading Accounting Intelligence…</span>
     </div>
   );
+}
+export function ProcessingStages({ current = "queue" }: { current?: "queue" | "extract" | "validate" | "complete" }) {
+  const stages = [
+    ["queue", "Queued", "Waiting for the processing worker"],
+    ["extract", "AI extraction", "Reading fields with the document model"],
+    ["validate", "Validation", "Checking totals and required fields"],
+    ["complete", "Ready", "Your document is ready to review"],
+  ] as const;
+  const active = stages.findIndex(([key]) => key === current);
+  return <div className="processing-stages" role="status" aria-live="polite" aria-busy={current !== "complete"}>
+    {stages.map(([key, title, detail], index) => <div className={`processing-stage${index <= active ? " is-active" : ""}${index === active ? " is-current" : ""}`} key={key}>
+      <span className="processing-stage-dot">{index < active ? "✓" : index + 1}</span>
+      <span><strong>{title}</strong><small>{index === active ? detail : ""}</small></span>
+    </div>)}
+  </div>;
 }
 export function ErrorState({
   message,

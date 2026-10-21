@@ -1,9 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "DemoPass!2026";
 async function signIn(page: Page, email: string) {
   await page.goto("/login");
   await expect(page.getByLabel("Demo account", { exact: true })).toHaveCount(0);
   await page.getByLabel("Company email *", { exact: true }).fill(email);
-  await page.getByLabel("Password *", { exact: true }).fill("WorkspacePassword!");
+  await page.getByLabel("Password *", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByRole("link", { name: /Continue to dashboard/ }).click();
   const dashboard = page.getByRole("heading", {

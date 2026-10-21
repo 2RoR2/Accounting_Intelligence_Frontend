@@ -10,6 +10,7 @@ import {
   UploadCloud,
   Camera,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import type { DocumentKind, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -191,6 +192,9 @@ export function UploadPage({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [camera, setCamera] = useState(() => searchParams.get("source") === "camera");
   const [batch, setBatch] = useState<{ id: string; name: string; status: string } | null>(null);
+  const [completedDocumentId, setCompletedDocumentId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const allowedExtensions = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "xlsx", "csv"];
   const addFiles = (incoming: File[]) => {
     const invalid = incoming.find((file) => {
@@ -203,6 +207,9 @@ export function UploadPage({ user }: { user: User }) {
       return;
     }
     setError("");
+    setCompletedDocumentId(null);
+    // Selecting a file only prepares the queue; processing progress starts when upload begins.
+    setProgress(0);
     setFiles((current) => [...current, ...incoming.filter((file) => !current.some((item) => item.name === file.name && item.size === file.size))]);
   };
   async function start() {
@@ -210,6 +217,7 @@ export function UploadPage({ user }: { user: User }) {
       setError("Choose at least one file.");
       return;
     }
+    setProgress(5);
     setBusy(true);
     setError("");
     try {
@@ -218,16 +226,19 @@ export function UploadPage({ user }: { user: User }) {
         setStage(`Uploading ${file.name}`);
         const doc = await uploadDocument(user, file, "success", "ACCOUNTS_PAYABLE", kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
         documentIds.push(doc.id);
+        setProgress(15);
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
         let consecutivePollErrors = 0;
-        const pollingDeadline = Date.now() + 120_000;
+        const pollingDeadline = Date.now() + 300_000;
         while (!terminal && Date.now() < pollingDeadline) {
           try {
             const job = await getProcessingJob(doc.jobId);
             consecutivePollErrors = 0;
             setStage(`${file.name} · ${job.status.toLowerCase()}`);
-            terminal = ["SUCCEEDED", "FAILED", "CANCELLED"].includes(job.status.toUpperCase());
+            const jobStatus = job.status.toUpperCase();
+            setProgress(jobStatus === "QUEUED" ? 25 : jobStatus === "PROCESSING" ? 60 : ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus) ? 100 : 15);
+            terminal = ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus);
             if (job.status.toUpperCase() === "FAILED") {
               throw new Error(`PROCESSING_TERMINAL_FAILURE:${job.lastError || `${file.name} processing failed.`}`);
             }
@@ -252,11 +263,15 @@ export function UploadPage({ user }: { user: User }) {
           }
         }
         if (!terminal) throw new Error(`${file.name} processing timed out while waiting for the backend worker.`);
+        setCompletedDocumentId(doc.id);
       }
       setBatch(await createDocumentBatch(`${kind} upload`, documentIds));
       setStage("Batch created and queued.");
+      setProgress(100);
     } catch (e) {
       setError((e as Error).message);
+      setProgress(0);
+      setStage("");
     } finally {
       setBusy(false);
     }
@@ -338,8 +353,15 @@ export function UploadPage({ user }: { user: User }) {
               accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
             />
-            {files.length > 0 && <div className="upload-queue-header"><strong>Ready to upload</strong><span>{files.length} file{files.length === 1 ? "" : "s"}</span></div>}
-            {files.map((file, i) => (
+            {progress > 0 && <div className="upload-progress" role="status" aria-label={`Processing ${progress}%`}>
+              <div className="upload-progress-title"><strong>Upload file</strong><span>{stage || "Select file type to start processing"}</span></div>
+              <div className="upload-progress-file"><FileText size={28} /><div><strong>{files[0]?.name || "Accounting document"}</strong><small>{files[0] ? `${(files[0].size / 1024).toFixed(1)} KB` : "Document"} · {busy ? "Uploading" : "Uploaded"}</small></div><button type="button" className="upload-progress-delete" aria-label="Remove uploaded file" disabled={busy} onClick={() => setFiles([])}><Trash2 size={17} /></button></div>
+              <div className="upload-progress-row"><div className="upload-progress-track"><span style={{ width: `${progress}%` }} /></div><span>{progress}%</span></div>
+              <div className="upload-progress-type"><label htmlFor="upload-progress-kind">File type <b>*</b></label><select id="upload-progress-kind" value={kind} disabled={busy} onChange={(e) => setKind(e.target.value as DocumentKind)}><option value="INVOICE">Invoice</option><option value="BILL">Bill</option><option value="RECEIPT">Receipt</option><option value="CREDIT_NOTE">Credit note</option><option value="DEBIT_NOTE">Debit note</option></select></div>
+              {completedDocumentId && <Link className="btn small" href={`${base}/documents/${completedDocumentId}`}>View extracted output</Link>}
+            </div>}
+            {!progress && files.length > 0 && <div className="upload-queue-header"><strong>Ready to upload</strong><span>{files.length} file{files.length === 1 ? "" : "s"}</span></div>}
+            {!progress && files.map((file, i) => (
               <div className="selected-file" key={`${file.name}-${i}`}>
                 <FileText size={19} />
                 <div>
@@ -356,7 +378,7 @@ export function UploadPage({ user }: { user: User }) {
                 </button>
               </div>
             ))}
-            <div className="upload-form-grid">
+            {!progress && <div className="upload-form-grid">
             <Field
               label="Document type"
               hint="Stored as a unique code for that type, such as INVOICE_100123, BILL_100123, or RECEIPT_100123."
@@ -373,29 +395,29 @@ export function UploadPage({ user }: { user: User }) {
                 <option value="DEBIT_NOTE">Debit note</option>
               </select>
             </Field>
-            </div>
+            </div>}
 
-            {stage && (
+            {stage && !progress && (
               <div className="processing-banner" role="status">
                 <span className="pulse-dot" />
                 {stage} {busy ? `· ${files.length} file${files.length === 1 ? "" : "s"} in batch` : ""}
               </div>
             )}
-            <button
+            {!progress && <button
               className="btn primary full"
               disabled={busy || !files.length}
               onClick={start}
             >
               <UploadCloud size={17} />
               {busy ? "Processing documents…" : "Upload and process"}
-            </button>
+            </button>}
           </div>
         </Panel>
         <Panel title="From upload to clarity">
           <div className="panel-body upload-guide">
             {[
               ["01", "Upload", "Add your invoice, bill, or receipt."],
-              ["02", "Extract", "Review the simulated extracted fields."],
+              ["02", "Extract", "Review the fields returned by the AI extraction service."],
               ["03", "Validate", "Check totals, required fields, and confidence."],
               ["04", "Standardise", "Resolve exceptions and create a consistent record."],
             ].map(([n, t, d], i) => (

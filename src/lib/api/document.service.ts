@@ -119,9 +119,10 @@ export function validateExtraction(
 }
 export async function getValidationResults(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  const extraction = await getExtraction(user, documentId);
-  const rules = await getValidationRules(user);
-  return validateExtraction(extraction, rules, []);
+  const response = await get<{
+    results?: ValidationResult[];
+  }>(`/api/documents/${documentId}/validation`);
+  return response.results ?? [];
 }
 export async function updateExtractedField(
   user: User,

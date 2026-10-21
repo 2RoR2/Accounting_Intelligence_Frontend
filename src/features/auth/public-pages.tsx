@@ -17,6 +17,8 @@ import {
   CalendarDays,
   UserRound,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
 import { Badge, Field, ErrorState } from "@/components/common/ui";
@@ -63,6 +65,8 @@ export function PublicPage({ page }: { page: string }) {
   const [totpSecret, setTotpSecret] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [showTotpSecret, setShowTotpSecret] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const mfaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [otp, setOtp] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -603,13 +607,19 @@ export function PublicPage({ page }: { page: string }) {
                     label="Password *"
                     hint="Enter your account password to continue."
                   >
-                    <input
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <div className="password-input-wrap">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        aria-label="Password *"
+                        required
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)}>
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </Field>
                 </>
               )}
@@ -701,21 +711,31 @@ export function PublicPage({ page }: { page: string }) {
                     <span>Use a password only you can guess.</span>
                   </div>
                   <Field label="Create password *">
-                    <input
-                      required
-                      type="password"
-                      autoComplete="new-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <div className="password-input-wrap">
+                      <input
+                        required
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)}>
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </Field>
                   <Field label="Confirm password *">
-                    <input
-                      required
-                      name="confirm"
-                      type="password"
-                      autoComplete="new-password"
-                    />
+                    <div className="password-input-wrap">
+                      <input
+                        required
+                        name="confirm"
+                        type={showConfirmPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                      />
+                      <button type="button" className="password-visibility" aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"} onClick={() => setShowConfirmPassword((visible) => !visible)}>
+                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </Field>
                   <div className="password-checks" aria-live="polite">
                     <span className="password-checks-title">
