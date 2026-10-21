@@ -10,6 +10,7 @@ import {
   getStandardisedRecords,
   openSupportView,
 } from "@/lib/api/record.service";
+import { decimalDisplay as money, type SupportViewRecord } from "@/lib/api/document-contract";
 import { getTenants } from "@/lib/api/tenant.service";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { createExport, downloadExport, getExports } from "@/lib/api/workflow.service";
@@ -25,13 +26,12 @@ import {
   Panel,
   SearchInput,
   formatDate,
-  money,
 } from "@/components/common/ui";
 export function RecordDetail({
   record,
   support = false,
 }: {
-  record: StandardisedRecord;
+  record: StandardisedRecord | SupportViewRecord;
   support?: boolean;
 }) {
   return (
@@ -43,16 +43,16 @@ export function RecordDetail({
             ? "READ-ONLY SUPPORT VIEW"
             : "STANDARDISED ACCOUNTING RECORD"}
         </span>
-        <Badge>
+        {"category" in record && <Badge>
           {record.category === "ACCOUNTS_RECEIVABLE"
             ? "ACCOUNTS RECEIVABLE"
             : "ACCOUNTS PAYABLE"}
-        </Badge>
-        <Badge>{record.validation}</Badge>
+        </Badge>}
+        {"validation" in record && <Badge>{record.validation}</Badge>}
       </div>
       <Panel
         title={record.id}
-        subtitle={`Document ${record.documentId} · Processed ${formatDate(record.createdAt)}`}
+        subtitle={`Document ${record.documentId}${"createdAt" in record ? " | Processed " + formatDate(record.createdAt) : ""}`}
       >
         <div className="record-fields">
           {Object.entries(record.extraction.fields).map(([key, f]) => (
@@ -68,7 +68,7 @@ export function RecordDetail({
         </div>
         <DataTable
           rows={record.extraction.lineItems}
-          rowKey={(r) => r.description}
+          rowKey={(r) => r.id ?? r.description ?? "line"}
           columns={[
             { label: "Description", render: (r) => r.description },
             { label: "Quantity", render: (r) => r.quantity },
@@ -105,7 +105,7 @@ export function RecordsPage({
   const [date, setDate] = useState("");
   const [validation, setValidation] = useState("");
   const [status, setStatus] = useState("");
-  const [detail, setDetail] = useState<StandardisedRecord>();
+  const [detail, setDetail] = useState<StandardisedRecord | SupportViewRecord>();
   const [support, setSupport] = useState("");
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState("");
@@ -115,12 +115,12 @@ export function RecordsPage({
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const records = data.records.filter(
     (r) =>
-      `${r.id} ${r.extraction.fields.invoice.value} ${r.extraction.fields.supplier.value}`
+      `${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
-      (!supplier || r.extraction.fields.supplier.value === supplier) &&
+      (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
       (!category || r.category === category) &&
-      (!date || r.extraction.fields.date.value === date) &&
+      (!date || (r.extraction.fields.date?.value ?? "") === date) &&
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
   );
@@ -153,7 +153,7 @@ export function RecordsPage({
           "discount",
           "total",
           "currency",
-        ].map((k) => r.extraction.fields[k].value),
+        ].map((k) => (r.extraction.fields[k]?.value ?? "")),
         r.validation,
       ]),
     ]);
@@ -312,7 +312,7 @@ export function RecordsPage({
               onChange={setSupplier}
               options={Array.from(
                 new Set(
-                  data.records.map((r) => r.extraction.fields.supplier.value),
+                  data.records.map((r) => (r.extraction.fields.supplier?.value ?? "")),
                 ),
               )}
             />
@@ -344,7 +344,7 @@ export function RecordsPage({
                 render: (r) => (
                   <div>
                     <strong>{r.id}</strong>
-                    <small>{r.extraction.fields.invoice.value}</small>
+                    <small>{(r.extraction.fields.invoice?.value ?? "")}</small>
                   </div>
                 ),
               },
@@ -358,21 +358,21 @@ export function RecordsPage({
               },
               {
                 label: "Supplier",
-                render: (r) => r.extraction.fields.supplier.value,
+                render: (r) => (r.extraction.fields.supplier?.value ?? ""),
               },
               {
                 label: "Invoice date",
-                render: (r) => r.extraction.fields.date.value,
+                render: (r) => (r.extraction.fields.date?.value ?? ""),
               },
               {
                 label: "Total",
                 render: (r) => (
-                  <strong>{money(r.extraction.fields.total.value)}</strong>
+                  <strong>{money((r.extraction.fields.total?.value ?? ""))}</strong>
                 ),
               },
               {
                 label: "Currency",
-                render: (r) => r.extraction.fields.currency.value,
+                render: (r) => (r.extraction.fields.currency?.value ?? ""),
               },
               {
                 label: "Validation",

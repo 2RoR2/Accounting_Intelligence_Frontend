@@ -21,7 +21,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
-import { Badge, Field, ErrorState } from "@/components/common/ui";
+import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
 import { HelpCenter } from "@/features/common/help/help-center";
 import {
   activateAccount,
@@ -29,12 +29,12 @@ import {
   login,
   verifyMfa,
   resendMfa,
-  requestLostAuthenticatorRecovery,
   verifyResetCode,
   passwordChecks,
   requestPasswordReset,
   resetPassword,
   getCurrentUser,
+  AUTH_IDENTITY_CONTRACT,
 } from "@/lib/api/auth.service";
 import { requestEnterpriseAccess } from "@/lib/api/tenant.service";
 import { roleHome } from "@/lib/permissions";
@@ -57,11 +57,6 @@ export function PublicPage({ page }: { page: string }) {
   const [mfaEnrollment, setMfaEnrollment] = useState(false);
   const [mfaSecondsLeft, setMfaSecondsLeft] = useState(0);
   const [mfaResending, setMfaResending] = useState(false);
-  const [mfaRecoveryOpen, setMfaRecoveryOpen] = useState(false);
-  const [mfaRecoveryMode, setMfaRecoveryMode] = useState(false);
-  const [mfaRecoveryComplete, setMfaRecoveryComplete] = useState(false);
-  const [mfaRecoveryPassword, setMfaRecoveryPassword] = useState("");
-  const [recoveryHome, setRecoveryHome] = useState("/workspace/dashboard");
   const [totpSecret, setTotpSecret] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [showTotpSecret, setShowTotpSecret] = useState(false);
@@ -72,7 +67,9 @@ export function PublicPage({ page }: { page: string }) {
   const [resetEmail, setResetEmail] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [otpRejected, setOtpRejected] = useState(false);
-  const [welcomeUser, setWelcomeUser] = useState<Awaited<ReturnType<typeof getCurrentUser>>>(null);
+  const { data: welcomeUser, error: welcomeError, loading: welcomeLoading, refresh: refreshWelcome } = useResource(
+    () => page === "welcome" ? getCurrentUser() : Promise.resolve(null), `${AUTH_IDENTITY_CONTRACT}:welcome:${page}`,
+  );
   const titles: Record<string, string> = {
     login: "Welcome back",
     welcome: "Welcome!",
@@ -83,10 +80,6 @@ export function PublicPage({ page }: { page: string }) {
     help: "Help & support",
   };
   const selected = accounts?.find((a) => a.id === activation);
-  useEffect(() => {
-    if (page !== "welcome") return;
-    getCurrentUser().then(setWelcomeUser);
-  }, [page]);
   useEffect(() => {
     if (!otpStep) return;
     const timer = window.setInterval(() => {
@@ -111,28 +104,6 @@ export function PublicPage({ page }: { page: string }) {
       setSecondsLeft(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to resend the code.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function requestLostAuthenticator() {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await requestLostAuthenticatorRecovery(mfaRecoveryPassword);
-      setMfaMethod("authenticator");
-      setMfaRecoveryMode(true);
-      setMfaEnrollment(true);
-      setTotpSecret(result.totpSecret);
-      setOtpauthUrl(result.otpauthUrl);
-      setMfaSecondsLeft(0);
-      setMfaRecoveryComplete(false);
-      setSuccess("");
-      setMfaRecoveryOpen(false);
-      setMfaRecoveryPassword("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to submit the recovery request.");
     } finally {
       setBusy(false);
     }
@@ -228,11 +199,6 @@ export function PublicPage({ page }: { page: string }) {
     setError("");
     try {
       const user = await verifyMfa(mfaCode.trim());
-      if (mfaRecoveryMode) {
-        setRecoveryHome(roleHome(user.role));
-        setMfaRecoveryComplete(true);
-        return;
-      }
       if (user.mustChangePassword) {
         router.push(roleHome(user.role));
         return;
@@ -459,13 +425,7 @@ export function PublicPage({ page }: { page: string }) {
             </>
           )}
           {page === "login" && mfaStep ? (
-            mfaRecoveryComplete ? <div className="otp-wait">
-              <h2>Authenticator reset authorized</h2>
-              <p>Scan this new QR code or enter the manual key in your authenticator app. Keep it private.</p>
-              {otpauthUrl && <div style={{ display: "flex", justifyContent: "center", margin: "18px 0" }}><QRCodeSVG value={otpauthUrl} size={220} level="M" includeMargin aria-label="New authenticator QR code" /></div>}
-              {totpSecret && <button type="button" className="totp-manual-secret" onClick={() => setShowTotpSecret((visible) => !visible)}><span>New manual setup key</span><input type={showTotpSecret ? "text" : "password"} readOnly value={totpSecret} aria-label="New manual TOTP setup key" tabIndex={-1} /></button>}
-              <button className="btn primary full" type="button" onClick={() => router.push(`/welcome?home=${encodeURIComponent(recoveryHome)}`)}>Continue</button>
-            </div> : <form className="otp-wait" onSubmit={submitMfa}>
+            <form className="otp-wait" onSubmit={submitMfa}>
               <button type="button" className="mfa-back-button" onClick={() => { setMfaStep(false); setMfaCode(""); setError(""); }} aria-label="Back to sign in">
                 <ArrowLeft size={18} />
               </button>
@@ -493,8 +453,7 @@ export function PublicPage({ page }: { page: string }) {
               </Field>
               <button className="btn primary full" type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify and continue"} <ArrowRight size={16} /></button>
               {mfaMethod === "email" && <button type="button" className="otp-resend" onClick={resendMfaCode} disabled={mfaSecondsLeft > 0 || mfaResending}>{mfaResending ? "Sending a new code..." : mfaSecondsLeft > 0 ? `Resend code in ${mfaSecondsLeft}s` : "Resend code"}</button>}
-              {mfaMethod !== "email" && !mfaEnrollment && <button type="button" className="otp-resend" onClick={() => setMfaRecoveryOpen((open) => !open)}>Lost access to your authenticator?</button>}
-              {mfaRecoveryOpen && <div className="form-bottom"><p>Re-enter your account password to generate a new authenticator setup.</p><input type="password" autoComplete="current-password" value={mfaRecoveryPassword} onChange={(event) => setMfaRecoveryPassword(event.target.value)} placeholder="Account password" aria-label="Account password for authenticator recovery" /><button type="button" className="btn" disabled={busy || !mfaRecoveryPassword} onClick={requestLostAuthenticator}>Verify password and generate new key</button></div>}
+              {mfaMethod !== "email" && !mfaEnrollment && <p className="form-bottom">Lost access to your authenticator? Self-service reset is unavailable. Contact your administrator for assistance with the approved recovery policy.</p>}
             </form>
           ) : page === "forgot-password" && otpStep && (
             <form className="otp-wait" onSubmit={continueReset}>
@@ -538,13 +497,14 @@ export function PublicPage({ page }: { page: string }) {
               </p>
             </form>
           )}
-          {page === "welcome" && welcomeUser ? (
+          {page === "welcome" && welcomeLoading ? <LoadingState /> : page === "welcome" && welcomeError ? <ErrorState message={welcomeError} retry={refreshWelcome} /> : page === "welcome" && welcomeUser ? (
             <div className="welcome-confirmation">
               <span className="welcome-check"><Check size={42} strokeWidth={2.4} /></span>
               <p className="hp-eyebrow">SIGN IN SUCCESSFUL</p>
               <h2>Welcome, {welcomeUser.name}</h2>
               <p className="welcome-lead">Your identity has been verified and you’ve successfully signed in to your workspace.</p>
               <div className="welcome-details">
+                {welcomeUser.tenantCode && <div><Building2 size={22} /><span>Company code</span><strong>{welcomeUser.tenantCode}</strong></div>}
                 <div><Building2 size={22} /><span>Company</span><strong>{welcomeUser.tenantName || (welcomeUser.role === "SUPER_ADMIN" ? "SAIC Platform" : "Company workspace")}</strong></div>
                 <div><UserRound size={22} /><span>Role</span><strong>{welcomeUser.role.replaceAll("_", " ")}</strong></div>
                 <div><CalendarDays size={22} /><span>Last sign in</span><strong>{welcomeUser.lastLogin ? new Date(welcomeUser.lastLogin).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</strong></div>
@@ -557,9 +517,9 @@ export function PublicPage({ page }: { page: string }) {
           ) : page === "welcome" ? (
             <div className="welcome-session-error">
               <p className="hp-eyebrow">Session unavailable</p>
-              <h2>You’re signed in.</h2>
+              <h2>Sign in to continue</h2>
               <p>
-                Your session could not be loaded. Please sign in again.
+                No authenticated session is available. Please sign in to continue.
               </p>
               <Link
                 className="btn primary"

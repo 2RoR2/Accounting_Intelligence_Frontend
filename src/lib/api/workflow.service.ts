@@ -1,3 +1,4 @@
+import { validateBankMatchingInputs } from "./bank-contract";
 import { api, get } from "./client";
 
 export type InboxDocument = {
@@ -51,19 +52,7 @@ export const reconcileDocument = (documentId: string, relatedDocumentId: string,
     body: JSON.stringify({ relatedDocumentId, relationType, amount: amount === undefined ? undefined : amount.toFixed(2), note }),
   });
 
-export type BankAccountingRecord = {
-  record_id: string;
-  total_amount: string | number;
-  currency: string;
-  reference_number: string;
-};
-
-export type BankTransaction = {
-  transaction_id: string;
-  amount: string | number;
-  currency: string;
-  reference: string;
-};
+export type { BankAccountingRecord, BankTransaction } from "./bank-contract";
 
 export type BankReconciliationResult = {
   results: Array<{
@@ -76,11 +65,10 @@ export type BankReconciliationResult = {
   used_bank_transaction_ids: string[];
 };
 
-export const runBankReconciliation = (accountingRecords: BankAccountingRecord[], bankTransactions: BankTransaction[]) =>
-  api<BankReconciliationResult>("/api/bank-reconciliation", {
-    method: "POST",
-    body: JSON.stringify({ accounting_records: accountingRecords, bank_transactions: bankTransactions }),
-  });
+export async function runBankReconciliation(accountingRecords: unknown, bankTransactions: unknown) {
+  const body = validateBankMatchingInputs(accountingRecords, bankTransactions);
+  return api<BankReconciliationResult>("/api/bank-reconciliation", { method: "POST", body: JSON.stringify(body) });
+}
 
 export const getDocumentInbox = (status?: string, assignedTo?: string) => {
   const params = new URLSearchParams();
@@ -99,23 +87,43 @@ export const createDocumentBatch = (name: string, documentIds: string[]) =>
 export const getDocumentBatch = (batchId: string) =>
   get<DocumentBatch>(`/api/accountant/batches/${batchId}`);
 
-export const submitDocumentReview = (documentId: string, decision: "submitted", note = "", expectedContentRevision = 1) =>
-  api<{ documentId: string; decision: string; status: string }>(`/api/documents/${documentId}/review`, {
-    method: "POST",
-    body: JSON.stringify({ decision, note, expectedContentRevision }),
+export interface DocumentReviews {
+  submissions: Array<{ id: string; submittedBy: string; decision: string; note: string; createdAt: string }>;
+  decisions: Array<{ id: string; reviewedBy: string; decision: string; note: string; approvedRevision: number | null; createdAt: string }>;
+}
+export const getDocumentReviews = (documentId: string) => get<DocumentReviews>(`/api/documents/${documentId}/reviews`);
+function requireRevision(revision: number) {
+  if (!Number.isInteger(revision) || revision < 1) throw new Error("Refresh the document to obtain its current revision.");
+}
+export async function submitDocumentReview(documentId: string, decision: "submitted", note: string, expectedContentRevision: number) {
+  requireRevision(expectedContentRevision);
+  const result = await api<{ documentId: string; decision: string; status: string }>(`/api/documents/${documentId}/review`, {
+    method: "POST", body: JSON.stringify({ decision, note, expectedContentRevision }),
   });
-
-export const decideDocumentReview = (documentId: string, decision: "approved" | "rejected" | "returned", note = "", expectedContentRevision = 1) =>
-  api<{ documentId: string; decision: string; reviewedBy: string; status: string }>(`/api/documents/${documentId}/review/decision`, {
-    method: "POST",
-    body: JSON.stringify({ decision, note, expectedContentRevision }),
+  if (!result || result.documentId !== documentId || result.decision !== decision || result.status !== "IN_REVIEW") throw new Error("The server did not confirm review submission. Refresh before trying again.");
+  return result;
+}
+export async function decideDocumentReview(documentId: string, decision: "approved" | "rejected" | "returned", note: string, expectedContentRevision: number) {
+  requireRevision(expectedContentRevision);
+  const result = await api<{ documentId: string; decision: string; reviewedBy: string; status: string }>(`/api/documents/${documentId}/review/decision`, {
+    method: "POST", body: JSON.stringify({ decision, note, expectedContentRevision }),
   });
-
-export const correctLineItem = (documentId: string, lineItemId: string, fieldKey: "description" | "quantity" | "unit_price" | "amount", value: string) =>
-  api<{ lineItemId: string; fieldKey: string; value: string; correctedBy: string }>(`/api/documents/${documentId}/line-items/${lineItemId}/${fieldKey}`, {
-    method: "PATCH",
-    body: JSON.stringify({ value }),
+  const status = { approved: "VALIDATED", rejected: "EXCEPTION", returned: "IN_REVIEW" }[decision];
+  if (!result || result.documentId !== documentId || result.decision !== decision || !result.reviewedBy || result.status !== status) throw new Error("The server did not confirm the review decision. Refresh before trying again.");
+  return result;
+}
+export type LineFieldKey = "description" | "quantity" | "unit_price" | "amount";
+export interface LineCorrectionResponse { lineItemId: string; fieldKey: LineFieldKey; value: string; correctedBy: string; contentRevision: number; }
+export async function correctLineItem(documentId: string, lineItemId: string, fieldKey: LineFieldKey, value: string, expectedContentRevision: number) {
+  requireRevision(expectedContentRevision);
+  const result = await api<LineCorrectionResponse>(`/api/documents/${documentId}/line-items/${lineItemId}/${fieldKey}`, {
+    method: "PATCH", body: JSON.stringify({ value, expectedContentRevision }),
   });
+  if (!result || result.lineItemId !== lineItemId || result.fieldKey !== fieldKey || typeof result.value !== "string" || !result.correctedBy || !Number.isInteger(result.contentRevision) || result.contentRevision <= expectedContentRevision) {
+    throw new Error("The server did not confirm the line correction. Refresh authoritative values before trying again.");
+  }
+  return result;
+}
 
 export const requestRecordAmendment = (recordId: string, reason: string) =>
   api<{ id: string; recordId: string; status: string; createdAt: string }>(`/api/records/${recordId}/amendments`, {

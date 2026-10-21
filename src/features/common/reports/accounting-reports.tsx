@@ -17,8 +17,8 @@ export function AccountingReportsPage({ user }: { user: User }) {
   const [status, setStatus] = useState("ALL");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [bankInput, setBankInput] = useState('[{"record_id":"record-001","total_amount":"100.00","currency":"MYR","reference_number":"PAY-001"}]');
-  const [transactionInput, setTransactionInput] = useState('[{"transaction_id":"bank-001","amount":"100.00","currency":"MYR","reference":"PAY-001"}]');
+  const [bankInput, setBankInput] = useState("");
+  const [transactionInput, setTransactionInput] = useState("");
   const [reconciliation, setReconciliation] = useState<BankReconciliationResult | null>(null);
   const [reconciliationError, setReconciliationError] = useState("");
   const [reconciling, setReconciling] = useState(false);
@@ -36,6 +36,7 @@ export function AccountingReportsPage({ user }: { user: User }) {
   ]);
   const runReconciliation = async () => {
     setReconciliationError("");
+    setReconciliation(null);
     try {
       const accountingRecords = JSON.parse(bankInput);
       const bankTransactions = JSON.parse(transactionInput);
@@ -78,17 +79,18 @@ export function AccountingReportsPage({ user }: { user: User }) {
         { label: "Date", render: (row) => row.date },
       ]} />
     </Panel>
-    <Panel title="Bank reconciliation" subtitle="Match accounting records against imported bank transactions. Ambiguous matches remain for review.">
+    <Panel title="Bank matching candidates" subtitle="Compare supplied accounting records and bank transactions. Results are proposals for review; they do not confirm settlement or post ledger entries.">
+      <p className="panel-body">Candidate results do not confirm a saved reconciliation. Review them against original evidence. Enter amounts as quoted decimal strings; references may be strings, null, or omitted.</p>
       <div className="report-toolbar">
-        <label style={{ flex: 1 }}>Accounting records<textarea value={bankInput} onChange={(e) => setBankInput(e.target.value)} rows={5} aria-label="Accounting records JSON" /></label>
-        <label style={{ flex: 1 }}>Bank transactions<textarea value={transactionInput} onChange={(e) => setTransactionInput(e.target.value)} rows={5} aria-label="Bank transactions JSON" /></label>
+        <label style={{ flex: 1 }}>Accounting records<textarea disabled={reconciling} value={bankInput} onChange={(e) => { setBankInput(e.target.value); setReconciliation(null); }} rows={5} aria-label="Accounting records JSON" /></label>
+        <label style={{ flex: 1 }}>Bank transactions<textarea disabled={reconciling} value={transactionInput} onChange={(e) => { setTransactionInput(e.target.value); setReconciliation(null); }} rows={5} aria-label="Bank transactions JSON" /></label>
       </div>
-      <button className="btn primary" type="button" onClick={runReconciliation} disabled={reconciling}>{reconciling ? "Matching…" : "Run reconciliation"}</button>
+      <button className="btn primary" type="button" onClick={runReconciliation} disabled={reconciling || !bankInput.trim() || !transactionInput.trim()}>{reconciling ? "Matching..." : "Find candidates"}</button>
       {reconciliationError && <p role="alert" className="error-text">{reconciliationError}</p>}
       {reconciliation && <DataTable rows={reconciliation.results} rowKey={(row) => row.accounting_record_id} columns={[
         { label: "Record", render: (row) => <strong>{row.accounting_record_id}</strong> },
-        { label: "Status", render: (row) => <Badge>{row.status}</Badge> },
-        { label: "Matched transaction", render: (row) => row.matched_bank_transaction_id ?? "—" },
+        { label: "Candidate status", render: (row) => <Badge>{row.status === "MATCHED" ? "Candidate found" : row.status === "UNMATCHED" ? "No candidate" : "Review required"}</Badge> },
+        { label: "Candidate transaction", render: (row) => row.matched_bank_transaction_id ?? "—" },
         { label: "Reason", render: (row) => row.reason ?? "—" },
       ]} />}
     </Panel>

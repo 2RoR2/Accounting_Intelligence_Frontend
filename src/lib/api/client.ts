@@ -1,12 +1,12 @@
 // Keep the browser and API on the same host name so SameSite=strict auth
 // cookies are sent after login. Configure NEXT_PUBLIC_API_URL when the API
 // is deployed separately. For a same-origin deployment, use relative URLs;
-// local development continues to use the backend on port 8000.
+// local development continues to use the backend on port 8002.
 const configuredApiBase = process.env.NEXT_PUBLIC_API_URL?.trim();
-const API_BASE = (configuredApiBase ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+const API_BASE = (configuredApiBase ?? "http://127.0.0.1:8002").replace(/\/$/, "");
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status?: number) {
+  constructor(message: string, public readonly status?: number, public readonly details?: Readonly<Record<string, unknown>>) {
     super(message);
     this.name = "ApiError";
   }
@@ -50,9 +50,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
         : body?.detail?.message
           ? `${body.detail.message}${body.detail.existingDocumentCode ? ` Existing document: ${body.detail.existingDocumentCode}.` : ""}`
           : `Request failed (${response.status})`;
-      throw new ApiError(response.status === 401
-        ? "Your session expired. Your unsaved draft is still on this screen; sign in again to continue."
-        : detail, response.status);
+      const details = body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail) ? body.detail as Record<string, unknown> : undefined;
+      throw new ApiError(detail, response.status, details);
     }
     return body as T;
   } catch (error) {
@@ -65,7 +64,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     // Preserve API/application errors. Only browser transport failures should
     // be rewritten as an unreachable-backend message.
     if (error instanceof Error && error.name !== "TypeError") throw error;
-    throw new Error("Unable to reach the backend API. Check that the backend is running on port 8000.");
+    throw new Error("Unable to reach the backend API. Check that the backend is running on port 8002.");
   } finally {
     globalThis.clearTimeout(timeout);
   }

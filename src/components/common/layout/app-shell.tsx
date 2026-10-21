@@ -393,7 +393,7 @@ export function AppShell({
                 ? "Super Admin"
                 : user.role === "LOCAL_ADMIN"
                   ? "Company Admin"
-                  : "Accountant"}
+                  : "Accountant"}{user.tenantCode ? ` | ${user.tenantCode}` : ""}
             </span>
           </div>
         </div>

@@ -769,3 +769,14 @@
   .acct-board,
   .acct-kpis { grid-template-columns: 1fr; }
 }
+
+/* Keep all real line-item values reachable in the document review pane. */
+.shoebox-lines table { min-width: 0; width: 100%; }
+.shoebox-lines th, .shoebox-lines td { padding-inline: 8px; }
+
+/* Revision-aware line editors stay within the existing review pane. */
+.shoebox-lines table:has(.line-correction-field) { table-layout: fixed; }
+.shoebox-lines .line-correction-field { min-width: 0; }
+.shoebox-lines .line-correction-field input { min-width: 0; width: 100%; max-width: 100%; }
+.shoebox-lines .line-correction-field :is(label, small, p) { overflow-wrap: anywhere; white-space: normal; }
+.shoebox-lines .line-correction-field .btn { white-space: normal; }

@@ -36,5 +36,5 @@ export function useResource<T>(loader: () => Promise<T>, key: string) {
       window.removeEventListener("storage", handler);
     };
   }, [key, refresh]);
-  return { data, error, loading, refresh };
+  return { data, error, loading, refresh, setData };
 }

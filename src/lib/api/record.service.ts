@@ -1,14 +1,18 @@
-import type { Document, StandardisedRecord, User } from "@/types";
+import type { Document, User } from "@/types";
 import { requireRole } from "../permissions";
+import { mapRecord, mapSupportView, type SupportViewResponse, type RecordResponse } from "./document-contract";
 import { api, get } from "./client";
 export async function standardiseDocument(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   const record = await api<{ id: string }>(`/api/records/from-document/${documentId}`, { method: "POST" });
+  if (!record || typeof record.id !== "string" || !record.id.trim()) {
+    throw new Error("The server did not confirm a standardised record. Refresh records before trying again.");
+  }
   return record.id;
 }
 export async function getStandardisedRecords(user: User) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return get<StandardisedRecord[]>("/api/records");
+  return (await get<RecordResponse[]>("/api/records")).map(mapRecord);
 }
 export async function getRecordMetadata(user: User, tenantId?: string) {
   requireRole(user, ["SUPER_ADMIN"]);
@@ -25,7 +29,7 @@ export async function openSupportView(
   requireRole(user, ["SUPER_ADMIN"]);
   if (reason.trim().length < 5)
     throw new Error("Provide a support reason of at least 5 characters.");
-  return api<StandardisedRecord>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) });
+  return mapSupportView(await api<SupportViewResponse>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) }));
 }
 export function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows
