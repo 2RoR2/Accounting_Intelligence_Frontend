@@ -7,6 +7,7 @@ export * from "./extraction";
 export * from "./record";
 export * from "./tenant";
 export * from "./validation";
+export * from "./money";
 
 import type { AuditLog } from "./audit";
 import type { Invitation, User } from "./auth";
