@@ -8,6 +8,7 @@ import { RulesPage, SettingsPage } from "@/features/common/settings/settings";
 import { ProfilePage } from "@/features/common/settings/profile-page";
 import { UserManagement } from "@/features/common/users/user-management";
 import { ContactsPage } from "@/features/common/contacts/contacts";
+import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import type { User } from "@/types";
 
 export function LocalAdminRoutes({ path, user }: { path: string[]; user: User }) {
@@ -19,6 +20,8 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "exceptions": return <ExceptionsPage user={user} />;
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} />;
+    case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
+    case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;
     case "users": return <UserManagement user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
     case "reports": return <PerformancePage user={user} />;
