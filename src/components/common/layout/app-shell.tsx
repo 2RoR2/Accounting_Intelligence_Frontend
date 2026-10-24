@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   ArrowUp,
   ArrowUpRight,
   Bell,
@@ -170,6 +172,10 @@ const companySections = [
   { label: "Exceptions", icon: ShieldCheck, items: companyNav.slice(15, 19) },
   { label: "Contacts", icon: Users, items: companyNav.slice(19, 22) },
   { label: "Standardised Records", icon: FileCheck2, items: companyNav.slice(22, 26) },
+  { label: "Money In & Money Out", icon: ArrowDownToLine, items: [
+    ["Money In", "money-in", ArrowDownToLine],
+    ["Money Out", "money-out", ArrowUpFromLine],
+  ] },
   { label: "Reports & Exports", icon: ChartNoAxesCombined, items: companyNav.slice(26, 31) },
   { label: "Audit Trail", icon: Activity, items: companyNav.slice(31, 35) },
   { label: "Team Management", icon: Users, items: [...companyNav.slice(35, 40), companyNav[47]] },
@@ -185,6 +191,10 @@ const accountantSections = [
   { label: "Exceptions", icon: ShieldCheck, items: [["All Exceptions", "exceptions", ShieldCheck], ["Blocking Errors", "exceptions", ShieldCheck], ["Warnings", "exceptions", ShieldCheck], ["Resolved Exceptions", "exceptions", ShieldCheck]] },
   { label: "Contacts", icon: Users, items: [["Customers", "contacts", Users], ["Suppliers", "contacts", Users], ["Contact Matching", "contacts", Users]] },
   { label: "Standardised Records", icon: FileCheck2, items: [["All Records", "records", FileCheck2], ["Sales Records", "records", FileCheck2], ["Purchase Records", "records", FileCheck2], ["Record Amendments", "records", FileCheck2]] },
+  { label: "Money In & Money Out", icon: ArrowDownToLine, items: [
+    ["Money In", "money-in", ArrowDownToLine],
+    ["Money Out", "money-out", ArrowUpFromLine],
+  ] },
   { label: "Reports & Exports", icon: ChartNoAxesCombined, items: [["Processing Reports", "reports", ChartNoAxesCombined], ["Validation Reports", "reports", ChartNoAxesCombined], ["Review Reports", "reports", ChartNoAxesCombined], ["Document Register", "reports", ChartNoAxesCombined], ["Export History", "reports", ChartNoAxesCombined]] },
   { label: "Audit Trail", icon: Activity, items: [["All Activities", "reports", Activity], ["Document Changes", "reports", Activity], ["Approvals", "reports", Activity], ["Security Events", "reports", Activity]] },
   { label: "Control Panel", icon: Settings2, items: [["Notifications", "profile", Bell], ["My Profile", "profile", UserRound], ["Settings", "profile", Settings2]] },
@@ -726,3 +736,4 @@ export function AppShell({
     </div>
   );
 }
+
