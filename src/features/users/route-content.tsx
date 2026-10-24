@@ -8,6 +8,7 @@ import { ContactsPage } from "@/features/common/contacts/contacts";
 import { AccountingReportsPage } from "@/features/common/reports/accounting-reports";
 import { SettingsPage } from "@/features/common/settings/settings";
 import { WorkspaceSectionPage } from "@/features/common/workspace/workspace-section-page";
+import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import type { User } from "@/types";
 
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
@@ -24,6 +25,8 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "exceptions": return <ExceptionsPage user={user} />;
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} />;
+    case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
+    case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;
     case "reports": return <AccountingReportsPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
