@@ -4,8 +4,8 @@ export const PUBLIC_ROUTES = new Set(["login", "welcome", "request-access", "act
 export const WORKSPACE_AREA: Record<Role, string> = { SUPER_ADMIN: "admin", LOCAL_ADMIN: "company", ACCOUNTANT: "workspace" };
 export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   admin: new Set(["dashboard", "approvals", "tenants", "users", "processing", "performance", "records", "audit", "settings", "profile"]),
-  company: new Set(["dashboard", "documents", "upload", "exceptions", "records", "users", "validation-rules", "reports", "audit", "settings", "profile"]),
-  workspace: new Set(["dashboard", "documents", "upload", "exceptions", "contacts", "records", "reports", "profile"]),
+  company: new Set(["dashboard", "documents", "upload", "exceptions", "records", "users", "validation-rules", "reports", "audit", "settings", "profile", "money-in", "money-out"]),
+  workspace: new Set(["dashboard", "documents", "upload", "exceptions", "contacts", "records", "reports", "profile", "money-in", "money-out"]),
 };
 const DETAIL_PAGES = new Set(["documents", "records", "tenants"]);
 export const isPublicRoute = (path: string[]) => path.length === 1 && PUBLIC_ROUTES.has(path[0]);
