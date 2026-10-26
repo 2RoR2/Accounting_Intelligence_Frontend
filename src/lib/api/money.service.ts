@@ -1,104 +1,144 @@
 import type { User } from "@/types";
 import type {
+  BankMoneyTransaction,
+  BankMoneyTransactionDetail,
   MoneyDirection,
-  MoneyTransaction,
-  MoneyTransactionDetail,
 } from "@/types/money";
 
-const MOCK: MoneyTransactionDetail[] = [
+/**
+ * Dummy data for client demo of the Money In / Money Out interface.
+ * Shape matches the existing backend bank_transactions + reconciliation model.
+ *
+ * Backend friend: replace these functions with real calls once the endpoints
+ * are ready, for example:
+ *   GET /api/bank-transactions?direction=money_in|money_out
+ *   GET /api/bank-transactions/{id}
+ *   GET /api/reconciliation/candidates?bankTransactionId=...
+ */
+const MOCK: BankMoneyTransactionDetail[] = [
   {
-    id: "mt-001",
+    id: "bt-001",
     tenantId: "t1",
     direction: "money_in",
-    transactionNumber: "RCP-1",
-    transactionDate: "2026-10-20",
-    customerId: "c1",
-    customerName: "ABC Trading",
-    vendorId: null,
+    postedDate: "2026-10-20",
+    description: "Payment from ABC Trading",
+    reference: "INV-1001",
+    amount: 1500,
     currency: "MYR",
-    referenceNumber: "INV-1001",
-    remarks: "Payment received",
-    description: "Sales receipt",
-    sourceDocumentId: "doc-101",
-    status: "ready",
-    createdAt: "2026-10-20T08:00:00Z",
-    postedBy: "u1",
-    postedAt: "2026-10-20T09:00:00Z",
-    itemTotal: 1500,
-    paymentTotal: 1500,
-    feeTotal: 0,
-    items: [
-      { id: "i1", moneyTransactionId: "mt-001", lineNumber: 1, accountId: "a4000", accountCode: "4000", accountName: "Sales Revenue", amount: 1500 },
-    ],
-    payments: [
-      { id: "p1", moneyTransactionId: "mt-001", lineNumber: 1, paymentMethodId: "pm1", paymentMethodName: "Bank Transfer", bankAccountId: "b1", bankAccountName: "Maybank Current", amount: 1500, feeAmount: 0 },
-    ],
+    status: "matched",
+    matchStatus: "matched",
+    bankAccountRef: "Maybank Current",
+    relatedRecordId: "rec-101",
+    relatedRecordCode: "REC-10070",
+    relatedDocumentId: "doc-101",
+    relatedDocumentCode: "INVOICE_100001",
+    amountDelta: 0,
+    createdAt: "2026-10-20T09:15:00Z",
+    importId: "imp-1",
+    sourceRow: 12,
   },
   {
-    id: "mt-002",
+    id: "bt-002",
     tenantId: "t1",
     direction: "money_out",
-    transactionNumber: "PV-1",
-    transactionDate: "2026-10-21",
-    vendorId: "v1",
-    vendorName: "Office Supplies Co",
-    customerId: null,
+    postedDate: "2026-10-21",
+    description: "Office Supplies Co",
+    reference: "BILL-55",
+    amount: 320,
     currency: "MYR",
-    referenceNumber: "BILL-55",
-    description: "Stationery",
-    sourceDocumentId: "doc-202",
-    status: "ready",
-    createdAt: "2026-10-21T10:00:00Z",
-    postedBy: "u1",
-    postedAt: "2026-10-21T11:00:00Z",
-    itemTotal: 320,
-    paymentTotal: 320,
-    feeTotal: 2,
-    items: [
-      { id: "i2", moneyTransactionId: "mt-002", lineNumber: 1, accountId: "a5100", accountCode: "5100", accountName: "Office Expenses", amount: 320 },
-    ],
-    payments: [
-      { id: "p2", moneyTransactionId: "mt-002", lineNumber: 1, paymentMethodId: "pm1", paymentMethodName: "Bank Transfer", bankAccountId: "b1", bankAccountName: "Maybank Current", amount: 320, feeAmount: 2, feeAccountId: "a5200", feeAccountName: "Bank Charges" },
-    ],
+    status: "matched",
+    matchStatus: "matched",
+    bankAccountRef: "Maybank Current",
+    relatedRecordId: "rec-202",
+    relatedRecordCode: "REC-10081",
+    relatedDocumentId: "doc-202",
+    relatedDocumentCode: "BILL_100012",
+    amountDelta: 0,
+    createdAt: "2026-10-21T11:02:00Z",
+    importId: "imp-1",
+    sourceRow: 18,
   },
   {
-    id: "mt-003",
+    id: "bt-003",
     tenantId: "t1",
     direction: "money_in",
-    transactionNumber: "RCP-2",
-    transactionDate: "2026-10-22",
-    customerId: "c2",
-    customerName: "XYZ Services",
+    postedDate: "2026-10-22",
+    description: "XYZ Services",
+    reference: "INV-1008",
+    amount: 800,
     currency: "MYR",
-    referenceNumber: "INV-1008",
-    status: "draft",
-    createdAt: "2026-10-22T14:00:00Z",
-    itemTotal: 800,
-    paymentTotal: 800,
-    feeTotal: 0,
-    items: [
-      { id: "i3", moneyTransactionId: "mt-003", lineNumber: 1, accountId: "a4000", accountCode: "4000", accountName: "Sales Revenue", amount: 800 },
-    ],
-    payments: [
-      { id: "p3", moneyTransactionId: "mt-003", lineNumber: 1, paymentMethodId: "pm2", paymentMethodName: "Cash", bankAccountId: "b2", bankAccountName: "Petty Cash", amount: 800, feeAmount: 0 },
-    ],
+    status: "proposed",
+    matchStatus: "proposed",
+    bankAccountRef: "Maybank Current",
+    relatedRecordId: "rec-108",
+    relatedRecordCode: "REC-10088",
+    relatedDocumentId: "doc-108",
+    relatedDocumentCode: "INVOICE_100008",
+    amountDelta: 0,
+    createdAt: "2026-10-22T14:30:00Z",
+    importId: "imp-1",
+    sourceRow: 24,
+  },
+  {
+    id: "bt-004",
+    tenantId: "t1",
+    direction: "money_out",
+    postedDate: "2026-10-23",
+    description: "Unknown transfer",
+    reference: "REF-9921",
+    amount: 150,
+    currency: "MYR",
+    status: "imported",
+    matchStatus: "unmatched",
+    bankAccountRef: "Maybank Current",
+    relatedRecordId: null,
+    relatedRecordCode: null,
+    relatedDocumentId: null,
+    relatedDocumentCode: null,
+    amountDelta: null,
+    createdAt: "2026-10-23T08:45:00Z",
+    importId: "imp-1",
+    sourceRow: 31,
+  },
+  {
+    id: "bt-005",
+    tenantId: "t1",
+    direction: "money_in",
+    postedDate: "2026-10-24",
+    description: "Cash deposit",
+    reference: null,
+    amount: 500,
+    currency: "MYR",
+    status: "needs_review",
+    matchStatus: "unmatched",
+    bankAccountRef: "Maybank Current",
+    relatedRecordId: null,
+    relatedRecordCode: null,
+    relatedDocumentId: null,
+    relatedDocumentCode: null,
+    amountDelta: null,
+    createdAt: "2026-10-24T10:10:00Z",
+    importId: "imp-1",
+    sourceRow: 35,
   },
 ];
 
 export async function getMoneyTransactions(
   _user: User,
   direction: MoneyDirection,
-): Promise<MoneyTransaction[]> {
-  // TODO: replace with GET /api/money-transactions?direction=...
+): Promise<BankMoneyTransaction[]> {
+  // TODO (backend): replace with GET /api/bank-transactions?direction=...
   await new Promise((r) => setTimeout(r, 120));
-  return MOCK.filter((t) => t.direction === direction).map(({ items, payments, ...rest }) => rest);
+  return MOCK.filter((t) => t.direction === direction).map(
+    ({ importId: _i, sourceRow: _s, ...rest }) => rest,
+  );
 }
 
 export async function getMoneyTransactionDetail(
   _user: User,
   id: string,
-): Promise<MoneyTransactionDetail | undefined> {
-  // TODO: replace with GET /api/money-transactions/{id}
+): Promise<BankMoneyTransactionDetail | undefined> {
+  // TODO (backend): replace with GET /api/bank-transactions/{id}
   await new Promise((r) => setTimeout(r, 80));
   return MOCK.find((t) => t.id === id);
 }
