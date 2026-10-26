@@ -180,7 +180,18 @@ export function MoneyFlowPage({
       />
 
       {notice && (
-        <div className="notice success" style={{ marginBottom: 12 }}>
+        <div
+          className="notice success"
+          style={{
+            marginBottom: 12,
+            padding: "10px 14px",
+            borderRadius: 8,
+            background: "#e8f6ee",
+            color: "#0f6b3c",
+            border: "1px solid #b7e4c7",
+            fontWeight: 500,
+          }}
+        >
           {notice}
         </div>
       )}
