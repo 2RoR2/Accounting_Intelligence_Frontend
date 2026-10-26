@@ -230,7 +230,17 @@ export async function importBankStatement(
   return { added: extra.length, fileName };
 }
 
-export async function getCashSummary(_user: User): Promise<{
+/** Remove a bank row (for example a wrong import). Demo only. */
+export async function deleteBankTransaction(
+  _user: User,
+  id: string,
+): Promise<boolean> {
+  // TODO (backend): replace with DELETE /api/bank-transactions/{id}
+  await new Promise((r) => setTimeout(r, 80));
+  const before = MOCK.length;
+  MOCK = MOCK.filter((t) => t.id !== id);
+  return MOCK.length < before;
+}
   moneyIn: number;
   moneyOut: number;
   verifiedIn: number;
