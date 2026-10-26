@@ -439,7 +439,8 @@ export function AppShell({
                   }));
                   const firstItem = section.items[0];
                   const firstIsUpload = firstItem[0] === "Upload Documents";
-                  router.push(firstIsUpload ? `/${prefix}/upload` : `/${prefix}/${firstItem[1]}/view-${firstItem[0].toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+                  const firstIsMoney = firstItem[1] === "money-in" || firstItem[1] === "money-out";
+                  router.push(firstIsUpload ? `/${prefix}/upload` : firstIsMoney ? `/${prefix}/${firstItem[1]}` : `/${prefix}/${firstItem[1]}/view-${firstItem[0].toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
                 }}
               >
                 <SectionIcon className="nav-section-icon" size={16} aria-hidden="true" />
@@ -454,11 +455,14 @@ export function AppShell({
                 const documentTab = label === "All Documents" ? "all" : label === "Sales Invoices" ? "sales-invoices" : label === "Purchase Bills" ? "purchase-bills" : label === "Receipts" ? "receipts" : label === "Credit Notes" ? "credit-notes" : label === "Debit Notes" ? "debit-notes" : "";
                 const uploadItem = label === "Upload Documents";
                 const profileItem = label === "My Profile";
+                const moneyItem = path === "money-in" || path === "money-out";
                 const reportItem = path === "reports";
                 const auditItem = section.label === "Audit Trail";
                 const reportTab = auditItem ? "audit" : label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
                 const itemHref = uploadItem || profileItem
                   ? `/${prefix}/${uploadItem ? "upload" : "profile"}`
+                  : moneyItem
+                  ? `/${prefix}/${path}`
                   : reportItem || auditItem
                   ? `/${prefix}/reports?tab=${reportTab}`
                   : documentTab
