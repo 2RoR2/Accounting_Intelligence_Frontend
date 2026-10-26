@@ -1,64 +1,44 @@
 export type MoneyDirection = "money_in" | "money_out";
-export type MoneyStatus = "draft" | "pending_approval" | "ready" | "void";
 
-export interface MoneyTransaction {
+/** Status of a bank statement row (matches backend bank_transactions.status). */
+export type BankTransactionStatus =
+  | "imported"
+  | "needs_review"
+  | "proposed"
+  | "matched"
+  | "ignored";
+
+/** Simplified match state for the Money In / Money Out UI. */
+export type MatchStatus = "unmatched" | "proposed" | "matched" | "ignored";
+
+/**
+ * Bank money movement shown on Money In / Money Out.
+ * Amount is always positive; direction decides in vs out.
+ * Related record fields are filled once the bank row is matched to a
+ * standardised record.
+ */
+export interface BankMoneyTransaction {
   id: string;
   tenantId: string;
   direction: MoneyDirection;
-  transactionNumber: string;
-  transactionDate: string;
-  customerId?: string | null;
-  vendorId?: string | null;
-  customerName?: string | null;
-  vendorName?: string | null;
+  postedDate: string;
+  valueDate?: string | null;
+  description: string;
+  reference?: string | null;
+  amount: number;
   currency: string;
-  referenceNumber?: string | null;
-  remarks?: string | null;
-  description?: string | null;
-  sourceDocumentId?: string | null;
-  status: MoneyStatus;
-  journalEntryId?: string | null;
-  createdBy?: string | null;
+  status: BankTransactionStatus;
+  matchStatus: MatchStatus;
+  bankAccountRef?: string | null;
+  relatedRecordId?: string | null;
+  relatedRecordCode?: string | null;
+  relatedDocumentId?: string | null;
+  relatedDocumentCode?: string | null;
+  amountDelta?: number | null;
   createdAt: string;
-  postedBy?: string | null;
-  postedAt?: string | null;
-  voidedBy?: string | null;
-  voidedAt?: string | null;
-  voidReason?: string | null;
-  itemTotal: number;
-  paymentTotal: number;
-  feeTotal: number;
 }
 
-export interface MoneyTransactionItem {
-  id: string;
-  moneyTransactionId: string;
-  lineNumber: number;
-  accountId: string;
-  accountCode?: string;
-  accountName?: string;
-  description?: string | null;
-  amount: number;
-  taxCodeId?: string | null;
-  taxCode?: string | null;
-}
-
-export interface MoneyTransactionPayment {
-  id: string;
-  moneyTransactionId: string;
-  lineNumber: number;
-  paymentMethodId: string;
-  paymentMethodName?: string;
-  bankAccountId: string;
-  bankAccountName?: string;
-  amount: number;
-  referenceNumber?: string | null;
-  feeAmount: number;
-  feeAccountId?: string | null;
-  feeAccountName?: string | null;
-}
-
-export interface MoneyTransactionDetail extends MoneyTransaction {
-  items: MoneyTransactionItem[];
-  payments: MoneyTransactionPayment[];
+export interface BankMoneyTransactionDetail extends BankMoneyTransaction {
+  importId?: string | null;
+  sourceRow?: number | null;
 }
