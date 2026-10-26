@@ -10,14 +10,8 @@ import type {
 import type { DocumentKind } from "@/types";
 import { requireRole } from "../permissions";
 import { api, get } from "./client";
-function documentKindFromName(name: string): DocumentKind {
-  const lower = name.toLowerCase();
-  if (lower.includes("receipt")) return "RECEIPT";
-  if (lower.includes("credit")) return "CREDIT_NOTE";
-  if (lower.includes("debit")) return "DEBIT_NOTE";
-  if (lower.includes("bill")) return "BILL";
-  return "INVOICE";
-}
+import { mapDocument, mapExtraction, type ExtractionResponse, type ValidationReport, type CorrectionResponse, type RevalidationResponse } from "./document-contract";
+import { correctLineItem, type LineFieldKey } from "./workflow.service";
 export type DocumentSearch = {
   q?: string;
   status?: string;
@@ -31,19 +25,14 @@ export async function getDocuments(user: User, filters: DocumentSearch = {}) {
     if (value?.trim()) params.set(key, value.trim());
   });
   const query = params.toString();
-  return get<Document[]>(`/api/documents${query ? `?${query}` : ""}`);
+  return (await get<Array<Document & { kind?: string }>>(`/api/documents${query ? `?${query}` : ""}`)).map(mapDocument);
 }
 export async function getDocument(user: User, documentId: string) {
-  return get<Document>(`/api/documents/${documentId}`);
+  return mapDocument(await get<Document & { kind?: string }>(`/api/documents/${documentId}`));
 }
 export async function getExtraction(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  const response = await get<{ documentId: string; fields?: Array<{ key: string; label?: string; value?: string | null; confidence?: number | null }>; lineItems?: Extraction["lineItems"] }>(`/api/documents/${documentId}/extraction`);
-  return {
-    documentId: response.documentId,
-    fields: Object.fromEntries((response.fields ?? []).map((field) => [field.key, { label: field.label ?? field.key, value: field.value ?? "", original: field.value ?? "", confidence: field.confidence ?? 0 }])),
-    lineItems: response.lineItems ?? [],
-  } as Extraction;
+  return mapExtraction(await get<ExtractionResponse>("/api/documents/" + documentId + "/extraction"));
 }
 export function validateExtraction(
   extraction: Extraction,
@@ -118,128 +107,36 @@ export function validateExtraction(
   return results;
 }
 export async function getValidationResults(user: User, documentId: string) {
-  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  const response = await get<{
-    results?: ValidationResult[];
-  }>(`/api/documents/${documentId}/validation`);
-  return response.results ?? [];
+  return (await getValidationReport(user, documentId)).results;
 }
 export async function getValidationReport(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return get<{ results: ValidationResult[]; validationStatus?: string; blocking?: boolean }>(`/api/documents/${documentId}/validation`);
+  return get<ValidationReport>("/api/documents/" + documentId + "/validation");
 }
-export async function updateExtractedField(
-  user: User,
-  documentId: string,
-  key: string,
-  value: string,
-  expectedContentRevision?: number,
-) {
-  return api<{ contentRevision?: number; value?: string }>(`/api/documents/${documentId}/extraction/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify({ value, ...(expectedContentRevision === undefined ? {} : { expectedContentRevision }) }) }); /*
-  mutate((db) => {
-    const doc = documentFor(db, user, documentId, true);
-    const field = db.extractions.find((e) => e.documentId === documentId)
-      ?.fields[key];
-    if (!field) throw new Error("Unknown extraction field.");
-    field.value = value;
-    field.correctedBy = user.name;
-    doc.status = "CORRECTED";
-    log(
-      db,
-      user,
-      "EXTRACTION_CORRECTED",
-      doc.name,
-      `${field.label}: ${field.original} → ${value}`,
-      doc.tenantId,
-    );
-  }); */
+export async function updateExtractedField(user: User, documentId: string, key: string, value: string, expectedContentRevision: number) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  if (!Number.isInteger(expectedContentRevision) || expectedContentRevision < 1) throw new Error("Refresh the document to obtain its current revision.");
+  return api<CorrectionResponse>("/api/documents/" + documentId + "/extraction/" + encodeURIComponent(key), {
+    method: "PATCH", body: JSON.stringify({ value, expectedContentRevision }),
+  });
 }
-export async function revalidateDocument(
-  user: User,
-  documentId: string,
-  note = "",
-) {
-  void user;
+export async function updateExtractedLineItem(user: User, documentId: string, lineId: string, key: string, value: string, expectedContentRevision: number) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  if (!Number.isInteger(expectedContentRevision) || expectedContentRevision < 1) throw new Error("Refresh the document to obtain its current revision.");
+  if (!["description", "quantity", "unit_price", "amount"].includes(key)) throw new Error("Unsupported line-item field.");
+  return correctLineItem(documentId, lineId, key as LineFieldKey, value, expectedContentRevision);
+}
+export async function revalidateDocument(user: User, documentId: string, note = "") {
   void note;
-  return api(`/api/documents/${documentId}/revalidate`, { method: "POST" }); /*
-  return mutate((db) => {
-    const doc = documentFor(db, user, documentId, true);
-    const extraction = db.extractions.find(
-      (item) => item.documentId === documentId,
-    )!;
-    if (extraction.fields.validationDateTime) {
-      const validatedAt = now();
-      extraction.fields.validationDateTime.value = validatedAt;
-      extraction.fields.validationDateTime.original = validatedAt;
-    }
-    const results = resultsFor(db, doc);
-    const failures = results.filter((r) => r.result !== "PASS");
-    doc.status = failures.some((r) => r.result === "FAIL")
-      ? "EXCEPTION"
-      : failures.length
-        ? "IN_REVIEW"
-        : "VALIDATED";
-    db.exceptions
-      .filter((e) => e.documentId === documentId)
-      .forEach((e) => {
-        const rule =
-          e.type === "TOTAL_MISMATCH"
-            ? "Total Calculation"
-            : e.type === "MISSING_INVOICE"
-              ? "Invoice Number Required"
-              : e.type === "DUPLICATE_INVOICE"
-                ? "Duplicate Invoice"
-                : "Confidence Check";
-        if (!failures.some((r) => r.rule === rule)) {
-          e.status = "RESOLVED";
-          e.note = note;
-        } else if (e.status === "RESOLVED") e.status = "OPEN";
-      });
-    failures.forEach((r) => {
-      const type =
-        r.rule === "Total Calculation"
-          ? "TOTAL_MISMATCH"
-          : r.rule === "Invoice Number Required"
-            ? "MISSING_INVOICE"
-            : r.rule === "Duplicate Invoice"
-              ? "DUPLICATE_INVOICE"
-              : "LOW_CONFIDENCE";
-      if (
-        !db.exceptions.some(
-          (e) =>
-            e.documentId === doc.id &&
-            e.type === type &&
-            e.status !== "RESOLVED",
-        )
-      )
-        db.exceptions.push({
-          id: id("EXC"),
-          documentId: doc.id,
-          tenantId: doc.tenantId,
-          type,
-          severity: r.result === "FAIL" ? "HIGH" : "LOW",
-          assignedTo: doc.assignedTo,
-          createdAt: now(),
-          status: "OPEN",
-          message: r.message,
-          note,
-        });
-    });
-    log(
-      db,
-      user,
-      "DOCUMENT_REVALIDATED",
-      doc.name,
-      `${doc.status}${note ? `: ${note}` : ""}`,
-      doc.tenantId,
-    );
-    return results;
-  }); */
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return api<RevalidationResponse>("/api/documents/" + documentId + "/revalidate", { method: "POST" });
 }
 
 export async function retryDocumentProcessing(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return api<{ documentId: string; id?: string; jobId?: string; queueJobId?: string | null; jobStatus?: string; status: string }>(`/api/documents/${documentId}/retry`, { method: "POST" });
+  const result = await api<{ id: string; jobId: string; queueJobId?: string | null; jobStatus: string; status: string; dispatchAccepted: boolean }>(`/api/documents/${documentId}/retry`, { method: "POST" });
+  if (!result || result.id !== documentId || !result.jobId || !result.status || !result.jobStatus || result.dispatchAccepted !== true || (result.queueJobId != null && typeof result.queueJobId !== "string")) throw new Error("Retry was not confirmed by a supported protocol. Refresh the document before trying again.");
+  return result;
 }
 export async function getExceptions(user: User) {
   void user;
@@ -273,24 +170,24 @@ export async function assignException(
 }
 export async function uploadDocument(
   user: User,
-  file: File | Pick<File, "name" | "size" | "type">,
+  file: File,
   scenario: string,
   category: RecordCategory = "ACCOUNTS_PAYABLE",
-  kind: DocumentKind = documentKindFromName(file.name),
+  kind: DocumentKind = "INVOICE",
 ) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  if (!/\.(pdf|png|jpe?g|tiff?|xlsx|csv)$/i.test(file.name))
+  if (!/\.(pdf|png|jpe?g)$/i.test(file.name))
     throw new Error(
-      "Supported formats: PDF, PNG, JPG, JPEG, TIFF, TIF, XLSX, CSV.",
+      "Upload a PDF, PNG or JPEG invoice, bill or receipt; unknown content requires review.",
     );
   if (file.size === 0) throw new Error("This file is empty.");
   if (file.size > 20 * 1024 * 1024)
     throw new Error("Maximum file size is 20 MB.");
   const body = new FormData();
-  body.append("file", file instanceof File ? file : new Blob([], { type: file.type }), file.name);
-  body.append("kind", kind.toLowerCase());
-  body.append("category", category.toLowerCase());
-  return api<Document>("/api/documents", { method: "POST", body });
+  body.append("file", file, file.name);
+  void scenario;
+  const params = new URLSearchParams({kind: kind.toLowerCase(), category: category.toLowerCase()});
+  return mapDocument(await api<Document>("/api/documents?" + params, { method: "POST", body }));
 }
 export async function advanceProcessing(
   user: User,

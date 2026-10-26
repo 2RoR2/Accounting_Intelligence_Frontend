@@ -439,7 +439,7 @@ export function AppShell({
                   }));
                   const firstItem = section.items[0];
                   const firstIsUpload = firstItem[0] === "Upload Documents";
-                  const firstIsMoney = firstItem[1] === "money-in" || firstItem[1] === "money-out";
+                  const firstIsMoney = ["money-in", "money-out"].includes(firstItem[1]);
                   router.push(firstIsUpload ? `/${prefix}/upload` : firstIsMoney ? `/${prefix}/${firstItem[1]}` : `/${prefix}/${firstItem[1]}/view-${firstItem[0].toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
                 }}
               >

@@ -12,10 +12,11 @@ import {
   CheckCircle2,
   Trash2,
 } from "lucide-react";
-import type { DocumentKind, User } from "@/types";
+import type { DocumentKind, RecordCategory, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   getDocuments,
+  getDocument,
   uploadDocument,
 } from "@/lib/api/document.service";
 import { getProcessingJob } from "@/lib/api/processing.service";
@@ -186,6 +187,7 @@ export function UploadPage({ user }: { user: User }) {
   const searchParams = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
   const [kind, setKind] = useState<DocumentKind>("INVOICE");
+  const [category, setCategory] = useState<RecordCategory>("ACCOUNTS_PAYABLE");
   const [dragging, setDragging] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
@@ -195,7 +197,7 @@ export function UploadPage({ user }: { user: User }) {
   const [completedDocumentId, setCompletedDocumentId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
-  const allowedExtensions = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "xlsx", "csv"];
+  const allowedExtensions = ["pdf", "png", "jpg", "jpeg"];
   const addFiles = (incoming: File[]) => {
     const invalid = incoming.find((file) => {
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -222,11 +224,13 @@ export function UploadPage({ user }: { user: User }) {
     setError("");
     try {
       const documentIds: string[] = [];
+      let processingContinues = false;
       for (const file of files) {
         setStage(`Uploading ${file.name}`);
-        const doc = await uploadDocument(user, file, "success", "ACCOUNTS_PAYABLE", kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
+        const doc = await uploadDocument(user, file, "real", category, kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
         documentIds.push(doc.id);
         setProgress(15);
+        if (!doc.queueJobId) throw new Error("The file was stored but dispatch failed. Open Documents to retry processing; do not upload it again.");
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
         let consecutivePollErrors = 0;
@@ -239,7 +243,7 @@ export function UploadPage({ user }: { user: User }) {
             const jobStatus = job.status.toUpperCase();
             setProgress(jobStatus === "QUEUED" ? 25 : jobStatus === "PROCESSING" ? 60 : ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus) ? 100 : 15);
             terminal = ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus);
-            if (job.status.toUpperCase() === "FAILED") {
+            if (["FAILED", "CANCELLED"].includes(jobStatus)) {
               throw new Error(`PROCESSING_TERMINAL_FAILURE:${job.lastError || `${file.name} processing failed.`}`);
             }
           } catch (error) {
@@ -262,12 +266,14 @@ export function UploadPage({ user }: { user: User }) {
             await new Promise((resolve) => window.setTimeout(resolve, Math.min(backoff, remaining)));
           }
         }
-        if (!terminal) throw new Error(`${file.name} processing timed out while waiting for the backend worker.`);
+        if (!terminal) processingContinues = true;
+        const actual = await getDocument(user, doc.id);
+        setProgress(actual.status === "PROCESSING" ? 60 : actual.status === "QUEUED" ? 25 : 100);
         setCompletedDocumentId(doc.id);
       }
-      setBatch(await createDocumentBatch(`${kind} upload`, documentIds));
-      setStage("Batch created and queued.");
-      setProgress(100);
+      if (documentIds.length > 1) setBatch(await createDocumentBatch(`${kind} upload`, documentIds));
+      setStage(processingContinues ? "Processing continues in the backend. Open the document to follow progress; do not upload it again." : "Extraction finished. Open the document to review the real results.");
+      if (!processingContinues) setProgress(100);
     } catch (e) {
       setError((e as Error).message);
       setProgress(0);
@@ -339,7 +345,7 @@ export function UploadPage({ user }: { user: User }) {
                 Press Ctrl+V for a copied image or file, or <b>browse files</b>
               </span>
               <small>
-                PDF, PNG, JPG/JPEG, TIFF/TIF, XLSX, CSV · Maximum 20 MB per
+                PDF, PNG, JPG/JPEG · Maximum 20 MB per
                 file
               </small>
             </button>
@@ -350,7 +356,7 @@ export function UploadPage({ user }: { user: User }) {
               hidden
               multiple
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.csv"
+              accept=".pdf,.png,.jpg,.jpeg"
               onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
             />
             {progress > 0 && <div className="upload-progress" role="status" aria-label={`Processing ${progress}%`}>
@@ -396,6 +402,12 @@ export function UploadPage({ user }: { user: User }) {
               </select>
             </Field>
             </div>}
+            {!progress && <Field label="Accounting category" hint="Confirm AP/AR direction; source kind and payment method do not determine it.">
+              <select value={category} disabled={busy} onChange={e => setCategory(e.target.value as RecordCategory)}>
+                <option value="ACCOUNTS_PAYABLE">Accounts Payable | Received from supplier</option>
+                <option value="ACCOUNTS_RECEIVABLE">Accounts Receivable | Sent to customer</option>
+              </select>
+            </Field>}
 
             {stage && !progress && (
               <div className="processing-banner" role="status">
@@ -418,8 +430,8 @@ export function UploadPage({ user }: { user: User }) {
             {[
               ["01", "Upload", "Add your invoice, bill, or receipt."],
               ["02", "Extract", "Review the fields returned by the AI extraction service."],
-              ["03", "Validate", "Check totals, required fields, and confidence."],
-              ["04", "Standardise", "Resolve exceptions and create a consistent record."],
+              ["03", "Validate", "Review backend checks and extraction warnings."],
+              ["04", "Standardise", "Resolve exceptions; validation and explicit human approval are required."],
             ].map(([n, t, d], i) => (
               <div key={n} className={`step-item${i === 0 ? " is-active" : ""}`}>
                 <span className="step-dot" />
@@ -431,8 +443,7 @@ export function UploadPage({ user }: { user: User }) {
             ))}
             <div className="info-box">
               <CheckCircle2 size={18} />
-              Uploaded file contents stay local. This prototype shows a labelled
-              sample document preview.
+              Original documents are retained privately by the backend. Review the actual source alongside extracted fields.
             </div>
           </div>
         </Panel>

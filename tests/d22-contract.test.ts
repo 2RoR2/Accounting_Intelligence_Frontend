@@ -7,10 +7,10 @@ test("D2.2 explicit unknown overrides stored invoice and keeps accounting fields
   assert.equal(sourceKind(extraction,"INVOICE"),"UNKNOWN");assert.deepEqual(extraction.fields,{});assert.equal(extraction.classification?.reason,"NO_SUPPORTED_DOCUMENT_HEADING");
 });
 test("D2.2 classified bill uses issuer/account/due labels and preserves null charges", () => {
-  const evidence=[{page:1,source_ref:"#/texts/1",text:"Amount due: 80.00",text_span:[0,17] as [number,number],bbox_scope:"source_block"}];
+  const evidence=[{page:1,source_ref:"#/texts/1",text:"Total: 80.00",text_span:[0,17] as [number,number],bbox_scope:"source_block"}];
   const extraction=mapExtraction({documentId:"bill",classification:{value:"bill",status:"classified",reason:"EXPLICIT_DOCUMENT_HEADING"},fields:[{key:"total",value:"80.00",confidence:null,evidence},{key:"tax",value:null}],lineItems:[{quantity:null,unit_price:null,amount:"80.00"}]});
   assert.equal(sourceKind(extraction,"INVOICE"),"BILL");assert.equal(fieldLabel("BILL","supplier"),"Issuer");
-  assert.equal(fieldLabel("BILL","total"),"Amount due");assert.equal(extraction.fields.tax.value,null);
+  assert.equal(fieldLabel("BILL","total"),"Bill total");assert.equal(fieldLabel("BILL","amount_due"),"Amount due");assert.equal(extraction.fields.tax.value,null);
   assert.deepEqual(extraction.fields.total.evidence,evidence);assert.equal(extraction.lineItems[0].quantity,null);assert.equal(extraction.lineItems[0].unitPrice,null);
 });
 test("D2.2 receipt payment method is source text, never a paid status", () => {

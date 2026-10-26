@@ -1,6 +1,7 @@
 import type { Document, StandardisedRecord, ExtractedField, Extraction, LineItem, ValidationResult } from "@/types";
 export interface ExtractionResponse {
-  documentId: string; contentRevision?: number; raw?: Record<string, unknown>; classification?: Extraction["classification"];
+  lineCorrections?: Extraction["lineCorrections"];
+  warnings?: Extraction["warnings"]; documentId: string; contentRevision?: number; raw?: Record<string, unknown>; classification?: Extraction["classification"];
   fields?: Array<Partial<ExtractedField> & { key: string }>;
   lineItems?: Array<Partial<LineItem> & { unit_price?: string | null }>;
 }
@@ -22,7 +23,7 @@ export function mapDocument(value: Document & { kind?: string }): Document {
 }
 export function mapExtraction(value: ExtractionResponse): Extraction {
   return {
-    documentId: value.documentId, contentRevision: value.contentRevision, raw: value.raw,
+    lineCorrections: value.lineCorrections ?? [], warnings: value.warnings ?? [], documentId: value.documentId, contentRevision: value.contentRevision, raw: value.raw,
     classification: value.classification ?? value.raw?.document_type as Extraction["classification"],
     fields: Object.fromEntries((value.fields ?? []).map(field => [field.key, {
       ...field, label: field.label ?? field.key, value: field.value ?? null,
@@ -80,7 +81,7 @@ export function fieldLabel(kind: string, key: string, fallback?: string): string
   const shared: Record<string, string> = { currency: "Currency", subtotal: "Subtotal", tax: "Tax", discount: "Discount", total: "Total", customer: "Customer", due: "Due date" };
   const profiles: Record<string, Record<string, string>> = {
     INVOICE: { supplier: "Supplier", invoice: "Invoice number", date: "Invoice date" },
-    BILL: { supplier: "Issuer", reference: "Bill reference", account_number: "Account number", billing_period: "Billing period", date: "Bill date", total: "Amount due" },
+    BILL: { supplier: "Issuer", reference: "Bill reference", account_number: "Account number", billing_period: "Billing period", date: "Bill date", total: "Bill total", amount_due: "Amount due", amount_paid: "Amount paid", charges: "Current charges" },
     RECEIPT: { supplier: "Merchant", reference: "Receipt reference", date: "Transaction date", transaction_time: "Transaction time", payment_method: "Payment method" },
   };
   return profiles[kind]?.[key] ?? shared[key] ?? fallback ?? key;

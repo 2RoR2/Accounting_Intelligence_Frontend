@@ -14,7 +14,7 @@ export function DocumentViewer({ name, extraction, highlightedField }: { name: s
   const source = "/api/documents/" + encodeURIComponent(extraction.documentId) + "/file";
   const url = source + (page ? "#page=" + page : "#view=FitH");
   return <div className="doc-viewer">
-    <div className="doc-viewer-toolbar"><strong>Original PDF: {name}</strong><a className="text-link" href={url} target="_blank" rel="noreferrer">Open original source</a></div>
+    <div className="doc-viewer-toolbar"><strong>Original document: {name}</strong><a className="text-link" href={url} target="_blank" rel="noreferrer">Open original source</a></div>
     <iframe title="Original document" src={url} style={{ width: "100%", height: 650, border: 0 }} />
     <div className="panel-body" style={{ background: "#fff", color: "#172033" }} aria-label="Source evidence">
       <strong>{highlightedField ? "Selected field evidence" : "Select a field to inspect its source evidence"}</strong>
