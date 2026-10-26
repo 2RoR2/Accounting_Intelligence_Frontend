@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowRight, UploadCloud } from "lucide-react";
+import { Trash2, UploadCloud } from "lucide-react";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -11,6 +11,7 @@ import type {
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   decideMatch,
+  deleteBankTransaction,
   getCashSummary,
   getMoneyTransactionDetail,
   getMoneyTransactions,
@@ -44,6 +45,7 @@ export function MoneyFlowPage({
 }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
+  const [preview, setPreview] = useState<"document" | "record" | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -62,6 +64,7 @@ export function MoneyFlowPage({
   const reload = () => setRefreshKey((k) => k + 1);
 
   const openDetail = async (id: string) => {
+    setPreview(null);
     setDetailLoading(true);
     const d = await getMoneyTransactionDetail(user, id);
     setDetail(d ?? null);
@@ -76,6 +79,17 @@ export function MoneyFlowPage({
     if (updated) {
       setDetail(updated);
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
+      reload();
+    }
+  };
+
+  const onDelete = async (id: string) => {
+    setBusy(true);
+    const ok = await deleteBankTransaction(user, id);
+    setBusy(false);
+    if (ok) {
+      setNotice("Bank row deleted.");
+      setDetail(null);
       reload();
     }
   };
@@ -101,14 +115,13 @@ export function MoneyFlowPage({
   );
   const total = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
   const matched = filtered.filter((r) => r.matchStatus === "matched").length;
+  const cashNet = (summary?.moneyIn ?? 0) - (summary?.moneyOut ?? 0);
 
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Bank statement credits. Import a statement, then verify each row against a standardised record."
-      : "Bank statement debits. Import a statement, then verify each row against a standardised record.";
-
-  const rolePath = user.role === "LOCAL_ADMIN" ? "company" : "workspace";
+      ? "Bank statement credits. Import a statement, then review each row against a standardised record."
+      : "Bank statement debits. Import a statement, then review each row against a standardised record.";
 
   return (
     <>
@@ -146,7 +159,49 @@ export function MoneyFlowPage({
         </div>
       )}
 
-      <div className="stats-row" style={{ marginBottom: 16 }}>
+      <Panel className="cash-summary-panel">
+        <div
+          style={{
+            padding: "20px 24px",
+            background: "linear-gradient(135deg, #2a3a4a 0%, #3d5166 100%)",
+            color: "#f6f1e8",
+            borderRadius: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, letterSpacing: 0.4, opacity: 0.8 }}>
+              CASH SUMMARY (MONEY IN − MONEY OUT)
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 700, marginTop: 4 }}>
+              {money(String(cashNet), "MYR")}
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
+              Not a profit & loss statement — cash movement only
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 24 }}>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>Money In</div>
+              <div style={{ fontSize: 20, fontWeight: 600 }}>
+                {money(String(summary?.moneyIn ?? 0), "MYR")}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>Money Out</div>
+              <div style={{ fontSize: 20, fontWeight: 600 }}>
+                {money(String(summary?.moneyOut ?? 0), "MYR")}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <div className="stats-row" style={{ margin: "16px 0" }}>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>Bank rows</small>
@@ -163,17 +218,6 @@ export function MoneyFlowPage({
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>Verified</small>
             <div style={{ fontSize: 28, fontWeight: 600 }}>{matched}</div>
-          </div>
-        </Panel>
-        <Panel>
-          <div style={{ padding: "12px 16px" }}>
-            <small style={{ color: "var(--muted)" }}>Cash summary (in − out)</small>
-            <div style={{ fontSize: 28, fontWeight: 600 }}>
-              {money(String((summary?.moneyIn ?? 0) - (summary?.moneyOut ?? 0)), "MYR")}
-            </div>
-            <small style={{ color: "var(--muted)" }}>
-              In {money(String(summary?.moneyIn ?? 0), "MYR")} · Out {money(String(summary?.moneyOut ?? 0), "MYR")}
-            </small>
           </div>
         </Panel>
       </div>
@@ -210,14 +254,14 @@ export function MoneyFlowPage({
               render: (r) => r.relatedRecordCode || "—",
             },
             {
-              label: "",
+              label: "Action",
               render: (r) => (
                 <button
-                  className="text-link"
+                  className="btn small"
                   type="button"
                   onClick={() => void openDetail(r.id)}
                 >
-                  Verify <ArrowRight size={14} />
+                  Review
                 </button>
               ),
             },
@@ -227,7 +271,10 @@ export function MoneyFlowPage({
 
       {detail && (
         <Modal title={detail.description} onClose={() => setDetail(null)}>
-          <div className="panel-body">
+          <div
+            className="panel-body"
+            style={{ maxHeight: "70vh", overflowY: "auto", paddingBottom: 24 }}
+          >
             {detailLoading && <LoadingState />}
             <p style={{ marginBottom: 12, color: "var(--muted)" }}>
               Bank statement row. Compare it with the related standardised record, then confirm or reject.
@@ -273,6 +320,52 @@ export function MoneyFlowPage({
               )}
             </div>
 
+            {preview === "document" && detail.relatedDocumentCode && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  border: "1px solid var(--line, #e5e0d8)",
+                  borderRadius: 8,
+                  background: "#faf8f5",
+                }}
+              >
+                <strong>Source document (demo)</strong>
+                <div className="detail-list" style={{ marginTop: 8 }}>
+                  <div><span>Code</span><strong>{detail.relatedDocumentCode}</strong></div>
+                  <div><span>Type</span><strong>{detail.relatedDocumentCode.startsWith("INVOICE") ? "Invoice" : "Bill"}</strong></div>
+                  <div><span>Total</span><strong>{money(String(detail.amount), detail.currency)}</strong></div>
+                  <div><span>Status</span><Badge>VALIDATED</Badge></div>
+                </div>
+                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                  Dummy preview for the client demo. The real document opens from the documents list once the backend is connected.
+                </p>
+              </div>
+            )}
+
+            {preview === "record" && detail.relatedRecordCode && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  border: "1px solid var(--line, #e5e0d8)",
+                  borderRadius: 8,
+                  background: "#faf8f5",
+                }}
+              >
+                <strong>Standardised record (demo)</strong>
+                <div className="detail-list" style={{ marginTop: 8 }}>
+                  <div><span>Record</span><strong>{detail.relatedRecordCode}</strong></div>
+                  <div><span>Document</span><strong>{detail.relatedDocumentCode || "—"}</strong></div>
+                  <div><span>Amount</span><strong>{money(String(detail.amount), detail.currency)}</strong></div>
+                  <div><span>Status</span><Badge>STANDARDISED</Badge></div>
+                </div>
+                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                  Dummy preview for the client demo. The real record opens from the records list once the backend is connected.
+                </p>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 className="btn primary"
@@ -291,18 +384,32 @@ export function MoneyFlowPage({
                 Reject
               </button>
               {detail.relatedDocumentId && (
-                <a
+                <button
                   className="btn"
-                  href={`/${rolePath}/documents/${detail.relatedDocumentId}`}
+                  type="button"
+                  onClick={() => setPreview(preview === "document" ? null : "document")}
                 >
                   Open source document
-                </a>
+                </button>
               )}
               {detail.relatedRecordId && (
-                <a className="btn" href={`/${rolePath}/records`}>
-                  View records
-                </a>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setPreview(preview === "record" ? null : "record")}
+                >
+                  View record
+                </button>
               )}
+              <button
+                className="btn"
+                type="button"
+                disabled={busy}
+                onClick={() => void onDelete(detail.id)}
+                style={{ marginLeft: "auto", color: "#b42318" }}
+              >
+                <Trash2 size={14} /> Delete
+              </button>
             </div>
           </div>
         </Modal>
