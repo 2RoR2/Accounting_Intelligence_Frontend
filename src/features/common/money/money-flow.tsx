@@ -59,7 +59,7 @@ export function MoneyFlowPage({
 
   const q = search.toLowerCase();
   const filtered = rows.filter((r) =>
-    `${r.description} ${r.reference ?? ""} ${r.relatedRecordCode ?? ""} ${r.relatedDocumentCode ?? ""}`
+    `${r.description} ${r.reference ?? ""} ${r.relatedRecordCode ?? ""} ${r.relatedDocumentCode ?? ""} ${r.bankAccountRef ?? ""}`
       .toLowerCase()
       .includes(q),
   );
@@ -69,8 +69,8 @@ export function MoneyFlowPage({
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Bank credits (money received). Match each row to a standardised record."
-      : "Bank debits (money paid). Match each row to a standardised record.";
+      ? "Bank statement credits. Verify each row against a standardised record."
+      : "Bank statement debits. Verify each row against a standardised record.";
 
   const rolePath = user.role === "LOCAL_ADMIN" ? "company" : "workspace";
 
@@ -81,7 +81,7 @@ export function MoneyFlowPage({
       <div className="stats-row" style={{ marginBottom: 16 }}>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
-            <small style={{ color: "var(--muted)" }}>Transactions</small>
+            <small style={{ color: "var(--muted)" }}>Bank rows</small>
             <div style={{ fontSize: 28, fontWeight: 600 }}>{filtered.length}</div>
           </div>
         </Panel>
@@ -93,7 +93,7 @@ export function MoneyFlowPage({
         </Panel>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
-            <small style={{ color: "var(--muted)" }}>Matched</small>
+            <small style={{ color: "var(--muted)" }}>Verified</small>
             <div style={{ fontSize: 28, fontWeight: 600 }}>{matched}</div>
           </div>
         </Panel>
@@ -104,7 +104,7 @@ export function MoneyFlowPage({
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search description, reference or record…"
+            placeholder="Search description, reference, bank or record…"
           />
         </div>
         <DataTable
@@ -113,16 +113,17 @@ export function MoneyFlowPage({
           columns={[
             { label: "Date", render: (r) => r.postedDate },
             {
-              label: "Description",
+              label: "Bank description",
               render: (r) => <strong>{r.description}</strong>,
             },
             { label: "Reference", render: (r) => r.reference || "—" },
+            { label: "Bank account", render: (r) => r.bankAccountRef || "—" },
             {
               label: "Amount",
               render: (r) => <strong>{money(String(r.amount), r.currency)}</strong>,
             },
             {
-              label: "Match",
+              label: "Verification",
               render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
             },
             {
@@ -137,7 +138,7 @@ export function MoneyFlowPage({
                   type="button"
                   onClick={() => void openDetail(r.id)}
                 >
-                  View <ArrowRight size={14} />
+                  Verify <ArrowRight size={14} />
                 </button>
               ),
             },
@@ -149,6 +150,9 @@ export function MoneyFlowPage({
         <Modal title={detail.description} onClose={() => setDetail(null)}>
           <div className="panel-body">
             {detailLoading && <LoadingState />}
+            <p style={{ marginBottom: 12, color: "var(--muted)" }}>
+              Bank statement row. Verify it against the related standardised record.
+            </p>
             <div className="detail-list">
               <div>
                 <span>Date</span>
@@ -156,7 +160,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Direction</span>
-                <strong>{detail.direction === "money_in" ? "Money In" : "Money Out"}</strong>
+                <strong>{detail.direction === "money_in" ? "Money In (credit)" : "Money Out (debit)"}</strong>
               </div>
               <div>
                 <span>Amount</span>
@@ -167,11 +171,11 @@ export function MoneyFlowPage({
                 <strong>{detail.reference || "—"}</strong>
               </div>
               <div>
-                <span>Bank</span>
+                <span>Bank account</span>
                 <strong>{detail.bankAccountRef || "—"}</strong>
               </div>
               <div>
-                <span>Match status</span>
+                <span>Verification</span>
                 <Badge>{MATCH_LABEL[detail.matchStatus] ?? detail.matchStatus}</Badge>
               </div>
               <div>
