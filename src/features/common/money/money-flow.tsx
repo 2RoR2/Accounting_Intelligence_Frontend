@@ -45,6 +45,9 @@ export function MoneyFlowPage({
   direction: MoneyDirection;
 }) {
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [preview, setPreview] = useState<"document" | "record" | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
