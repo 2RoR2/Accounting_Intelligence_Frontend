@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trash2, UploadCloud } from "lucide-react";
 import type { User } from "@/types";
 import type {
@@ -22,7 +22,6 @@ import {
   Badge,
   DataTable,
   ErrorState,
-  Filter,
   LoadingState,
   Modal,
   PageHeader,
@@ -48,6 +47,7 @@ export function MoneyFlowPage({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [preview, setPreview] = useState<"document" | "record" | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -55,6 +55,15 @@ export function MoneyFlowPage({
   const [notice, setNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (!statusRef.current?.contains(event.target as Node)) setStatusOpen(false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
 
   const { data: rows, error, loading, refresh } = useResource(
     () => getMoneyTransactions(user, direction),
@@ -248,46 +257,128 @@ export function MoneyFlowPage({
       </div>
 
       <Panel>
-        <div className="filter-bar" style={{ flexWrap: "wrap", gap: 8 }}>
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search description, reference, bank, record, date or amount…"
-          />
-          <input
-            aria-label="From date"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            style={{ minWidth: 150 }}
-          />
-          <input
-            aria-label="To date"
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            style={{ minWidth: 150 }}
-          />
-          <Filter
-            label="Statuses"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={["matched", "proposed", "unmatched", "ignored"]}
-          />
-          {(search || dateFrom || dateTo || statusFilter) && (
-            <button
-              className="btn small"
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setDateFrom("");
-                setDateTo("");
-                setStatusFilter("");
-              }}
-            >
-              Clear
-            </button>
-          )}
+        <div style={{ padding: "12px 16px 0" }}>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
+            Search covers bank description, reference, bank account, related record, related document, date and amount.
+          </div>
+          <div className="filter-bar" style={{ flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+            <div style={{ minWidth: 260, flex: "1 1 260px" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+                Search
+              </label>
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Description, reference, bank, record…"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+                Date from
+              </label>
+              <input
+                aria-label="Date from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{ minWidth: 150 }}
+              />
+            </div>
+            <div style={{ fontSize: 13, color: "var(--muted)", paddingBottom: 8 }}>until</div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+                Date to
+              </label>
+              <input
+                aria-label="Date to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{ minWidth: 150 }}
+              />
+            </div>
+            <div ref={statusRef} style={{ position: "relative" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+                Verification
+              </label>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setStatusOpen((open) => !open)}
+                aria-expanded={statusOpen}
+                style={{ minWidth: 150, justifyContent: "space-between" }}
+              >
+                {statusFilter ? MATCH_LABEL[statusFilter as MatchStatus] : "All statuses"}
+              </button>
+              {statusOpen && (
+                <div
+                  role="listbox"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    minWidth: 160,
+                    background: "#fff",
+                    border: "1px solid #e5e0d8",
+                    borderRadius: 8,
+                    boxShadow: "0 8px 24px rgba(42, 58, 74, 0.12)",
+                    zIndex: 20,
+                    padding: 4,
+                  }}
+                >
+                  {[
+                    ["", "All statuses"],
+                    ["matched", "Matched"],
+                    ["proposed", "Proposed"],
+                    ["unmatched", "Unmatched"],
+                    ["ignored", "Ignored"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value || "all"}
+                      type="button"
+                      role="option"
+                      aria-selected={statusFilter === value}
+                      onClick={() => {
+                        setStatusFilter(value);
+                        setStatusOpen(false);
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        border: 0,
+                        background: statusFilter === value ? "#2a3a4a" : "transparent",
+                        color: statusFilter === value ? "#f6f1e8" : "#2a3a4a",
+                        borderRadius: 6,
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {(search || dateFrom || dateTo || statusFilter) && (
+              <button
+                className="btn small"
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setDateFrom("");
+                  setDateTo("");
+                  setStatusFilter("");
+                }}
+                style={{ marginBottom: 2 }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 12px" }}>
+            Date filter uses the bank row Date column. Showing {filtered.length} of {rows.length} rows.
+          </div>
         </div>
         <DataTable
           rows={filtered}
