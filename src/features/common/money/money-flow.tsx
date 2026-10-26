@@ -22,6 +22,7 @@ import {
   Badge,
   DataTable,
   ErrorState,
+  Filter,
   LoadingState,
   Modal,
   PageHeader,
@@ -108,11 +109,24 @@ export function MoneyFlowPage({
   if (error || !rows) return <ErrorState message={error} retry={refresh} />;
 
   const q = search.toLowerCase();
-  const filtered = rows.filter((r) =>
-    `${r.description} ${r.reference ?? ""} ${r.relatedRecordCode ?? ""} ${r.relatedDocumentCode ?? ""} ${r.bankAccountRef ?? ""}`
-      .toLowerCase()
-      .includes(q),
-  );
+  const filtered = rows.filter((r) => {
+    const searchable = [
+      r.description,
+      r.reference ?? "",
+      r.relatedRecordCode ?? "",
+      r.relatedDocumentCode ?? "",
+      r.bankAccountRef ?? "",
+      r.postedDate,
+      String(r.amount),
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (q && !searchable.includes(q)) return false;
+    if (statusFilter && r.matchStatus !== statusFilter) return false;
+    if (dateFrom && r.postedDate < dateFrom) return false;
+    if (dateTo && r.postedDate > dateTo) return false;
+    return true;
+  });
   const total = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
   const matched = filtered.filter((r) => r.matchStatus === "matched").length;
   const cashNet = (summary?.moneyIn ?? 0) - (summary?.moneyOut ?? 0);
@@ -201,34 +215,76 @@ export function MoneyFlowPage({
         </div>
       </Panel>
 
-      <div className="stats-row" style={{ margin: "16px 0" }}>
+      <div
+        className="stats-row"
+        style={{
+          margin: "16px 0",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 12,
+        }}
+      >
         <Panel>
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>Bank rows</small>
-            <div style={{ fontSize: 28, fontWeight: 600 }}>{filtered.length}</div>
+            <div style={{ fontSize: 24, fontWeight: 600 }}>{filtered.length}</div>
           </div>
         </Panel>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>This page total</small>
-            <div style={{ fontSize: 28, fontWeight: 600 }}>{money(String(total), "MYR")}</div>
+            <div style={{ fontSize: 24, fontWeight: 600 }}>{money(String(total), "MYR")}</div>
           </div>
         </Panel>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>Verified</small>
-            <div style={{ fontSize: 28, fontWeight: 600 }}>{matched}</div>
+            <div style={{ fontSize: 24, fontWeight: 600 }}>{matched}</div>
           </div>
         </Panel>
       </div>
 
       <Panel>
-        <div className="filter-bar">
+        <div className="filter-bar" style={{ flexWrap: "wrap", gap: 8 }}>
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search description, reference, bank or record…"
+            placeholder="Search description, reference, bank, record, date or amount…"
           />
+          <input
+            aria-label="From date"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{ minWidth: 150 }}
+          />
+          <input
+            aria-label="To date"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{ minWidth: 150 }}
+          />
+          <Filter
+            label="Statuses"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={["matched", "proposed", "unmatched", "ignored"]}
+          />
+          {(search || dateFrom || dateTo || statusFilter) && (
+            <button
+              className="btn small"
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setDateFrom("");
+                setDateTo("");
+                setStatusFilter("");
+              }}
+            >
+              Clear
+            </button>
+          )}
         </div>
         <DataTable
           rows={filtered}
