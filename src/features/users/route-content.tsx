@@ -13,6 +13,10 @@ import type { User } from "@/types";
 
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
+  // Money pages must win even if the sidebar still appends /view-money-in
+  if (page === "money-in" || page === "money-out") {
+    return <MoneyFlowPage user={user} direction={page === "money-in" ? "money_in" : "money_out"} />;
+  }
   if (id === "view-settings") return <SettingsPage user={user} />;
   if (id === "view-customers" || id === "view-suppliers" || id === "view-contact-matching") return <ContactsPage user={user} />;
   if (id?.startsWith("view-")) {
@@ -25,8 +29,6 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "exceptions": return <ExceptionsPage user={user} />;
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} />;
-    case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
-    case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;
     case "reports": return <AccountingReportsPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
