@@ -3,9 +3,16 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import type { User } from "@/types";
-import type { MoneyDirection, MoneyTransactionDetail } from "@/types/money";
+import type {
+  BankMoneyTransactionDetail,
+  MatchStatus,
+  MoneyDirection,
+} from "@/types/money";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { getMoneyTransactionDetail, getMoneyTransactions } from "@/lib/api/money.service";
+import {
+  getMoneyTransactionDetail,
+  getMoneyTransactions,
+} from "@/lib/api/money.service";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
 import {
   Badge,
@@ -16,14 +23,13 @@ import {
   PageHeader,
   Panel,
   SearchInput,
-  formatDate,
 } from "@/components/common/ui";
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Draft",
-  pending_approval: "Pending",
-  ready: "Ready",
-  void: "Void",
+const MATCH_LABEL: Record<MatchStatus, string> = {
+  unmatched: "Unmatched",
+  proposed: "Proposed",
+  matched: "Matched",
+  ignored: "Ignored",
 };
 
 export function MoneyFlowPage({
@@ -38,7 +44,7 @@ export function MoneyFlowPage({
     `${user.id}:${direction}`,
   );
   const [search, setSearch] = useState("");
-  const [detail, setDetail] = useState<MoneyTransactionDetail | null>(null);
+  const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const openDetail = async (id: string) => {
@@ -53,17 +59,20 @@ export function MoneyFlowPage({
 
   const q = search.toLowerCase();
   const filtered = rows.filter((r) =>
-    `${r.transactionNumber} ${r.referenceNumber ?? ""} ${r.customerName ?? ""} ${r.vendorName ?? ""}`
+    `${r.description} ${r.reference ?? ""} ${r.relatedRecordCode ?? ""} ${r.relatedDocumentCode ?? ""}`
       .toLowerCase()
       .includes(q),
   );
-  const total = filtered.reduce((s, r) => s + Number(r.itemTotal || 0), 0);
+  const total = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const matched = filtered.filter((r) => r.matchStatus === "matched").length;
 
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Receipts and customer payments."
-      : "Payments and supplier bills.";
+      ? "Bank credits (money received). Match each row to a standardised record."
+      : "Bank debits (money paid). Match each row to a standardised record.";
+
+  const rolePath = user.role === "LOCAL_ADMIN" ? "company" : "workspace";
 
   return (
     <>
@@ -78,8 +87,14 @@ export function MoneyFlowPage({
         </Panel>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
-            <small style={{ color: "var(--muted)" }}>Item total</small>
-            <div style={{ fontSize: 28, fontWeight: 600 }}>{money(String(total))}</div>
+            <small style={{ color: "var(--muted)" }}>Total amount</small>
+            <div style={{ fontSize: 28, fontWeight: 600 }}>{money(String(total), "MYR")}</div>
+          </div>
+        </Panel>
+        <Panel>
+          <div style={{ padding: "12px 16px" }}>
+            <small style={{ color: "var(--muted)" }}>Matched</small>
+            <div style={{ fontSize: 28, fontWeight: 600 }}>{matched}</div>
           </div>
         </Panel>
       </div>
@@ -89,32 +104,39 @@ export function MoneyFlowPage({
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search number, reference or contact…"
+            placeholder="Search description, reference or record…"
           />
         </div>
         <DataTable
           rows={filtered}
           rowKey={(r) => r.id}
           columns={[
-            { label: "Number", render: (r) => <strong>{r.transactionNumber}</strong> },
-            { label: "Date", render: (r) => r.transactionDate },
+            { label: "Date", render: (r) => r.postedDate },
             {
-              label: "Contact",
-              render: (r) => r.customerName || r.vendorName || "—",
+              label: "Description",
+              render: (r) => <strong>{r.description}</strong>,
             },
-            { label: "Reference", render: (r) => r.referenceNumber || "—" },
+            { label: "Reference", render: (r) => r.reference || "—" },
             {
               label: "Amount",
-              render: (r) => <strong>{money(String(r.itemTotal))}</strong>,
+              render: (r) => <strong>{money(String(r.amount), r.currency)}</strong>,
             },
             {
-              label: "Status",
-              render: (r) => <Badge>{STATUS_LABEL[r.status] ?? r.status}</Badge>,
+              label: "Match",
+              render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
+            },
+            {
+              label: "Related record",
+              render: (r) => r.relatedRecordCode || "—",
             },
             {
               label: "",
               render: (r) => (
-                <button className="text-link" type="button" onClick={() => void openDetail(r.id)}>
+                <button
+                  className="text-link"
+                  type="button"
+                  onClick={() => void openDetail(r.id)}
+                >
                   View <ArrowRight size={14} />
                 </button>
               ),
@@ -124,51 +146,66 @@ export function MoneyFlowPage({
       </Panel>
 
       {detail && (
-        <Modal title={detail.transactionNumber} onClose={() => setDetail(null)}>
+        <Modal title={detail.description} onClose={() => setDetail(null)}>
           <div className="panel-body">
             {detailLoading && <LoadingState />}
             <div className="detail-list">
-              <div><span>Date</span><strong>{detail.transactionDate}</strong></div>
-              <div><span>Status</span><Badge>{STATUS_LABEL[detail.status]}</Badge></div>
-              <div><span>Contact</span><strong>{detail.customerName || detail.vendorName || "—"}</strong></div>
-              <div><span>Reference</span><strong>{detail.referenceNumber || "—"}</strong></div>
-              <div><span>Item total</span><strong>{money(String(detail.itemTotal))}</strong></div>
-              <div><span>Payment total</span><strong>{money(String(detail.paymentTotal))}</strong></div>
-              <div><span>Fee total</span><strong>{money(String(detail.feeTotal))}</strong></div>
+              <div>
+                <span>Date</span>
+                <strong>{detail.postedDate}</strong>
+              </div>
+              <div>
+                <span>Direction</span>
+                <strong>{detail.direction === "money_in" ? "Money In" : "Money Out"}</strong>
+              </div>
+              <div>
+                <span>Amount</span>
+                <strong>{money(String(detail.amount), detail.currency)}</strong>
+              </div>
+              <div>
+                <span>Reference</span>
+                <strong>{detail.reference || "—"}</strong>
+              </div>
+              <div>
+                <span>Bank</span>
+                <strong>{detail.bankAccountRef || "—"}</strong>
+              </div>
+              <div>
+                <span>Match status</span>
+                <Badge>{MATCH_LABEL[detail.matchStatus] ?? detail.matchStatus}</Badge>
+              </div>
+              <div>
+                <span>Related record</span>
+                <strong>{detail.relatedRecordCode || "Not matched yet"}</strong>
+              </div>
+              <div>
+                <span>Related document</span>
+                <strong>{detail.relatedDocumentCode || "—"}</strong>
+              </div>
+              {detail.amountDelta != null && (
+                <div>
+                  <span>Amount difference</span>
+                  <strong>{money(String(detail.amountDelta), detail.currency)}</strong>
+                </div>
+              )}
             </div>
 
-            <h4 style={{ marginTop: 16 }}>Items</h4>
-            <DataTable
-              rows={detail.items}
-              rowKey={(i) => i.id}
-              columns={[
-                { label: "Account", render: (i) => `${i.accountCode ?? ""} ${i.accountName ?? ""}`.trim() },
-                { label: "Description", render: (i) => i.description || "—" },
-                { label: "Amount", render: (i) => money(String(i.amount)) },
-                { label: "Tax", render: (i) => i.taxCode || "—" },
-              ]}
-            />
-
-            <h4 style={{ marginTop: 16 }}>Payments</h4>
-            <DataTable
-              rows={detail.payments}
-              rowKey={(p) => p.id}
-              columns={[
-                { label: "Method", render: (p) => p.paymentMethodName || "—" },
-                { label: "Bank / Cash", render: (p) => p.bankAccountName || "—" },
-                { label: "Amount", render: (p) => money(String(p.amount)) },
-                { label: "Fee", render: (p) => money(String(p.feeAmount)) },
-                { label: "Ref", render: (p) => p.referenceNumber || "—" },
-              ]}
-            />
-
-            {detail.sourceDocumentId && (
+            {detail.relatedDocumentId && (
               <a
                 className="btn"
-                style={{ marginTop: 12 }}
-                href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/documents/${detail.sourceDocumentId}`}
+                style={{ marginTop: 16 }}
+                href={`/${rolePath}/documents/${detail.relatedDocumentId}`}
               >
-                Source document
+                Open source document
+              </a>
+            )}
+            {detail.relatedRecordId && (
+              <a
+                className="btn"
+                style={{ marginTop: 8, marginLeft: 8 }}
+                href={`/${rolePath}/records`}
+              >
+                View records
               </a>
             )}
           </div>
