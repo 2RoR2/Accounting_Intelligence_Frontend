@@ -241,6 +241,8 @@ export async function deleteBankTransaction(
   MOCK = MOCK.filter((t) => t.id !== id);
   return MOCK.length < before;
 }
+
+export async function getCashSummary(_user: User): Promise<{
   moneyIn: number;
   moneyOut: number;
   verifiedIn: number;
