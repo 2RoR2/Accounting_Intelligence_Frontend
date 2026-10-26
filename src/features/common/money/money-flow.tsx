@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowRight, UploadCloud } from "lucide-react";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -10,8 +10,11 @@ import type {
 } from "@/types/money";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
+  decideMatch,
+  getCashSummary,
   getMoneyTransactionDetail,
   getMoneyTransactions,
+  importBankStatement,
 } from "@/lib/api/money.service";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
 import {
@@ -39,19 +42,52 @@ export function MoneyFlowPage({
   user: User;
   direction: MoneyDirection;
 }) {
-  const { data: rows, error, loading, refresh } = useResource(
-    () => getMoneyTransactions(user, direction),
-    `${user.id}:${direction}`,
-  );
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: rows, error, loading, refresh } = useResource(
+    () => getMoneyTransactions(user, direction),
+    `${user.id}:${direction}:${refreshKey}`,
+  );
+  const { data: summary } = useResource(
+    () => getCashSummary(user),
+    `${user.id}:cash:${refreshKey}`,
+  );
+
+  const reload = () => setRefreshKey((k) => k + 1);
 
   const openDetail = async (id: string) => {
     setDetailLoading(true);
     const d = await getMoneyTransactionDetail(user, id);
     setDetail(d ?? null);
     setDetailLoading(false);
+  };
+
+  const onDecide = async (decision: "confirm" | "reject") => {
+    if (!detail) return;
+    setBusy(true);
+    const updated = await decideMatch(user, detail.id, decision);
+    setBusy(false);
+    if (updated) {
+      setDetail(updated);
+      setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
+      reload();
+    }
+  };
+
+  const onImport = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setNotice("");
+    const result = await importBankStatement(user, file.name);
+    setBusy(false);
+    setNotice(`Imported ${result.fileName}. ${result.added} bank rows added (demo).`);
+    reload();
   };
 
   if (loading) return <LoadingState />;
@@ -69,14 +105,46 @@ export function MoneyFlowPage({
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Bank statement credits. Verify each row against a standardised record."
-      : "Bank statement debits. Verify each row against a standardised record.";
+      ? "Bank statement credits. Import a statement, then verify each row against a standardised record."
+      : "Bank statement debits. Import a statement, then verify each row against a standardised record.";
 
   const rolePath = user.role === "LOCAL_ADMIN" ? "company" : "workspace";
 
   return (
     <>
-      <PageHeader title={title} description={description} />
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          <>
+            <input
+              ref={fileRef}
+              hidden
+              type="file"
+              accept=".csv,.pdf,.xlsx"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                void onImport(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              className="btn primary"
+              type="button"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              <UploadCloud size={16} /> Import bank statement
+            </button>
+          </>
+        }
+      />
+
+      {notice && (
+        <div className="notice success" style={{ marginBottom: 12 }}>
+          {notice}
+        </div>
+      )}
 
       <div className="stats-row" style={{ marginBottom: 16 }}>
         <Panel>
@@ -87,7 +155,7 @@ export function MoneyFlowPage({
         </Panel>
         <Panel>
           <div style={{ padding: "12px 16px" }}>
-            <small style={{ color: "var(--muted)" }}>Total amount</small>
+            <small style={{ color: "var(--muted)" }}>This page total</small>
             <div style={{ fontSize: 28, fontWeight: 600 }}>{money(String(total), "MYR")}</div>
           </div>
         </Panel>
@@ -95,6 +163,17 @@ export function MoneyFlowPage({
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>Verified</small>
             <div style={{ fontSize: 28, fontWeight: 600 }}>{matched}</div>
+          </div>
+        </Panel>
+        <Panel>
+          <div style={{ padding: "12px 16px" }}>
+            <small style={{ color: "var(--muted)" }}>Cash summary (in − out)</small>
+            <div style={{ fontSize: 28, fontWeight: 600 }}>
+              {money(String((summary?.moneyIn ?? 0) - (summary?.moneyOut ?? 0)), "MYR")}
+            </div>
+            <small style={{ color: "var(--muted)" }}>
+              In {money(String(summary?.moneyIn ?? 0), "MYR")} · Out {money(String(summary?.moneyOut ?? 0), "MYR")}
+            </small>
           </div>
         </Panel>
       </div>
@@ -151,7 +230,7 @@ export function MoneyFlowPage({
           <div className="panel-body">
             {detailLoading && <LoadingState />}
             <p style={{ marginBottom: 12, color: "var(--muted)" }}>
-              Bank statement row. Verify it against the related standardised record.
+              Bank statement row. Compare it with the related standardised record, then confirm or reject.
             </p>
             <div className="detail-list">
               <div>
@@ -194,24 +273,37 @@ export function MoneyFlowPage({
               )}
             </div>
 
-            {detail.relatedDocumentId && (
-              <a
-                className="btn"
-                style={{ marginTop: 16 }}
-                href={`/${rolePath}/documents/${detail.relatedDocumentId}`}
+            <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+              <button
+                className="btn primary"
+                type="button"
+                disabled={busy || detail.matchStatus === "matched" || !detail.relatedRecordId}
+                onClick={() => void onDecide("confirm")}
               >
-                Open source document
-              </a>
-            )}
-            {detail.relatedRecordId && (
-              <a
+                Confirm match
+              </button>
+              <button
                 className="btn"
-                style={{ marginTop: 8, marginLeft: 8 }}
-                href={`/${rolePath}/records`}
+                type="button"
+                disabled={busy || detail.matchStatus === "unmatched"}
+                onClick={() => void onDecide("reject")}
               >
-                View records
-              </a>
-            )}
+                Reject
+              </button>
+              {detail.relatedDocumentId && (
+                <a
+                  className="btn"
+                  href={`/${rolePath}/documents/${detail.relatedDocumentId}`}
+                >
+                  Open source document
+                </a>
+              )}
+              {detail.relatedRecordId && (
+                <a className="btn" href={`/${rolePath}/records`}>
+                  View records
+                </a>
+              )}
+            </div>
           </div>
         </Modal>
       )}
