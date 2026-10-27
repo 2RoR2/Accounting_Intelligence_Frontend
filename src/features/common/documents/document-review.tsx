@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleX, FileCheck2, RefreshCw } from "lucide-react";
 import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -49,22 +49,35 @@ import {
 } from "@/lib/api/workflow.service";
 
 
-function FormField({ field, onSave, onFocus, readonly }: {
-  field: ExtractedField; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean;
+function FormField({ field, onSave, onFocus, readonly, selected }: {
+  field: ExtractedField; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean; selected?: boolean;
 }) {
+  const inputId = useId();
   const [value, setValue] = useState(field.value ?? "");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   useEffect(() => { if (!dirty) setValue(field.value ?? ""); }, [field.value, dirty]);
-  return <div className="shoebox-field">
-    <label className="shoebox-label" htmlFor={"field-" + field.label}>{field.label}
-      <em className="conf">{field.correctedBy ? "Reviewed correction" : "Source state: " + (field.state ?? "unverified")}</em>
-    </label>
-    <input id={"field-" + field.label} aria-label={field.label} value={value} disabled={readonly || saving}
+  return <div className={`shoebox-field${selected ? " selected" : ""}`} onFocusCapture={onFocus}>
+    <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
+      {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
+    </div>
+    <span className="shoebox-field-state">{field.correctedBy ? "Reviewed correction" : "Source state: " + (field.state ?? "unverified")}</span>
+    <input id={inputId} aria-label={field.label} value={value} disabled={readonly || saving}
       onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
-    <small>Raw: {field.rawValue ?? "Not provided"}<br/>Extracted: {field.original ?? "Not provided"}<br/>Saved: {field.value ?? "Not provided"} | {field.method ?? "Method not provided"}</small>
+    {selected && <div className="shoebox-mobile-evidence"><strong>Selected source evidence</strong>
+      {field.evidence?.length ? field.evidence.map((item, index) => <div key={index}><strong>Source page {item.page ?? "not provided"}</strong><p>{item.text ?? "Source text not provided"}</p></div>) : <p>Source evidence not available.</p>}
+    </div>}
+    <details className="shoebox-field-metadata"><summary>Raw values and extraction details</summary>
+      <dl><dt>Raw source value</dt><dd>{field.rawValue ?? "Not provided"}</dd>
+        <dt>Extracted value</dt><dd>{field.original ?? "Not provided"}</dd>
+        <dt>Saved current value</dt><dd>{field.value ?? "Not provided"}</dd>
+        <dt>Method</dt><dd>{field.method ?? "Not provided"}</dd>
+        <dt>Confidence</dt><dd>{field.confidence == null ? "Not available" : String(field.confidence)}</dd>
+        {field.correctedBy && <><dt>Corrected by</dt><dd>{field.correctedBy}</dd><dt>Corrected at</dt><dd>{field.correctedAt ?? "Not provided"}</dd></>}
+      </dl>
+    </details>
     {field.confirmationRequired && <small>Accountant confirmation required</small>}
     {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
       {warning.reviewed ? "Reviewed source warning" : "Extraction warning"}: {warning.message}
@@ -123,6 +136,7 @@ export function DocumentReview({
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
+  const [selectedLine, setSelectedLine] = useState<{ index: number; key: string; label: string }>();
 
   async function run(op: () => Promise<unknown>, message: string, propagate = false) {
     setBusy(true);
@@ -220,7 +234,9 @@ export function DocumentReview({
           {panel === "review" && (
             <div className="shoebox-split">
               <div className="shoebox-doc">
-                <DocumentViewer name={data.doc.name} extraction={extraction} highlightedField={highlightedField} />
+                <DocumentViewer name={data.doc.name} extraction={extraction} highlightedField={highlightedField}
+                  selectedSource={selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [] }
+                    : highlightedField ? { label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [] } : undefined} />
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">{kind === "UNKNOWN" ? "Unknown / Needs Review" : kind[0] + kind.slice(1).toLowerCase() + " fields"}</div>
@@ -238,7 +254,8 @@ export function DocumentReview({
                       key={key}
                       field={{ ...field, label: fieldLabel(kind, key, field.label) }}
                       readonly={readonly}
-                      onFocus={() => setHighlightedField(key)}
+                      selected={!selectedLine && highlightedField === key}
+                      onFocus={() => { setSelectedLine(undefined); setHighlightedField(key); }}
                       onSave={(value) =>
                         run(
                           () => updateExtractedField(user, documentId, key, value, data.extraction.contentRevision!),
@@ -274,6 +291,8 @@ export function DocumentReview({
                           const correction = extraction.lineCorrections?.find(item => item.line_item_id === line.id && item.field_key === key);
                           const guidance = line.guidance?.[key];
                           return <FormField key={key} readonly={readonly || !line.id}
+                            selected={selectedLine?.index === index && selectedLine.key === key}
+                            onFocus={() => { setHighlightedField(undefined); setSelectedLine({ index, key, label: `Line ${index + 1} ${label}` }); }}
                             field={{label: `Line ${index + 1} ${label}`, value: line[property] == null ? null : String(line[property]),
                               original, rawValue: line.evidence?.[key]?.map(e => e.text).filter(Boolean).join(" | ") || null,
                               confidence: null, state: line.fieldStates?.[key], evidence: line.evidence?.[key],

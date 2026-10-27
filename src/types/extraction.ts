@@ -1,5 +1,5 @@
 export interface ExtractionWarning { code: string; message: string; reviewed?: boolean; }
-export interface SourceEvidence { page?: number; source_ref?: string; text?: string; bbox?: { l: number; t: number; r: number; b: number; coord_origin?: string } | null; coordinate_units?: string; text_span?: [number, number]; bbox_scope?: string; }
+export interface SourceEvidence { page?: number; source_ref?: string; text?: string; bbox?: { l: number; t: number; r: number; b: number; coord_origin?: string } | null; page_size?: { width: number; height: number } | null; coordinate_units?: string; text_span?: [number, number]; bbox_scope?: string; }
 export interface ExtractedField {
   label: string; value: string | null; original: string | null; confidence: number | null;
   rawValue?: string | null; normalizedValue?: string | null; currentValue?: string | null;
