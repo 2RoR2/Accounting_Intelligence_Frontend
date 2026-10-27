@@ -1,258 +1,133 @@
 import type { User } from "@/types";
+import { api, get } from "@/lib/api/client";
 import type {
   BankMoneyTransaction,
   BankMoneyTransactionDetail,
+  BankReconciliationCandidate,
+  CashSummary,
   MoneyDirection,
-  MatchStatus,
 } from "@/types/money";
 
-/**
- * Dummy data for client demo of the Money In / Money Out interface.
- * Shape matches the existing backend bank_transactions + reconciliation model.
- *
- * Backend friend: replace these functions with real calls once the endpoints
- * are ready, for example:
- *   GET  /api/bank-transactions?direction=money_in|money_out
- *   GET  /api/bank-transactions/{id}
- *   POST /api/bank-imports                     (upload statement)
- *   POST /api/reconciliation/decisions         (confirm / reject)
- */
-let MOCK: BankMoneyTransactionDetail[] = [
-  {
-    id: "bt-001",
-    tenantId: "t1",
-    direction: "money_in",
-    postedDate: "2026-10-20",
-    description: "Payment from ABC Trading",
-    reference: "INV-1001",
-    amount: 1500,
-    currency: "MYR",
-    status: "matched",
-    matchStatus: "matched",
-    bankAccountRef: "Maybank Current",
-    relatedRecordId: "rec-101",
-    relatedRecordCode: "REC-10070",
-    relatedDocumentId: "doc-101",
-    relatedDocumentCode: "INVOICE_100001",
-    amountDelta: 0,
-    createdAt: "2026-10-20T09:15:00Z",
-    importId: "imp-1",
-    sourceRow: 12,
-  },
-  {
-    id: "bt-002",
-    tenantId: "t1",
-    direction: "money_out",
-    postedDate: "2026-10-21",
-    description: "Office Supplies Co",
-    reference: "BILL-55",
-    amount: 320,
-    currency: "MYR",
-    status: "matched",
-    matchStatus: "matched",
-    bankAccountRef: "Maybank Current",
-    relatedRecordId: "rec-202",
-    relatedRecordCode: "REC-10081",
-    relatedDocumentId: "doc-202",
-    relatedDocumentCode: "BILL_100012",
-    amountDelta: 0,
-    createdAt: "2026-10-21T11:02:00Z",
-    importId: "imp-1",
-    sourceRow: 18,
-  },
-  {
-    id: "bt-003",
-    tenantId: "t1",
-    direction: "money_in",
-    postedDate: "2026-10-22",
-    description: "XYZ Services",
-    reference: "INV-1008",
-    amount: 800,
-    currency: "MYR",
-    status: "proposed",
-    matchStatus: "proposed",
-    bankAccountRef: "Maybank Current",
-    relatedRecordId: "rec-108",
-    relatedRecordCode: "REC-10088",
-    relatedDocumentId: "doc-108",
-    relatedDocumentCode: "INVOICE_100008",
-    amountDelta: 0,
-    createdAt: "2026-10-22T14:30:00Z",
-    importId: "imp-1",
-    sourceRow: 24,
-  },
-  {
-    id: "bt-004",
-    tenantId: "t1",
-    direction: "money_out",
-    postedDate: "2026-10-23",
-    description: "Unknown transfer",
-    reference: "REF-9921",
-    amount: 150,
-    currency: "MYR",
-    status: "imported",
-    matchStatus: "unmatched",
-    bankAccountRef: "Maybank Current",
-    relatedRecordId: null,
-    relatedRecordCode: null,
-    relatedDocumentId: null,
-    relatedDocumentCode: null,
-    amountDelta: null,
-    createdAt: "2026-10-23T08:45:00Z",
-    importId: "imp-1",
-    sourceRow: 31,
-  },
-  {
-    id: "bt-005",
-    tenantId: "t1",
-    direction: "money_in",
-    postedDate: "2026-10-24",
-    description: "Cash deposit",
-    reference: null,
-    amount: 500,
-    currency: "MYR",
-    status: "needs_review",
-    matchStatus: "unmatched",
-    bankAccountRef: "Maybank Current",
-    relatedRecordId: null,
-    relatedRecordCode: null,
-    relatedDocumentId: null,
-    relatedDocumentCode: null,
-    amountDelta: null,
-    createdAt: "2026-10-24T10:10:00Z",
-    importId: "imp-1",
-    sourceRow: 35,
-  },
-];
+type BankTransactionResponse = Omit<BankMoneyTransaction, "amount" | "amountDelta" | "currency" | "createdAt"> & {
+  amount: string | null;
+  amountDelta: string | null;
+  currency: string | null;
+  createdAt: string | null;
+  importId: string;
+  sourceRow: number;
+  candidateId?: string | null;
+  expectedRevision?: number | null;
+  candidates?: BankReconciliationCandidate[];
+};
+
+function mapTransaction(row: BankTransactionResponse): BankMoneyTransactionDetail {
+  return {
+    ...row,
+    amount: row.amount,
+    amountDelta: row.amountDelta,
+    currency: row.currency,
+    createdAt: row.createdAt,
+    candidates: row.candidates ?? [],
+    candidateId: row.candidateId ?? null,
+    expectedRevision: row.expectedRevision ?? null,
+  };
+}
 
 export async function getMoneyTransactions(
   _user: User,
   direction: MoneyDirection,
 ): Promise<BankMoneyTransaction[]> {
-  // TODO (backend): replace with GET /api/bank-transactions?direction=...
-  await new Promise((r) => setTimeout(r, 80));
-  return MOCK.filter((t) => t.direction === direction).map(
-    ({ importId: _i, sourceRow: _s, ...rest }) => rest,
+  const rows = await get<BankTransactionResponse[]>(
+    `/api/bank-transactions?direction=${encodeURIComponent(direction)}&limit=500&offset=0`,
   );
+  return rows.map(mapTransaction);
 }
 
 export async function getMoneyTransactionDetail(
   _user: User,
   id: string,
 ): Promise<BankMoneyTransactionDetail | undefined> {
-  // TODO (backend): replace with GET /api/bank-transactions/{id}
-  await new Promise((r) => setTimeout(r, 40));
-  return MOCK.find((t) => t.id === id);
+  const row = await get<BankTransactionResponse>(`/api/bank-transactions/${encodeURIComponent(id)}`);
+  return mapTransaction(row);
 }
 
-/** Confirm or reject a proposed match. Demo only — updates local dummy data. */
 export async function decideMatch(
   _user: User,
-  id: string,
+  candidateId: string,
   decision: "confirm" | "reject",
-): Promise<BankMoneyTransactionDetail | undefined> {
-  // TODO (backend): replace with POST /api/reconciliation/decisions
-  await new Promise((r) => setTimeout(r, 120));
-  const row = MOCK.find((t) => t.id === id);
-  if (!row) return undefined;
-  if (decision === "confirm") {
-    row.matchStatus = "matched";
-    row.status = "matched";
-    row.amountDelta = row.amountDelta ?? 0;
-  } else {
-    row.matchStatus = "unmatched";
-    row.status = "imported";
-    row.relatedRecordId = null;
-    row.relatedRecordCode = null;
-    row.relatedDocumentId = null;
-    row.relatedDocumentCode = null;
-    row.amountDelta = null;
-  }
-  return { ...row };
+  expectedRevision: number,
+  reason?: string,
+): Promise<BankMoneyTransactionDetail> {
+  const row = await api<BankTransactionResponse>(`/api/reconciliation/${encodeURIComponent(candidateId)}/decision`, {
+    method: "POST",
+    body: JSON.stringify({
+      decision,
+      expectedRevision,
+      ...(reason?.trim() ? { reason: reason.trim() } : {}),
+    }),
+  });
+  return mapTransaction(row);
 }
 
-/**
- * Import a bank statement. Demo only — adds a few sample rows so the client
- * can see the result immediately. Real parsing stays with the backend.
- */
-export async function importBankStatement(
+export interface BankImportPreview {
+  importId: string;
+  rowCount: number;
+  duplicateRowsSkipped: number;
+  needsReviewCount: number;
+  canConfirm: boolean;
+  status: "previewed";
+  sampleRows: Array<{
+    sourceRow: number;
+    postedDate: string | null;
+    description: string;
+    reference: string | null;
+    debit: string | null;
+    credit: string | null;
+    direction: MoneyDirection | null;
+    currency: string | null;
+    status: string;
+    reviewReasons: string[];
+  }>;
+}
+
+export async function previewBankImport(
   _user: User,
-  fileName: string,
-): Promise<{ added: number; fileName: string }> {
-  // TODO (backend): replace with POST /api/bank-imports (multipart file)
-  await new Promise((r) => setTimeout(r, 200));
-  const now = new Date().toISOString();
-  const extra: BankMoneyTransactionDetail[] = [
-    {
-      id: `bt-imp-${Date.now()}-1`,
-      tenantId: "t1",
-      direction: "money_in",
-      postedDate: "2026-10-25",
-      description: `Imported credit from ${fileName}`,
-      reference: "IMP-IN-001",
-      amount: 2400,
-      currency: "MYR",
-      status: "proposed",
-      matchStatus: "proposed",
-      bankAccountRef: "Maybank Current",
-      relatedRecordId: "rec-120",
-      relatedRecordCode: "REC-10120",
-      relatedDocumentId: "doc-120",
-      relatedDocumentCode: "INVOICE_100120",
-      amountDelta: 0,
-      createdAt: now,
-      importId: "imp-demo",
-      sourceRow: 1,
-    },
-    {
-      id: `bt-imp-${Date.now()}-2`,
-      tenantId: "t1",
-      direction: "money_out",
-      postedDate: "2026-10-25",
-      description: `Imported debit from ${fileName}`,
-      reference: "IMP-OUT-002",
-      amount: 180,
-      currency: "MYR",
-      status: "imported",
-      matchStatus: "unmatched",
-      bankAccountRef: "Maybank Current",
-      relatedRecordId: null,
-      relatedRecordCode: null,
-      relatedDocumentId: null,
-      relatedDocumentCode: null,
-      amountDelta: null,
-      createdAt: now,
-      importId: "imp-demo",
-      sourceRow: 2,
-    },
-  ];
-  MOCK = [...extra, ...MOCK];
-  return { added: extra.length, fileName };
+  file: File,
+  accountRef: string,
+  mapping: Record<string, string>,
+  dateFormat: "iso" | "dmy" | "mdy",
+): Promise<BankImportPreview> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("source_bank_account_ref", accountRef);
+  form.set("mapping", JSON.stringify(mapping));
+  form.set("date_format", dateFormat);
+  return api<BankImportPreview>("/api/bank-imports/preview", { method: "POST", body: form });
 }
 
-/** Remove a bank row (for example a wrong import). Demo only. */
-export async function deleteBankTransaction(
-  _user: User,
-  id: string,
-): Promise<boolean> {
-  // TODO (backend): replace with DELETE /api/bank-transactions/{id}
-  await new Promise((r) => setTimeout(r, 80));
-  const before = MOCK.length;
-  MOCK = MOCK.filter((t) => t.id !== id);
-  return MOCK.length < before;
+export async function confirmBankImport(_user: User, importId: string) {
+  return api<{ importId: string; status: string; rowCount: number; candidatesProposed: number }>(
+    `/api/bank-imports/${encodeURIComponent(importId)}/confirm`,
+    { method: "POST" },
+  );
 }
 
-export async function getCashSummary(_user: User): Promise<{
-  moneyIn: number;
-  moneyOut: number;
-  verifiedIn: number;
-  verifiedOut: number;
-}> {
-  // TODO (backend): replace with GET /api/bank-transactions/summary
-  await new Promise((r) => setTimeout(r, 40));
-  const moneyIn = MOCK.filter((t) => t.direction === "money_in").reduce((s, t) => s + t.amount, 0);
-  const moneyOut = MOCK.filter((t) => t.direction === "money_out").reduce((s, t) => s + t.amount, 0);
-  const verifiedIn = MOCK.filter((t) => t.direction === "money_in" && t.matchStatus === "matched").reduce((s, t) => s + t.amount, 0);
-  const verifiedOut = MOCK.filter((t) => t.direction === "money_out" && t.matchStatus === "matched").reduce((s, t) => s + t.amount, 0);
-  return { moneyIn, moneyOut, verifiedIn, verifiedOut };
+export async function discardBankImportPreview(_user: User, importId: string) {
+  return api<{ importId: string; status: string }>(
+    `/api/bank-imports/${encodeURIComponent(importId)}/discard`,
+    { method: "POST" },
+  );
+}
+
+export async function ignoreBankTransaction(_user: User, id: string): Promise<boolean> {
+  const result = await api<{ id: string; status: string }>(
+    `/api/bank-transactions/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  return result.status === "ignored";
+}
+
+export async function getCashSummary(_user: User): Promise<CashSummary> {
+  void _user;
+  return get<CashSummary>("/api/bank-transactions/summary");
 }

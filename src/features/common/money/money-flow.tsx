@@ -11,11 +11,14 @@ import type {
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   decideMatch,
-  deleteBankTransaction,
+  discardBankImportPreview,
+  confirmBankImport,
   getCashSummary,
   getMoneyTransactionDetail,
   getMoneyTransactions,
-  importBankStatement,
+  ignoreBankTransaction,
+  previewBankImport,
+  type BankImportPreview,
 } from "@/lib/api/money.service";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
 import {
@@ -28,6 +31,67 @@ import {
   Panel,
   SearchInput,
 } from "@/components/common/ui";
+
+type ImportColumn = "posted_date" | "value_date" | "description" | "reference" | "debit" | "credit" | "currency";
+const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolean }> = [
+  { key: "posted_date", label: "Posted date", required: true },
+  { key: "value_date", label: "Value date", required: false },
+  { key: "description", label: "Description", required: true },
+  { key: "reference", label: "Reference", required: false },
+  { key: "debit", label: "Debit (Money Out)", required: true },
+  { key: "credit", label: "Credit (Money In)", required: true },
+  { key: "currency", label: "Currency", required: true },
+];
+
+function csvHeaders(text: string): string[] {
+  const firstLine = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
+  const headers: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let i = 0; i < firstLine.length; i += 1) {
+    const char = firstLine[i];
+    if (char === '"' && quoted && firstLine[i + 1] === '"') {
+      value += '"';
+      i += 1;
+    } else if (char === '"') quoted = !quoted;
+    else if (char === "," && !quoted) {
+      headers.push(value.trim());
+      value = "";
+    } else value += char;
+  }
+  headers.push(value.trim());
+  if (quoted || headers.some((header) => !header) || new Set(headers).size !== headers.length) {
+    throw new Error("The CSV needs one header row with unique, non-empty column names.");
+  }
+  return headers;
+}
+
+function guessColumn(headers: string[], key: ImportColumn): string {
+  const normalized = (header: string) => header.toLowerCase().replace(/[^a-z]/g, "");
+  const matches: Record<ImportColumn, string[]> = {
+    posted_date: ["date", "transactiondate", "posteddate", "bookingdate"],
+    value_date: ["valuedate"],
+    description: ["description", "details", "narrative", "transactiondetails"],
+    reference: ["reference", "ref", "transactionreference"],
+    debit: ["debit", "withdrawal", "moneyout"],
+    credit: ["credit", "deposit", "moneyin"],
+    currency: ["currency", "ccy"],
+  };
+  return headers.find((header) => matches[key].includes(normalized(header))) ?? "";
+}
+
+function addDecimalValues(values: Array<string | null | undefined>): string {
+  const cents = values.reduce((total, value) => {
+    if (!value || !/^-?\d+(?:\.\d{1,2})?$/.test(value)) return total;
+    const negative = value.startsWith("-");
+    const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
+    const amount = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
+    return total + (negative ? -amount : amount);
+  }, 0n);
+  const negative = cents < 0n;
+  const absolute = negative ? -cents : cents;
+  return `${negative ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
+}
 
 const MATCH_LABEL: Record<MatchStatus, string> = {
   unmatched: "Unmatched",
@@ -49,11 +113,21 @@ export function MoneyFlowPage({
   const [statusFilter, setStatusFilter] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
-  const [preview, setPreview] = useState<"document" | "record" | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [decisionReason, setDecisionReason] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importMapping, setImportMapping] = useState<Record<ImportColumn, string>>({
+    posted_date: "", value_date: "", description: "", reference: "", debit: "", credit: "", currency: "",
+  });
+  const [accountRef, setAccountRef] = useState("");
+  const [dateFormat, setDateFormat] = useState<"" | "iso" | "dmy" | "mdy">("");
+  const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
@@ -77,44 +151,114 @@ export function MoneyFlowPage({
   const reload = () => setRefreshKey((k) => k + 1);
 
   const openDetail = async (id: string) => {
-    setPreview(null);
+    setActionError("");
+    setDecisionReason("");
     setDetailLoading(true);
-    const d = await getMoneyTransactionDetail(user, id);
-    setDetail(d ?? null);
-    setDetailLoading(false);
+    try {
+      const d = await getMoneyTransactionDetail(user, id);
+      setDetail(d ?? null);
+      setSelectedCandidateId(d?.candidateId ?? d?.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to load the bank row.");
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const onDecide = async (decision: "confirm" | "reject") => {
-    if (!detail) return;
+    const candidate = detail?.candidates?.find((item) => item.id === selectedCandidateId);
+    if (!detail || detail.status !== "proposed" || !candidate || candidate.status !== "proposed" || !selectedCandidateId) return;
+    if (decision === "reject" && !decisionReason.trim()) {
+      setActionError("Enter a reason before rejecting a proposed match.");
+      return;
+    }
     setBusy(true);
-    const updated = await decideMatch(user, detail.id, decision);
-    setBusy(false);
-    if (updated) {
+    setActionError("");
+    try {
+      const updated = await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
       setDetail(updated);
+      setSelectedCandidateId(updated.candidateId ?? "");
+      setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
       reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "The reconciliation decision was not saved.");
+    } finally {
+      setBusy(false);
     }
   };
 
   const onDelete = async (id: string) => {
     setBusy(true);
-    const ok = await deleteBankTransaction(user, id);
-    setBusy(false);
-    if (ok) {
-      setNotice("Bank row deleted.");
+    setActionError("");
+    try {
+      const ok = await ignoreBankTransaction(user, id);
+      if (!ok) throw new Error("The bank row was not marked as ignored.");
+      setNotice("Bank row ignored. Its imported evidence is retained.");
       setDetail(null);
       reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to ignore the bank row.");
+    } finally {
+      setBusy(false);
     }
   };
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
+    setActionError("");
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setActionError("Bank statement import currently supports CSV files only.");
+      return;
+    }
+    try {
+      const headers = csvHeaders(await file.text());
+      setImportFile(file);
+      setImportHeaders(headers);
+      setImportMapping(Object.fromEntries(IMPORT_COLUMNS.map(({ key }) => [key, guessColumn(headers, key)])) as Record<ImportColumn, string>);
+      setImportPreview(null);
+      setAccountRef("");
+      setDateFormat("");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to read the CSV header.");
+    }
+  };
+
+  const prepareImport = async () => {
+    if (!importFile || !dateFormat || !accountRef.trim()) return;
     setBusy(true);
-    setNotice("");
-    const result = await importBankStatement(user, file.name);
-    setBusy(false);
-    setNotice(`Imported ${result.fileName}. ${result.added} bank rows added (demo).`);
-    reload();
+    setActionError("");
+    try {
+      const mapping = Object.fromEntries(Object.entries(importMapping).filter(([, header]) => header)) as Record<string, string>;
+      const preview = await previewBankImport(user, importFile, accountRef.trim(), mapping, dateFormat);
+      setImportPreview(preview);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to preview the bank statement.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishImport = async (confirm: boolean) => {
+    if (!importPreview) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      if (confirm) {
+        const result = await confirmBankImport(user, importPreview.importId);
+        setNotice(`Imported ${result.rowCount} bank rows. ${result.candidatesProposed} exact match candidates need review.`);
+      } else {
+        await discardBankImportPreview(user, importPreview.importId);
+        setNotice("Bank import preview discarded; source rows remain retained as ignored evidence.");
+      }
+      setImportFile(null);
+      setImportPreview(null);
+      reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to complete the bank import.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) return <LoadingState />;
@@ -139,9 +283,11 @@ export function MoneyFlowPage({
     if (dateTo && r.postedDate > dateTo) return false;
     return true;
   });
-  const total = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
   const matched = filtered.filter((r) => r.matchStatus === "matched").length;
-  const cashNet = (summary?.moneyIn ?? 0) - (summary?.moneyOut ?? 0);
+  const pageTotals = Array.from(new Set(filtered.map((row) => row.currency ?? ""))).map((currency) => ({
+    currency: currency || null,
+    amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
+  }));
 
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
@@ -160,7 +306,7 @@ export function MoneyFlowPage({
               ref={fileRef}
               hidden
               type="file"
-              accept=".csv,.pdf,.xlsx"
+              accept=".csv,text/csv"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 void onImport(file);
@@ -196,45 +342,25 @@ export function MoneyFlowPage({
         </div>
       )}
 
+      {actionError && <p role="alert" className="error-text">{actionError}</p>}
+
       <Panel className="cash-summary-panel">
-        <div
-          style={{
-            padding: "20px 24px",
-            background: "linear-gradient(135deg, #2a3a4a 0%, #3d5166 100%)",
-            color: "#f6f1e8",
-            borderRadius: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, letterSpacing: 0.4, opacity: 0.8 }}>
-              CASH SUMMARY (MONEY IN − MONEY OUT)
-            </div>
-            <div style={{ fontSize: 36, fontWeight: 700, marginTop: 4 }}>
-              {money(String(cashNet), "MYR")}
-            </div>
-            <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-              Not a profit & loss statement — cash movement only
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 24 }}>
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.75 }}>Money In</div>
-              <div style={{ fontSize: 20, fontWeight: 600 }}>
-                {money(String(summary?.moneyIn ?? 0), "MYR")}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, opacity: 0.75 }}>Money Out</div>
-              <div style={{ fontSize: 20, fontWeight: 600 }}>
-                {money(String(summary?.moneyOut ?? 0), "MYR")}
-              </div>
-            </div>
-          </div>
+        <div style={{ padding: 20, background: "linear-gradient(135deg, #2a3a4a 0%, #3d5166 100%)", color: "#f6f1e8", borderRadius: 12 }}>
+          <div style={{ fontSize: 13, letterSpacing: 0.4, opacity: 0.8 }}>CASH SUMMARY BY CURRENCY</div>
+          <div style={{ fontSize: 13, opacity: 0.85, margin: "4px 0 14px" }}>Cash movement only; this is not a profit and loss statement.</div>
+          {summary?.currencies.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            {summary.currencies.map((item) => {
+              const currency = item.currency;
+              const label = currency ?? "Currency unavailable";
+              const net = currency ? addDecimalValues([item.moneyIn, `-${item.moneyOut}`]) : null;
+              return <div key={label} style={{ borderTop: "1px solid rgba(255,255,255,.25)", paddingTop: 10 }}>
+                <strong>{label}</strong>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 6 }}><span>Money In</span><strong>{money(item.moneyIn, currency)}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><span>Money Out</span><strong>{money(item.moneyOut, currency)}</strong></div>
+                {net !== null && <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><span>Net movement</span><strong>{money(net, currency)}</strong></div>}
+              </div>;
+            })}
+          </div> : <p style={{ margin: 0 }}>No imported bank transactions yet.</p>}
         </div>
       </Panel>
 
@@ -256,7 +382,7 @@ export function MoneyFlowPage({
         <Panel>
           <div style={{ padding: "12px 16px" }}>
             <small style={{ color: "var(--muted)" }}>This page total</small>
-            <div style={{ fontSize: 24, fontWeight: 600 }}>{money(String(total), "MYR")}</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{pageTotals.length ? pageTotals.map((item) => <div key={item.currency ?? "none"}>{money(item.amount, item.currency)}</div>) : "—"}</div>
           </div>
         </Panel>
         <Panel>
@@ -404,7 +530,7 @@ export function MoneyFlowPage({
             { label: "Bank account", render: (r) => r.bankAccountRef || "—" },
             {
               label: "Amount",
-              render: (r) => <strong>{money(String(r.amount), r.currency)}</strong>,
+              render: (r) => <strong>{money(r.amount, r.currency)}</strong>,
             },
             {
               label: "Verification",
@@ -430,6 +556,51 @@ export function MoneyFlowPage({
         />
       </Panel>
 
+      {importFile && (
+        <Modal title={importPreview ? "Review bank statement import" : "Map bank statement columns"} onClose={() => {
+          if (busy) return;
+          if (importPreview) setActionError("Choose Confirm import or Discard preview to close this review.");
+          else setImportFile(null);
+        }}>
+          <div className="panel-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+            {!importPreview ? <>
+              <p>CSV only. Check the column mapping and choose the date format used by this statement. The account label should be a name such as “Main current account”, not an account number.</p>
+              <p><strong>File:</strong> {importFile.name}</p>
+              <label style={{ display: "block", margin: "12px 0" }}>Bank account label
+                <input value={accountRef} onChange={(event) => setAccountRef(event.target.value)} maxLength={64} placeholder="Main current account" style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+              <label style={{ display: "block", margin: "12px 0" }}>Date format
+                <select value={dateFormat} onChange={(event) => setDateFormat(event.target.value as typeof dateFormat)} style={{ display: "block", width: "100%", marginTop: 4 }}>
+                  <option value="">Choose date format</option><option value="iso">YYYY-MM-DD</option><option value="dmy">DD/MM/YYYY</option><option value="mdy">MM/DD/YYYY</option>
+                </select>
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+                {IMPORT_COLUMNS.map(({ key, label, required }) => <label key={key}>{label}{required ? " *" : " (optional)"}
+                  <select value={importMapping[key]} onChange={(event) => setImportMapping((current) => ({ ...current, [key]: event.target.value }))} style={{ display: "block", width: "100%", marginTop: 4 }}>
+                    <option value="">{required ? "Choose column" : "Not mapped"}</option>
+                    {importHeaders.map((header) => <option key={header} value={header}>{header}</option>)}
+                  </select>
+                </label>)}
+              </div>
+              <div className="modal-actions" style={{ marginTop: 18 }}>
+                <button className="btn" type="button" disabled={busy} onClick={() => setImportFile(null)}>Cancel</button>
+                <button className="btn primary" type="button" disabled={busy || !accountRef.trim() || !dateFormat || IMPORT_COLUMNS.some(({ key, required }) => required && !importMapping[key])} onClick={() => void prepareImport()}>{busy ? "Reading statement…" : "Preview rows"}</button>
+              </div>
+            </> : <>
+              <p>{importPreview.rowCount} new rows; {importPreview.duplicateRowsSkipped} duplicates skipped; {importPreview.needsReviewCount} rows need review. Confirming imports the rows and proposes only exact candidate matches.</p>
+              {importPreview.sampleRows.length > 0 && <div style={{ overflowX: "auto" }}><table><thead><tr><th>Row</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Currency</th><th>Import state</th></tr></thead><tbody>
+                {importPreview.sampleRows.map((row) => <tr key={row.sourceRow}><td>{row.sourceRow}</td><td>{row.postedDate ?? "—"}</td><td>{row.description || "—"}</td><td>{row.debit ?? "—"}</td><td>{row.credit ?? "—"}</td><td>{row.currency ?? "—"}</td><td>{row.status === "needs_review" ? `Needs review: ${row.reviewReasons.join(", ")}` : row.direction === "money_in" ? "Money In" : "Money Out"}</td></tr>)}
+              </tbody></table></div>}
+              <div className="modal-actions" style={{ marginTop: 18 }}>
+                <button className="btn" type="button" disabled={busy} onClick={() => void finishImport(false)}>Discard preview</button>
+                <button className="btn primary" type="button" disabled={busy || !importPreview.canConfirm} onClick={() => void finishImport(true)}>{busy ? "Saving…" : "Confirm import"}</button>
+              </div>
+            </>}
+            {actionError && <p role="alert" className="error-text" style={{ marginTop: 12 }}>{actionError}</p>}
+          </div>
+        </Modal>
+      )}
+
       {detail && (
         <Modal title={detail.description} onClose={() => setDetail(null)}>
           <div
@@ -451,7 +622,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Amount</span>
-                <strong>{money(String(detail.amount), detail.currency)}</strong>
+                <strong>{money(detail.amount, detail.currency)}</strong>
               </div>
               <div>
                 <span>Reference</span>
@@ -473,65 +644,39 @@ export function MoneyFlowPage({
                 <span>Related document</span>
                 <strong>{detail.relatedDocumentCode || "—"}</strong>
               </div>
-              {detail.amountDelta != null && (
-                <div>
-                  <span>Amount difference</span>
-                  <strong>{money(String(detail.amountDelta), detail.currency)}</strong>
-                </div>
-              )}
             </div>
 
-            {preview === "document" && detail.relatedDocumentCode && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: 12,
-                  border: "1px solid var(--line, #e5e0d8)",
-                  borderRadius: 8,
-                  background: "#faf8f5",
-                }}
-              >
-                <strong>Source document (demo)</strong>
-                <div className="detail-list" style={{ marginTop: 8 }}>
-                  <div><span>Code</span><strong>{detail.relatedDocumentCode}</strong></div>
-                  <div><span>Type</span><strong>{detail.relatedDocumentCode.startsWith("INVOICE") ? "Invoice" : "Bill"}</strong></div>
-                  <div><span>Total</span><strong>{money(String(detail.amount), detail.currency)}</strong></div>
-                  <div><span>Status</span><Badge>VALIDATED</Badge></div>
-                </div>
-                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--muted)" }}>
-                  Dummy preview for the client demo. The real document opens from the documents list once the backend is connected.
-                </p>
-              </div>
-            )}
+            {(detail.candidates?.length ?? 0) > 0 && <div style={{ marginTop: 14 }}>
+              <label style={{ display: "block", fontWeight: 600 }}>Reconciliation candidate
+                <select value={selectedCandidateId} onChange={(event) => setSelectedCandidateId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
+                  {detail.candidates?.map((candidate) => <option key={candidate.id} value={candidate.id} disabled={candidate.status !== "proposed" || detail.status !== "proposed"}>
+                    {candidate.recordCode} — {candidate.category.replace(/_/g, " ")} — {candidate.currency ?? "Unknown currency"} {candidate.amount ?? "amount unavailable"} ({candidate.status})
+                  </option>)}
+                </select>
+              </label>
+              {(() => {
+                const candidate = detail.candidates?.find((item) => item.id === selectedCandidateId);
+                return candidate ? <div className="detail-list" style={{ marginTop: 10 }}>
+                  <div><span>Record reference</span><strong>{candidate.reference ?? "—"}</strong></div>
+                  <div><span>Party</span><strong>{candidate.party ?? "—"}</strong></div>
+                  <div><span>Candidate amount</span><strong>{money(candidate.amount, candidate.currency)}</strong></div>
+                  <div><span>Amount difference</span><strong>{money(candidate.amountDelta, candidate.currency)}</strong></div>
+                  <div><span>Match evidence</span><strong>{candidate.reasons.join(", ") || "No reason supplied"}</strong></div>
+                  {candidate.dateDeltaDays !== null && <div><span>Date difference</span><strong>{candidate.dateDeltaDays} days</strong></div>}
+                </div> : <p>No proposed candidate is available. This row needs manual review.</p>;
+              })()}
+            </div>}
 
-            {preview === "record" && detail.relatedRecordCode && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: 12,
-                  border: "1px solid var(--line, #e5e0d8)",
-                  borderRadius: 8,
-                  background: "#faf8f5",
-                }}
-              >
-                <strong>Standardised record (demo)</strong>
-                <div className="detail-list" style={{ marginTop: 8 }}>
-                  <div><span>Record</span><strong>{detail.relatedRecordCode}</strong></div>
-                  <div><span>Document</span><strong>{detail.relatedDocumentCode || "—"}</strong></div>
-                  <div><span>Amount</span><strong>{money(String(detail.amount), detail.currency)}</strong></div>
-                  <div><span>Status</span><Badge>STANDARDISED</Badge></div>
-                </div>
-                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--muted)" }}>
-                  Dummy preview for the client demo. The real record opens from the records list once the backend is connected.
-                </p>
-              </div>
-            )}
+            <label style={{ display: "block", marginTop: 14 }}>Decision note{selectedCandidateId ? " (required when rejecting)" : ""}
+              <textarea value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} maxLength={2000} rows={3} style={{ display: "block", width: "100%", marginTop: 4 }} placeholder="Explain the review decision" />
+            </label>
+            {actionError && <p role="alert" className="error-text">{actionError}</p>}
 
             <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 className="btn primary"
                 type="button"
-                disabled={busy || detail.matchStatus === "matched" || !detail.relatedRecordId}
+                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
                 onClick={() => void onDecide("confirm")}
               >
                 Confirm match
@@ -539,37 +684,19 @@ export function MoneyFlowPage({
               <button
                 className="btn"
                 type="button"
-                disabled={busy || detail.matchStatus === "unmatched"}
+                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed" || !decisionReason.trim()}
                 onClick={() => void onDecide("reject")}
               >
                 Reject
               </button>
-              {detail.relatedDocumentId && (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setPreview(preview === "document" ? null : "document")}
-                >
-                  Open source document
-                </button>
-              )}
-              {detail.relatedRecordId && (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setPreview(preview === "record" ? null : "record")}
-                >
-                  View record
-                </button>
-              )}
               <button
                 className="btn"
                 type="button"
-                disabled={busy}
+                disabled={busy || !(detail.status === "imported" || detail.status === "needs_review")}
                 onClick={() => void onDelete(detail.id)}
                 style={{ marginLeft: "auto", color: "#b42318" }}
               >
-                <Trash2 size={14} /> Delete
+                <Trash2 size={14} /> Ignore row
               </button>
             </div>
           </div>
