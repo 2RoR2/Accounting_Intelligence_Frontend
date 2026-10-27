@@ -33,6 +33,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { canEditDocument, canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay as money, fieldLabel, sourceKind, standardisationAvailable, validationState } from "@/lib/api/document-contract";
+import { TransactionAnomalyVisual } from "@/features/common/documents/transaction-anomaly-visual";
 import { DocumentViewer, SourceEvidenceList } from "@/components/common/documents/document-viewer";
 import { DocumentDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
@@ -332,6 +333,7 @@ export function DocumentReview({
           {panel === "validation" && (
             <Panel title="Validation centre" subtitle="Confirm every extracted value before this document moves to standardisation.">
               {data.validationReport && <div className="panel-body"><Badge>{data.validationReport.validationStatus}</Badge><p>{data.validationReport.passed} aggregate check passed ? {data.validationReport.failed} blocking findings ? {data.validationReport.warnings} warnings.</p><p>Human review and explicit approval remain required. This is not an extraction accuracy score.</p></div>}
+              {data.validationReport?.transactionAnomaly && <TransactionAnomalyVisual result={data.validationReport.transactionAnomaly} />}
               <div className="validation-results-head"><div><strong>Rule results</strong><span>{validation.length} backend findings at the current revision</span></div><Badge>{data.doc.status}</Badge></div>
               <DataTable
                 rows={validation}

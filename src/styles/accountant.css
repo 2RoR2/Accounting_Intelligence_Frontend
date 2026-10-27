@@ -491,6 +491,20 @@
 .validation-rule { display:flex; align-items:center; gap:9px; }.validation-icon { display:grid; place-items:center; }.validation-icon.pass { color:#15803d; }.validation-icon.warning { color:#b7791f; }.validation-icon.fail { color:#b42318; }.validation-message { color:#52657e; }.fail-text { color:#b42318; font-weight:600; }
 .validation-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e7eef6; margin-top:18px; }
 @media (max-width: 760px) { .validation-overview { grid-template-columns:1fr 1fr; }.validation-score { grid-column:1 / -1; }.validation-progress { grid-column:1 / -1; } }
+.transaction-anomaly-visual { margin:0 22px 20px; padding:16px; border:1px solid #dbe8f5; border-radius:12px; background:#f8fbff; }
+.transaction-anomaly-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.transaction-anomaly-heading > div, .transaction-anomaly-values > div { display:grid; gap:4px; }
+.transaction-anomaly-heading span, .transaction-anomaly-values span, .transaction-anomaly-legend { color:#6b7d96; font-size:12px; }
+.transaction-anomaly-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:16px 0; }
+.transaction-anomaly-values strong { color:#183b60; font-size:15px; }
+.transaction-anomaly-track { position:relative; height:10px; overflow:visible; border-radius:99px; background:#e6edf5; }
+.transaction-anomaly-track > span { display:block; height:100%; border-radius:inherit; }
+.transaction-anomaly-track > span.normal { background:#0ea5a4; }
+.transaction-anomaly-track > span.flagged { background:#dc6464; }
+.transaction-anomaly-track > i { position:absolute; top:-4px; height:18px; border-left:2px dashed #1e3a5f; }
+.transaction-anomaly-legend { display:flex; justify-content:space-between; margin-top:7px; }
+.transaction-anomaly-visual > p { margin:12px 0 0; color:#52657e; font-size:13px; }
+@media (max-width:760px) { .transaction-anomaly-values { grid-template-columns:1fr; gap:10px; } .transaction-anomaly-visual { margin:0 12px 16px; } }
 
 .review-toolbar {
   display: flex;

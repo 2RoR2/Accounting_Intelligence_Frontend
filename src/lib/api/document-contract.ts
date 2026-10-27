@@ -1,4 +1,4 @@
-import type { Document, StandardisedRecord, ExtractedField, Extraction, LineItem, ValidationResult } from "@/types";
+import type { Document, StandardisedRecord, ExtractedField, Extraction, LineItem, ValidationResult, TransactionAnomaly } from "@/types";
 export interface ExtractionResponse {
   lineCorrections?: Extraction["lineCorrections"];
   warnings?: Extraction["warnings"]; documentId: string; contentRevision?: number; raw?: Record<string, unknown>; classification?: Extraction["classification"];
@@ -9,6 +9,7 @@ export interface ValidationReport {
   documentId: string; contentRevision: number; status: string; validationStatus: string;
   reviewRequired: boolean; accountingApprovalPerformed: boolean;
   coverageComplete?: boolean; passed: number; warnings: number; failed: number; blocking: boolean; results: ValidationResult[];
+  transactionAnomaly?: TransactionAnomaly | null;
 }
 /** POST revalidate returns errors/checks; GET validation supplies the full report. */
 export interface RevalidationResponse {
