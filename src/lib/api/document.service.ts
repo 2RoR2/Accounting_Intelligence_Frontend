@@ -19,6 +19,16 @@ export type DocumentSearch = {
   amount?: string;
   business?: string;
 };
+export type DemoCatalogDocument = Document & { demoCode: string; sampleId: string; benchmarkRevision: string; sourceSha256: string; goldManifestSha256: string };
+export type DemoAccuracyPreview = { datasetId: string; status: "NOT_RUN" | string; documentCount: number; accuracy: number | null; recall: number | null; precision: number | null; coverage: number | null; breakdown: unknown[] };
+export async function getDemoCatalog(user: User, datasetId: string) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return get<{ datasetId: string; documents: DemoCatalogDocument[] }>(`/api/demo-datasets/${encodeURIComponent(datasetId)}/catalog`);
+}
+export async function getDemoAccuracyPreview(user: User, datasetId: string) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return get<DemoAccuracyPreview>(`/api/demo-datasets/${encodeURIComponent(datasetId)}/accuracy-preview`);
+}
 export async function getDocuments(user: User, filters: DocumentSearch = {}) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {

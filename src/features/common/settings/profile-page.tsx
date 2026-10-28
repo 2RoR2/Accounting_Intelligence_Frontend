@@ -4,7 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Camera, UserRound } from "lucide-react";
 import type { User } from "@/types";
 import { updateOwnProfile } from "@/lib/api/user.service";
-import { changeOwnPassword, resetPassword } from "@/lib/api/auth.service";
+import { changeOwnPassword, resetPassword, generateBackupCodes } from "@/lib/api/auth.service";
 import { ErrorState, Field, PageHeader, Panel, Toast } from "@/components/common/ui";
 
 export function ProfilePage({ user }: { user: User }) {
@@ -13,6 +13,7 @@ export function ProfilePage({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
   function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -133,6 +134,16 @@ export function ProfilePage({ user }: { user: User }) {
             </form>
           </Panel>
         )}
+        {user.role !== "ACCOUNTANT" && <Panel title="Authenticator recovery" subtitle="Generate one-time codes for the event you lose access to your authenticator.">
+          <div className="panel-body">
+            {backupCodes.length ? <>
+              <p>Save these codes now. They will not be shown again.</p>
+              <pre aria-label="Backup codes">{backupCodes.join("\n")}</pre>
+              <button className="btn" type="button" onClick={() => navigator.clipboard?.writeText(backupCodes.join("\n"))}>Copy codes</button>
+            </> : <p>No active backup codes are displayed.</p>}
+            <button className="btn primary" type="button" disabled={busy} onClick={async () => { setBusy(true); setFailure(""); try { const result = await generateBackupCodes(); setBackupCodes(result.codes); setMessage("New backup codes generated. Save them somewhere safe."); } catch (error) { setFailure((error as Error).message); } finally { setBusy(false); } }}>Generate new backup codes</button>
+          </div>
+        </Panel>}
       </div>
       <Toast message={message} />
     </>

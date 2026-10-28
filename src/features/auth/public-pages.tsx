@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import saicLogo from "@/images/saic_logo.png";
 import welcomeBackground from "@/images/welcome_bg.png";
@@ -35,6 +36,8 @@ import {
   resetPassword,
   getCurrentUser,
   AUTH_IDENTITY_CONTRACT,
+  requestLostAuthenticatorRecovery,
+  recoverAuthenticator,
 } from "@/lib/api/auth.service";
 import { requestEnterpriseAccess } from "@/lib/api/tenant.service";
 import { roleHome } from "@/lib/permissions";
@@ -62,6 +65,9 @@ export function PublicPage({ page }: { page: string }) {
   const [showTotpSecret, setShowTotpSecret] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [recoveryReason, setRecoveryReason] = useState("");
+  const [recoveryRequested, setRecoveryRequested] = useState(false);
+  const [lostAuthenticator, setLostAuthenticator] = useState(false);
   const mfaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [otp, setOtp] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -223,6 +229,30 @@ export function PublicPage({ page }: { page: string }) {
     } finally {
       setMfaResending(false);
     }
+  }
+  async function requestLostAuthenticator() {
+    if (!recoveryReason.trim()) { setError("Explain why you lost access to your authenticator."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await requestLostAuthenticatorRecovery(recoveryReason.trim());
+      setRecoveryRequested(true);
+      setRecoveryReason("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to submit the recovery request.");
+    } finally { setBusy(false); }
+  }
+  async function submitLostAuthenticator() {
+    setBusy(true); setError("");
+    const form = new FormData();
+    const recoveryEmail = document.querySelector<HTMLInputElement>('input[name="recoveryEmail"]');
+    const recoveryPassword = document.querySelector<HTMLInputElement>('input[name="recoveryPassword"]');
+    form.set("recoveryEmail", recoveryEmail?.value ?? email);
+    form.set("recoveryPassword", recoveryPassword?.value ?? "");
+    try {
+      const result = await recoverAuthenticator(String(form.get("recoveryEmail")), String(form.get("recoveryPassword")));
+      setTotpSecret(result.totpSecret); setOtpauthUrl(result.otpauthUrl); setMfaEnrollment(true); setMfaCode(""); setLostAuthenticator(false);
+    } catch (e) { setError(e instanceof Error ? e.message : "Recovery failed."); } finally { setBusy(false); }
   }
   if (page === "help")
     return (
@@ -447,13 +477,24 @@ export function PublicPage({ page }: { page: string }) {
               <Field label="Authenticator code *">
                 <div className="mfa-code-boxes" aria-label="Six-digit authenticator code">
                   {Array.from({ length: 6 }, (_, index) => (
-                    <input key={index} ref={(element) => { mfaInputRefs.current[index] = element; }} inputMode="numeric" maxLength={1} value={mfaCode[index] ?? ""} aria-label={`Authenticator digit ${index + 1}`} onKeyDown={(event) => { if (event.key === "Backspace" && !mfaCode[index] && index > 0) mfaInputRefs.current[index - 1]?.focus(); }} onChange={(event) => { const digit = event.target.value.replace(/\D/g, "").slice(-1); const next = mfaCode.split(""); next[index] = digit; setMfaCode(next.join("").slice(0, 6)); if (digit && index < 5) mfaInputRefs.current[index + 1]?.focus(); }} />
+                    <input key={index} ref={(element) => { mfaInputRefs.current[index] = element; }} inputMode="numeric" maxLength={1} value={mfaCode[index] ?? ""} aria-label={`Authenticator digit ${index + 1}`} onKeyDown={(event) => { if (event.key === "Backspace" && !mfaCode[index] && index > 0) mfaInputRefs.current[index - 1]?.focus(); }} onChange={(event) => { const digit = event.target.value.replace(/\D/g, "").slice(-1); const next = mfaCode.split(""); next[index] = digit; setMfaCode(next.join("").slice(0, 6)); }} />
                   ))}
                 </div>
               </Field>
               <button className="btn primary full" type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify and continue"} <ArrowRight size={16} /></button>
               {mfaMethod === "email" && <button type="button" className="otp-resend" onClick={resendMfaCode} disabled={mfaSecondsLeft > 0 || mfaResending}>{mfaResending ? "Sending a new code..." : mfaSecondsLeft > 0 ? `Resend code in ${mfaSecondsLeft}s` : "Resend code"}</button>}
-              {mfaMethod !== "email" && !mfaEnrollment && <p className="form-bottom">Lost access to your authenticator? Self-service reset is unavailable. Contact your administrator for assistance with the approved recovery policy.</p>}
+              {mfaMethod !== "email" && !mfaEnrollment && <div className="form-bottom">
+                <button type="button" className="otp-resend" onClick={() => setLostAuthenticator(true)}>Lost authenticator key?</button>
+                {lostAuthenticator && typeof document !== "undefined" && createPortal(<div className="recovery-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLostAuthenticator(false); }}>
+                  <div className="recovery-modal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
+                    <button type="button" className="recovery-modal-close" onClick={() => setLostAuthenticator(false)} aria-label="Close recovery dialog">×</button>
+                    <h3 id="recovery-title">Recover your authenticator</h3>
+                    <p>Retype your password to generate a new authenticator key.</p>
+                    <Field label="Retype your password"><input name="recoveryPassword" type="password" required autoComplete="current-password" /></Field>
+                    <button type="button" className="btn primary full" disabled={busy} onClick={submitLostAuthenticator}>{busy ? "Checking…" : "Generate new authenticator key"}</button>
+                  </div>
+                </div>, document.body)}
+              </div>}
             </form>
           ) : page === "forgot-password" && otpStep && (
             <form className="otp-wait" onSubmit={continueReset}>

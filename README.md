@@ -1,6 +1,6 @@
 # Accounting Intelligence Frontend
 
-Next.js App Router, React, strict TypeScript, and Lucide. The frontend uses the FastAPI backend as its source of truth through the typed service layer in `src/lib/api`. It does not provide database security or replace backend authorization.
+Next.js App Router, React, strict TypeScript, Tailwind CSS v4, and Lucide. The frontend uses the FastAPI backend as its source of truth through the typed service layer in `src/lib/api`. It does not provide database security or replace backend authorization.
 
 ## Run
 
@@ -12,17 +12,21 @@ npm run dev
 
 Open http://localhost:3000. On Windows PowerShell, use `npm.cmd` if script execution policy blocks `npm`.
 
+The backend must be running on `http://127.0.0.1:8000` unless `BACKEND_URL` is set in `.env.local`. The Next.js proxy forwards browser `/api/*` requests to that backend.
+
 ## Sample accounts
 
-At `/login`, enter a company email below and any non-empty password. The app then opens `/verify-otp` for the six-digit email verification code. A successful verification opens `/welcome` before the user continues to their role dashboard. There is no account or role dropdown: the entered email determines the workspace. Passwords are never saved in this frontend package. Real OTP email delivery requires the backend integration marked in `auth.service.ts`.
+At `/login`, enter a seeded company email and password. Users who require MFA stay on the login page while the six-digit OTP form is displayed inline; there is no separate `/verify-otp` route. A successful verification opens `/welcome` before the user continues to their role dashboard. There is no account or role dropdown: the entered email determines the workspace. Passwords are never saved in this frontend package. Real email OTP delivery is handled by the backend.
+
+All development seed accounts use the password `DemoPass!2026`.
 
 | Account | Company | Role |
 | --- | --- | --- |
-| admin@saic.example | SAIC | Super Admin |
-| alice@abc.example | ABC Sdn Bhd | Local Admin |
-| rachel@abc.example | ABC Sdn Bhd | Accountant |
-| david@xyz.example | XYZ Sdn Bhd | Local Admin |
-| sarah@xyz.example | XYZ Sdn Bhd | Accountant |
+| `platform.demo@saic.example` | Platform | Super Admin |
+| `reviewer.demo@saic.example` | Demo Company | Local Admin |
+| `accountant.demo@saic.example` | Demo Company | Accountant |
+| `ai.adminportal@gmail.com` | Demo Company | Accountant |
+| `102784694@students.swinburne.edu.my` | ABC Sdn Bhd | Accountant |
 
 ## Walkthrough
 
@@ -38,7 +42,7 @@ At `/login`, enter a company email below and any non-empty password. The app the
 10. Switch to SAIC to inspect monitoring, metadata, and performance. Enter Support View with a reason to access a read-only financial record; the event is audited.
 11. Switch to Sarah at XYZ. ABC documents and records are filtered out.
 
-Development data comes from the backend PostgreSQL seed in `Accounting_Intelligence_Backend/database/mock_data.sql`. Do not use live customer data in local development.
+Development data comes from the backend PostgreSQL seed in `Accounting_Intelligence_Backend/database/mock.data.sql`. Do not use live customer data in local development.
 
 ## Architecture and integration
 
@@ -68,8 +72,19 @@ npm test
 npm run build
 ```
 
-`tests/workflows.test.ts` runs backend API smoke checks against `API_BASE_URL` (default `http://127.0.0.1:8000`) and skips cleanly when the backend is not running. Browser smoke tests use installed Chrome (`npm run test:browser`) against a running app at http://localhost:3001. Set `PLAYWRIGHT_BASE_URL` to test another local port.
+`tests/workflows.test.ts` runs backend API smoke checks against `API_BASE_URL` (default `http://127.0.0.1:8000`) and skips cleanly when the backend is not running. Browser tests use installed Chrome with the current `playwright.config.ts` against a running app at `http://localhost:3000`. The active suite contains the current `tests/browser/columns.spec.ts` and `tests/browser/layout.spec.ts` checks. Set `PLAYWRIGHT_BASE_URL` to test another local port.
 
 Run `npm run typecheck` and `npm run lint` before handoff. Backend integration tests require the backend test dependencies, PostgreSQL, Redis/RQ, and configured provider services; they are not replaced by frontend typechecking.
 
 The interface uses navy `#061433`, blue `#022fa2`, white, and light blue `#eaf5ff`. Success indicators use blue; warning and error labels retain distinct text and semantic accents. Wide tables scroll within their panels and keep action columns visible.
+
+## Styling
+
+PostCSS is configured in `postcss.config.mjs` with the Tailwind CSS v4 plugin:
+
+```js
+const config = { plugins: { "@tailwindcss/postcss": {} } };
+export default config;
+```
+
+Do not add a legacy `tailwindcss` PostCSS plugin configuration; use the installed `@tailwindcss/postcss` package.

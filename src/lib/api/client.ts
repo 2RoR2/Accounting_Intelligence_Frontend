@@ -1,9 +1,9 @@
 // Keep the browser and API on the same host name so SameSite=strict auth
 // cookies are sent after login. Configure NEXT_PUBLIC_API_URL when the API
 // is deployed separately. For a same-origin deployment, use relative URLs;
-// local development continues to use the backend on port 8002.
+// local development continues to use the backend on port 8000.
 const configuredApiBase = process.env.NEXT_PUBLIC_API_URL?.trim();
-const API_BASE = (configuredApiBase ?? "http://127.0.0.1:8002").replace(/\/$/, "");
+const API_BASE = (configuredApiBase ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status?: number, public readonly details?: Readonly<Record<string, unknown>>) {
@@ -64,7 +64,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     // Preserve API/application errors. Only browser transport failures should
     // be rewritten as an unreachable-backend message.
     if (error instanceof Error && error.name !== "TypeError") throw error;
-    throw new Error("Unable to reach the backend API. Check that the backend is running on port 8002.");
+    throw new Error("Unable to reach the backend API. Check that the backend is running on port 8000.");
   } finally {
     globalThis.clearTimeout(timeout);
   }

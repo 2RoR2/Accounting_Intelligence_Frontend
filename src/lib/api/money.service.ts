@@ -38,7 +38,7 @@ export async function getMoneyTransactions(
   direction: MoneyDirection,
 ): Promise<BankMoneyTransaction[]> {
   const rows = await get<BankTransactionResponse[]>(
-    `/api/bank-transactions?direction=${encodeURIComponent(direction)}&limit=500&offset=0`,
+    `/api/bank/transactions?direction=${encodeURIComponent(direction)}`,
   );
   return rows.map(mapTransaction);
 }
@@ -47,7 +47,7 @@ export async function getMoneyTransactionDetail(
   _user: User,
   id: string,
 ): Promise<BankMoneyTransactionDetail | undefined> {
-  const row = await get<BankTransactionResponse>(`/api/bank-transactions/${encodeURIComponent(id)}`);
+  const row = await get<BankTransactionResponse>(`/api/bank/transactions/${encodeURIComponent(id)}`);
   return mapTransaction(row);
 }
 
@@ -58,10 +58,11 @@ export async function decideMatch(
   expectedRevision: number,
   reason?: string,
 ): Promise<BankMoneyTransactionDetail> {
-  const row = await api<BankTransactionResponse>(`/api/reconciliation/${encodeURIComponent(candidateId)}/decision`, {
+  const row = await api<BankTransactionResponse>(`/api/bank/reconciliation/candidates/${encodeURIComponent(candidateId)}/decision`, {
     method: "POST",
     body: JSON.stringify({
-      decision,
+      candidateId,
+      decision: decision === "confirm" ? "confirmed" : "rejected",
       expectedRevision,
       ...(reason?.trim() ? { reason: reason.trim() } : {}),
     }),
@@ -102,7 +103,7 @@ export async function previewBankImport(
   form.set("source_bank_account_ref", accountRef);
   form.set("mapping", JSON.stringify(mapping));
   form.set("date_format", dateFormat);
-  return api<BankImportPreview>("/api/bank-imports/preview", { method: "POST", body: form });
+  return api<BankImportPreview>("/api/bank/imports", { method: "POST", body: form });
 }
 
 export async function confirmBankImport(_user: User, importId: string) {
@@ -121,7 +122,7 @@ export async function discardBankImportPreview(_user: User, importId: string) {
 
 export async function ignoreBankTransaction(_user: User, id: string): Promise<boolean> {
   const result = await api<{ id: string; status: string }>(
-    `/api/bank-transactions/${encodeURIComponent(id)}`,
+    `/api/bank/transactions/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
   return result.status === "ignored";
@@ -129,5 +130,24 @@ export async function ignoreBankTransaction(_user: User, id: string): Promise<bo
 
 export async function getCashSummary(_user: User): Promise<CashSummary> {
   void _user;
-  return get<CashSummary>("/api/bank-transactions/summary");
+  const rows = await get<BankTransactionResponse[]>("/api/bank/transactions");
+  const currencies = new Map<string | null, CashSummary["currencies"][number]>();
+  for (const row of rows) {
+    const item = currencies.get(row.currency) ?? { currency: row.currency, moneyIn: "0.00", moneyOut: "0.00", verifiedIn: "0.00", verifiedOut: "0.00" };
+    if (row.direction === "money_in") item.moneyIn = addMoney(item.moneyIn, row.amount ?? "0.00");
+    if (row.direction === "money_out") item.moneyOut = addMoney(item.moneyOut, row.amount ?? "0.00");
+    if (row.status === "matched" && row.direction === "money_in") item.verifiedIn = addMoney(item.verifiedIn, row.amount ?? "0.00");
+    if (row.status === "matched" && row.direction === "money_out") item.verifiedOut = addMoney(item.verifiedOut, row.amount ?? "0.00");
+    currencies.set(row.currency, item);
+  }
+  return { currencies: [...currencies.values()] };
+}
+
+function addMoney(left: string, right: string): string {
+  const cents = (value: string) => {
+    const [whole, fraction = ""] = value.split(".");
+    return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0").slice(0, 2));
+  };
+  const total = cents(left) + cents(right);
+  return `${total / 100n}.${String(total % 100n).padStart(2, "0")}`;
 }

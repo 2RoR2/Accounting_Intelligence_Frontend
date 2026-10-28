@@ -638,6 +638,13 @@
 .auth-wash .reset-card h2 { margin-bottom: 22px; font-size: 2rem; }
 .auth-wash .otp-wait { display: grid; }
 .auth-wash .otp-wait .form-bottom { background: #f3f9fc; border: 1px solid #d8e8ef; border-radius: 10px; padding: 14px; }
+.auth-wash .otp-wait .form-bottom:has(> .otp-resend) { background: transparent; border: 0; padding: 0; }
+.recovery-modal-backdrop { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 9999; display: grid; place-items: center; padding: 20px; background: rgba(35, 50, 70, 0.28); }
+.recovery-modal { position: relative; width: min(100%, 420px); padding: 28px; border: 1px solid #d8e8ef; border-radius: 16px; background: #fff; box-shadow: 0 20px 60px rgba(35, 50, 70, 0.22); text-align: left; }
+.recovery-modal h3 { margin: 0 0 8px; color: #2a3a4a; font-size: 20px; }
+.recovery-modal p { margin: 0 0 18px; color: #5e7384; font-size: 13px; }
+.recovery-modal-close { position: absolute; top: 8px; right: 12px; border: 0; background: transparent; color: #5e7384; font-size: 26px; cursor: pointer; }
+.recovery-modal .otp-resend { display: block; width: 100%; }
 .auth-wash .otp-wait .form-bottom svg { display: block; margin: 10px auto 14px; background: #fff; padding: 10px; border-radius: 8px; }
 .auth-wash .otp-wait .form-bottom textarea { width: 100%; font-size: 10px; line-height: 1.35; resize: none; }
 .auth-wash .totp-manual-secret { display: block; width: 100%; margin-top: 10px; border: 0; color: #526579; font-size: 11px; font-weight: 650; background: transparent; cursor: pointer; }
@@ -646,7 +653,28 @@
 .auth-wash .otp-wait .field:has(.mfa-code-boxes) { justify-items: center; }
 .auth-wash .otp-wait .field:has(.mfa-code-boxes) label { width: 100%; text-align: center; }
 .auth-wash .mfa-code-boxes { justify-content: center; }
-.auth-wash .mfa-code-boxes input { width: 42px; height: 48px; padding: 0; text-align: center; font-size: 22px; font-weight: 700; }
+.auth-wash .mfa-code-boxes input,
+.auth-wash .mfa-code-boxes input:focus,
+.auth-wash .mfa-code-boxes input:-webkit-autofill,
+.auth-wash .mfa-code-boxes input:-webkit-autofill:hover,
+.auth-wash .mfa-code-boxes input:-webkit-autofill:focus {
+  width: 42px;
+  height: 48px;
+  padding: 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #2a3a4a;
+  background: #fff !important;
+  -webkit-text-fill-color: #2a3a4a;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  box-shadow: 0 0 0 1000px #fff inset;
+}
+.auth-wash .mfa-code-boxes input:focus {
+  border-color: #2a3a4a !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(122, 168, 200, 0.35) !important;
+}
 .auth-wash .otp-wait code { overflow-wrap: anywhere; font-size: 12px; }
 .auth-wash .otp-wait > p:not(.hp-eyebrow):not(.otp-timer):not(.form-bottom) { margin-bottom: 18px; }
 .auth-wash .otp-timer {

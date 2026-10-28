@@ -17,6 +17,7 @@ import {
 import { getTenantUsers } from "@/lib/api/user.service";
 import { getDocuments } from "@/lib/api/document.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
+import { approveMfaRecovery, getMfaRecoveryRequests, type MfaRecoveryRequest } from "@/lib/api/auth.service";
 import {
   AccountUsage,
   Badge,
@@ -41,6 +42,7 @@ export function Approvals({ user }: { user: User }) {
       requests: await getCompanyRequests(user),
       limits: await getAccountLimitRequests(user),
       tenants: await getTenants(user),
+      mfaRecovery: await getMfaRecoveryRequests(),
     }),
     user.id,
   );
@@ -81,6 +83,27 @@ export function Approvals({ user }: { user: User }) {
         title="Pending approvals"
         description="Review company access and account limit requests."
       />
+      <Panel>
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">SECURITY ADMINISTRATION</p>
+            <h2>MFA recovery requests</h2>
+            <p>Approve a lost-authenticator request to clear the old TOTP key and require fresh enrollment at the next login.</p>
+          </div>
+        </div>
+        {data.mfaRecovery.length === 0 ? <p className="muted">No MFA recovery requests.</p> : (
+          <DataTable
+            columns={[
+              { label: "User", render: (item: MfaRecoveryRequest) => `${item.target_name} (${item.target_email})` },
+              { label: "Reason", render: (item: MfaRecoveryRequest) => item.reason },
+              { label: "Status", render: (item: MfaRecoveryRequest) => <Badge>{item.status}</Badge> },
+              { label: "Action", render: (item: MfaRecoveryRequest) => item.status === "pending" ? <button className="btn primary" disabled={busy} onClick={() => act(() => approveMfaRecovery(item.id), "MFA recovery approved. The user will enroll a new authenticator at next login.")}>Approve recovery</button> : <span className="muted">Reviewed</span> },
+            ]}
+            rows={data.mfaRecovery}
+            rowKey={(item) => item.id}
+          />
+        )}
+      </Panel>
       <Panel>
         <div className="filter-bar">
           <SearchInput

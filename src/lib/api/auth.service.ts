@@ -44,6 +44,13 @@ export async function verifyMfa(code: string) {
   if (!/^\d{6}$/.test(code)) throw new Error("Enter the six-digit verification code.");
   return mapUser(await post<BackendUser>("/api/auth/verify-mfa", { code }));
 }
+export async function recoverAuthenticator(email: string, password: string) {
+  const response = await post<{ mfaRequired: boolean; enrollmentRequired: boolean; totpSecret: string; otpauthUrl: string }>("/api/auth/recover-authenticator", { email, password });
+  return response;
+}
+export async function generateBackupCodes() {
+  return post<{ codes: string[]; generatedAt: string }>("/api/auth/backup-codes");
+}
 export async function resendMfa() {
   try {
     return await post<{ message: string; expiresIn: number }>("/api/auth/resend-mfa");
@@ -58,6 +65,29 @@ export async function resendMfa() {
     throw error;
   }
 }
+
+export type MfaRecoveryRequest = {
+  id: string;
+  requester_id: string;
+  target_user_id: string;
+  target_email: string;
+  target_name: string;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
+export const getMfaRecoveryRequests = () =>
+  get<MfaRecoveryRequest[]>("/api/admin/mfa-recovery-requests");
+
+export const approveMfaRecovery = (requestId: string) =>
+  post<{ success: boolean }>(`/api/admin/mfa-recovery-requests/${encodeURIComponent(requestId)}/approve`);
+
+export const requestLostAuthenticatorRecovery = (reason: string) =>
+  post<{ id: string; status: string; createdAt: string }>(
+    "/api/auth/mfa-recovery-requests/lost-authenticator",
+    { reason },
+  );
 export async function getCurrentUser() {
   try {
     const response = await get<BackendUser>("/api/auth/me");

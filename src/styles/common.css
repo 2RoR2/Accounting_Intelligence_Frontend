@@ -1299,6 +1299,9 @@ hr {
 
 .password-input-wrap { position: relative; }
 .password-input-wrap input { padding-right: 2.75rem; width: 100%; }
+/* The app supplies its own visibility toggle; suppress Edge's native duplicate. */
+.password-input-wrap input[type="password"]::-ms-reveal,
+.password-input-wrap input[type="password"]::-ms-clear { display: none; }
 .password-visibility {
   position: absolute;
   top: 50%;
