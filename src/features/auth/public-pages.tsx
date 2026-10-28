@@ -477,7 +477,33 @@ export function PublicPage({ page }: { page: string }) {
               <Field label="Authenticator code *">
                 <div className="mfa-code-boxes" aria-label="Six-digit authenticator code">
                   {Array.from({ length: 6 }, (_, index) => (
-                    <input key={index} ref={(element) => { mfaInputRefs.current[index] = element; }} inputMode="numeric" maxLength={1} value={mfaCode[index] ?? ""} aria-label={`Authenticator digit ${index + 1}`} onKeyDown={(event) => { if (event.key === "Backspace" && !mfaCode[index] && index > 0) mfaInputRefs.current[index - 1]?.focus(); }} onChange={(event) => { const digit = event.target.value.replace(/\D/g, "").slice(-1); const next = mfaCode.split(""); next[index] = digit; setMfaCode(next.join("").slice(0, 6)); }} />
+                    <input
+                      key={index}
+                      ref={(element) => { mfaInputRefs.current[index] = element; }}
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={mfaCode[index] ?? ""}
+                      aria-label={`Authenticator digit ${index + 1}`}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Backspace") return;
+                        event.preventDefault();
+                        const next = mfaCode.split("");
+                        if (next[index]) {
+                          next[index] = "";
+                        } else if (index > 0) {
+                          next[index - 1] = "";
+                          mfaInputRefs.current[index - 1]?.focus();
+                        }
+                        setMfaCode(next.join("").slice(0, 6));
+                      }}
+                      onChange={(event) => {
+                        const digit = event.target.value.replace(/\D/g, "").slice(-1);
+                        const next = mfaCode.split("");
+                        next[index] = digit;
+                        setMfaCode(next.join("").slice(0, 6));
+                        if (digit && index < 5) mfaInputRefs.current[index + 1]?.focus();
+                      }}
+                    />
                   ))}
                 </div>
               </Field>
