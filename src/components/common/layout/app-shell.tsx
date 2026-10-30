@@ -213,7 +213,7 @@ export function AppShell({
     ? openExceptions.slice(0, 6).map((e) => ({
         id: e.id,
         title: e.severity || "Exception",
-        detail: e.message || e.documentName || "Needs review",
+        detail: e.message || e.type || "Needs review",
         href: `/${prefix}/exceptions`,
         time: e.createdAt,
       }))
