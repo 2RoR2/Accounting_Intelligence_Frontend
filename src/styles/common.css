@@ -6849,4 +6849,61 @@ dialog {
   line-height: 16px;
   text-align: center;
 }
+/* Contacts page — split list + related documents
+   Append to common.css. */
 
+.contacts-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .contacts-layout { grid-template-columns: 1fr; }
+}
+
+.contacts-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px;
+  padding: 0 12px;
+  border: 1px solid #e6eef5;
+  border-radius: 8px;
+  background: #fff;
+}
+.contacts-search input {
+  border: 0;
+  flex: 1;
+  padding: 8px 0;
+  background: transparent;
+}
+
+.contacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 12px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.contacts-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  color: #2a3a4a;
+  cursor: pointer;
+}
+.contacts-list button:hover { background: #f8fbfd; }
+.contacts-list button.active {
+  background: #d7f1ff;
+}
+.contacts-list strong { font-size: 13.5px; }
+.contacts-list span { font-size: 12px; color: #5e7384; }
+.contacts-list small { font-size: 11.5px; color: #7a90a3; }
