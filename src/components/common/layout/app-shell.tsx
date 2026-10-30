@@ -89,6 +89,8 @@ const accountantNav = [
   ["Documents", "documents", Files],
   ["Upload", "upload", Upload],
   ["Exceptions", "exceptions", ShieldCheck],
+  ["Validation", "validation", ClipboardCheck],
+  ["AI Performance", "ai-performance", ChartNoAxesCombined],
   ["Standardised Records", "records", FileCheck2],
   ["Contacts", "contacts", Users],
   ["Money In", "money-in", ArrowDownToLine],
