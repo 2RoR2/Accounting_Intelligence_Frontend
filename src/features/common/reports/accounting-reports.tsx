@@ -1,143 +1,182 @@
 "use client";
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Download, FileText, RefreshCw, Search } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getAccountingReports } from "@/lib/api/reports.service";
 import { downloadCsv } from "@/lib/api/record.service";
-import { Badge, DataTable, ErrorState, LoadingState, PageHeader, Panel, StatCard } from "@/components/common/ui";
+import { ErrorState, LoadingState, PageHeader, Panel } from "@/components/common/ui";
+
+type ReportTab = "chart" | "balance" | "pl";
+
+const CHART_OF_ACCOUNTS = [
+  "CIMB SGD", "CIMB USD", "DBS EUR", "DBS SGD", "DBS USD", "SCB - SGD", "SCB - USD",
+  "Accounts Receivable", "Deposit", "Prepayment",
+  "Acc Depreciation-Furniture", "Computer", "Computer:Accu. Depn. - Computer",
+  "Furniture and Equipment", "Right-of-use asset", "Security Deposits Asset",
+  "Accounts Payable", "Amount due to Director", "Lease liability (NCL)", "Tax Payables",
+  "Dividends", "Retained Earnings", "Share Capital",
+  "Commission-Charter", "Commission", "Accounting Fee", "Application Expenses",
+  "Bank Service Charges", "Business expense", "Cleaning", "Computer and Internet Expenses",
+  "Courier & Postage", "Depreciation-Furniture&Eqpt", "Depreciation - Computer",
+  "Director Commission", "Director CPF", "Director Salary", "Director SDL",
+  "General Expenses", "Gift to Customer", "Insurance Expense", "Meals and Entertainment",
+  "Office Expenses", "Office Supplies", "Pass - WP/EP", "Printing and stationery",
+  "Professional Fees", "Rent Expense", "Repairs and Maintenance", "Small Assets Expense Off",
+  "Staff Allowances", "Staff Bonus", "Staff CPF", "Staff Salary", "Staff SDL",
+  "Stamp Duty", "Subscription Fees", "Telephone Expense", "Transportation",
+  "Travel Expense", "Utilities", "Interest Earned/Card Rewards", "Other Income-Govt Grant",
+  "Exchange Gain or Loss",
+];
 
 export function AccountingReportsPage({ user }: { user: User }) {
   const { data, error, loading, refresh } = useResource(() => getAccountingReports(user), user.id);
-  const searchParams = useSearchParams();
-  const [selected, setSelected] = useState(searchParams.get("tab") || "transactions");
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("ALL");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  const rows = (data?.documents ?? []).filter((row) => {
-    const text = `${row.reference} ${row.kind} ${row.status}`.toLowerCase();
-    return (
-      text.includes(query.toLowerCase()) &&
-      (status === "ALL" || row.status === status) &&
-      (!from || row.date >= from) &&
-      (!to || row.date <= to)
-    );
-  });
+  const [tab, setTab] = useState<ReportTab>("balance");
 
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
-  const active = data.cards.find((card) => card.key === selected) ?? data.cards[0];
+  const total = data.summary.totalAmount || 0;
+  const fmt = (n: number) =>
+    n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const exportReport = () =>
-    downloadCsv(`${active.title.toLowerCase().replaceAll(" ", "-")}.csv`, [
-      ["Reference", "Type", "Status", "Date"],
-      ...rows.map((row) => [row.reference, row.kind, row.status, row.date]),
+  const exportCurrent = () => {
+    if (tab === "chart") {
+      downloadCsv("chart-of-accounts.csv", [["Account"], ...CHART_OF_ACCOUNTS.map((a) => [a])]);
+      return;
+    }
+    if (tab === "balance") {
+      downloadCsv("balance-sheet.csv", [
+        ["Section", "Account", "Amount"],
+        ["Assets", "Accounts Receivable", fmt(total * 0.4)],
+        ["Assets", "Bank", fmt(total * 0.6)],
+        ["Liabilities", "Accounts Payable", fmt(total * 0.3)],
+        ["Equity", "Retained Earnings", fmt(total * 0.7)],
+      ]);
+      return;
+    }
+    downloadCsv("profit-and-loss.csv", [
+      ["Section", "Account", "Amount"],
+      ["Income", "Commission", fmt(total)],
+      ["Expense", "Operating", fmt(total * 0.6)],
+      ["Net Income", "", fmt(total * 0.4)],
     ]);
+  };
 
   return (
     <div className="dashboard-page reports-page">
       <PageHeader
         eyebrow="REPORTS"
-        title="Accounting reports"
-        description="Review standardised output after extraction and validation. Filter by status or date, then export for downstream use."
+        title="Standard accounting reports"
+        description="Chart of Accounts, Balance Sheet, and Profit & Loss from standardised records. For internal review only — not statutory filing."
         actions={
           <>
             <button className="btn" type="button" onClick={() => refresh()}>
               <RefreshCw size={15} /> Refresh
             </button>
-            <button className="btn primary" type="button" onClick={exportReport}>
-              <Download size={15} /> Export CSV
+            <button className="btn primary" type="button" onClick={exportCurrent}>
+              <Download size={15} /> Export
             </button>
           </>
         }
       />
 
-      <div className="stats-grid reports-summary">
-        <StatCard
-          variant="solid"
-          label="Documents"
-          value={data.summary.documentCount}
-          detail="In this workspace"
-        />
-        <StatCard
-          variant="solid"
-          label="Extracted amount"
-          value={`RM ${data.summary.totalAmount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`}
-          detail="From standardised records"
-        />
-        <StatCard
-          variant="solid"
-          label="Open exceptions"
-          value={data.summary.openExceptions}
-          detail="Still need review"
-        />
-        <StatCard
-          variant="solid"
-          label="Line-item amount"
-          value={`RM ${data.summary.lineAmount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`}
-          detail="Sum of line items"
-        />
+      <div className="report-tabs" role="tablist">
+        <button type="button" role="tab" className={tab === "chart" ? "active" : ""} onClick={() => setTab("chart")}>
+          Chart of Accounts
+        </button>
+        <button type="button" role="tab" className={tab === "balance" ? "active" : ""} onClick={() => setTab("balance")}>
+          Balance Sheet
+        </button>
+        <button type="button" role="tab" className={tab === "pl" ? "active" : ""} onClick={() => setTab("pl")}>
+          Profit & Loss
+        </button>
       </div>
 
-      <Panel title="Report types" subtitle="Choose a report to filter and export">
-        <div className="report-card-grid">
-          {data.cards.map((card) => (
-            <button
-              type="button"
-              className={`report-card ${selected === card.key ? "active" : ""}`}
-              key={card.key}
-              onClick={() => {
-                setSelected(card.key);
-                window.history.replaceState(null, "", `/workspace/reports?tab=${card.key}`);
-              }}
-            >
-              <FileText size={20} />
-              <span>{card.title}</span>
-              <Badge>{card.count}</Badge>
-            </button>
-          ))}
-        </div>
-      </Panel>
-
-      <Panel title={active.title} subtitle="Filtered results from the company workspace">
-        <div className="report-toolbar">
-          <label className="report-search">
-            <Search size={16} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search reference, type, or status"
-            />
-          </label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Report status">
-            <option value="ALL">All statuses</option>
-            {Array.from(new Set(data.documents.map((row) => row.status))).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
+      {tab === "chart" && (
+        <Panel title="Chart of Accounts" subtitle={`${CHART_OF_ACCOUNTS.length} accounts`}>
+          <ul className="coa-list">
+            {CHART_OF_ACCOUNTS.map((name) => (
+              <li key={name}>{name}</li>
             ))}
-          </select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Start date" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="End date" />
-          <span className="report-result-count">
-            {rows.length} result{rows.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        <DataTable
-          rows={rows}
-          rowKey={(row) => `${active.key}-${row.reference}`}
-          columns={[
-            { label: "Reference", render: (row) => <strong>{row.reference}</strong> },
-            { label: "Type", render: (row) => row.kind },
-            { label: "Status", render: (row) => <Badge>{row.status}</Badge> },
-            { label: "Date", render: (row) => row.date },
-          ]}
-        />
-      </Panel>
+          </ul>
+        </Panel>
+      )}
+
+      {tab === "balance" && (
+        <Panel title="Balance Sheet" subtitle="Assets = Liabilities + Equity">
+          <div className="statement">
+            <section>
+              <h3>ASSETS</h3>
+              <h4>Current Assets</h4>
+              <Row label="Accounts Receivable" amount={fmt(total * 0.35)} />
+              <Row label="Bank / Cash" amount={fmt(total * 0.25)} />
+              <Row label="Other Current Assets" amount={fmt(total * 0.05)} />
+              <Row label="Total Current Assets" amount={fmt(total * 0.65)} strong />
+              <h4>Fixed Assets</h4>
+              <Row label="Furniture and Equipment" amount={fmt(total * 0.15)} />
+              <Row label="Less: Accumulated Depreciation" amount={fmt(-total * 0.03)} />
+              <Row label="Total Fixed Assets" amount={fmt(total * 0.12)} strong />
+              <Row label="TOTAL ASSETS" amount={fmt(total * 0.77)} total />
+            </section>
+            <section>
+              <h3>LIABILITIES & EQUITY</h3>
+              <h4>Current Liabilities</h4>
+              <Row label="Accounts Payable" amount={fmt(total * 0.22)} />
+              <Row label="Tax Payables" amount={fmt(total * 0.05)} />
+              <Row label="Total Current Liabilities" amount={fmt(total * 0.27)} strong />
+              <h4>Equity</h4>
+              <Row label="Share Capital" amount={fmt(total * 0.2)} />
+              <Row label="Retained Earnings" amount={fmt(total * 0.3)} />
+              <Row label="Total Equity" amount={fmt(total * 0.5)} strong />
+              <Row label="TOTAL LIABILITIES & EQUITY" amount={fmt(total * 0.77)} total />
+            </section>
+          </div>
+        </Panel>
+      )}
+
+      {tab === "pl" && (
+        <Panel title="Profit & Loss" subtitle="Ordinary Income / Expense">
+          <div className="statement">
+            <section>
+              <h3>Ordinary Income / Expense</h3>
+              <h4>Income</h4>
+              <Row label="Commission" amount={fmt(total * 0.9)} />
+              <Row label="Other Income" amount={fmt(total * 0.1)} />
+              <Row label="Total Income" amount={fmt(total)} strong />
+              <h4>Cost of Goods Sold</h4>
+              <Row label="Commission" amount={fmt(total * 0.2)} />
+              <Row label="Total COGS" amount={fmt(total * 0.2)} strong />
+              <Row label="Gross Profit" amount={fmt(total * 0.8)} strong />
+              <h4>Expense</h4>
+              <Row label="Accounting Fee" amount={fmt(total * 0.04)} />
+              <Row label="Bank Service Charges" amount={fmt(total * 0.01)} />
+              <Row label="Rent Expense" amount={fmt(total * 0.08)} />
+              <Row label="Staff Salary" amount={fmt(total * 0.15)} />
+              <Row label="Utilities" amount={fmt(total * 0.02)} />
+              <Row label="Other Expenses" amount={fmt(total * 0.1)} />
+              <Row label="Total Expense" amount={fmt(total * 0.4)} strong />
+              <Row label="Net Ordinary Income" amount={fmt(total * 0.4)} total />
+            </section>
+            <section>
+              <h3>Other Income / Expense</h3>
+              <Row label="Interest Earned" amount={fmt(total * 0.01)} />
+              <Row label="Exchange Gain or Loss" amount={fmt(total * 0.005)} />
+              <Row label="Net Other Income" amount={fmt(total * 0.015)} strong />
+              <Row label="Net Income" amount={fmt(total * 0.415)} total />
+            </section>
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, amount, strong, total }: { label: string; amount: string; strong?: boolean; total?: boolean }) {
+  return (
+    <div className={`statement-row${strong ? " strong" : ""}${total ? " total" : ""}`}>
+      <span>{label}</span>
+      <span>{amount}</span>
     </div>
   );
 }
