@@ -34,6 +34,7 @@ import {
 import type { User } from "@/types";
 import { logout } from "@/lib/api/auth.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
+import { getExceptions } from "@/lib/api/document.service";
 import { getTenants, getCompanyRequests } from "@/lib/api/tenant.service";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { HelpCenter } from "@/features/common/help/help-center";
@@ -48,11 +49,6 @@ export function Brand() {
     </span>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Flattened navigation for PoC (Upload → Extract → Validate → Standardise → Money + Exceptions)
-// Document-type, exception-severity and report filters live inside the pages, not the sidebar.
-// ---------------------------------------------------------------------------
 
 const adminNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
@@ -169,21 +165,30 @@ export function AppShell({
   }, []);
 
   const data = useResource(
-    async () => ({
-      tenants: user.role === "SUPER_ADMIN" ? await getTenants(user) : [],
-      audit: await getAuditLogs(user),
-      pending:
-        user.role === "SUPER_ADMIN"
-          ? (await getCompanyRequests(user)).filter(
-              (r) => r.status === "PENDING",
-            ).length
-          : 0,
-    }),
+    async () => {
+      const isAccountant = user.role === "ACCOUNTANT";
+      const [audit, exceptions] = await Promise.all([
+        getAuditLogs(user),
+        isAccountant ? getExceptions(user) : Promise.resolve([]),
+      ]);
+      return {
+        tenants: user.role === "SUPER_ADMIN" ? await getTenants(user) : [],
+        audit,
+        exceptions,
+        pending:
+          user.role === "SUPER_ADMIN"
+            ? (await getCompanyRequests(user)).filter(
+                (r) => r.status === "PENDING",
+              ).length
+            : 0,
+      };
+    },
     user.id,
   );
 
   const isAdmin = user.role === "SUPER_ADMIN";
   const isCompanyAdmin = user.role === "LOCAL_ADMIN";
+  const isAccountant = user.role === "ACCOUNTANT";
   const prefix = isAdmin
     ? "admin"
     : isCompanyAdmin
@@ -197,9 +202,29 @@ export function AppShell({
       : accountantNav;
 
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
-  const latestActivity = data.data?.audit.slice(0, 4) ?? [];
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
   const currentPage = pathname.split("/")[2] ?? "";
+
+  const openExceptions = (data.data?.exceptions ?? []).filter(
+    (e) => e.status !== "RESOLVED",
+  );
+  type Alert = { id: string; title: string; detail: string; href: string; time: string };
+  const alerts: Alert[] = isAccountant
+    ? openExceptions.slice(0, 6).map((e) => ({
+        id: e.id,
+        title: e.severity || "Exception",
+        detail: e.message || e.documentName || "Needs review",
+        href: `/${prefix}/exceptions`,
+        time: e.createdAt,
+      }))
+    : (data.data?.audit.slice(0, 4) ?? []).map((entry) => ({
+        id: entry.id,
+        title: entry.action.replaceAll("_", " "),
+        detail: `${entry.user} · ${entry.resource}`,
+        href: notificationHref,
+        time: entry.timestamp,
+      }));
+  const alertCount = isAccountant ? openExceptions.length : alerts.length;
 
   return (
     <div
@@ -369,7 +394,7 @@ export function AppShell({
             <button
               className="notification icon-btn"
               aria-label={
-                notifications ? "Close latest activity" : "Open latest activity"
+                notifications ? "Close notifications" : "Open notifications"
               }
               aria-expanded={notifications}
               onClick={() => {
@@ -378,44 +403,58 @@ export function AppShell({
               }}
             >
               <Bell size={19} />
-              <i />
+              {alertCount > 0 && (
+                <span className="notification-badge">{alertCount}</span>
+              )}
             </button>
             {notifications && (
               <div
                 className="notification-panel"
                 role="dialog"
-                aria-label="Latest activity"
+                aria-label={isAccountant ? "Exceptions" : "Latest activity"}
               >
                 <div className="notification-heading">
                   <div>
-                    <strong>Latest activity</strong>
-                    <span>Newest workspace updates</span>
+                    <strong>{isAccountant ? "Needs attention" : "Latest activity"}</strong>
+                    <span>
+                      {isAccountant
+                        ? "Open exceptions that need review"
+                        : "Newest workspace updates"}
+                    </span>
                   </div>
-                  <Activity size={16} />
                 </div>
                 <div className="notification-list">
-                  {latestActivity.length ? (
-                    latestActivity.map((entry) => (
-                      <div className="notification-item" key={entry.id}>
+                  {alerts.length ? (
+                    alerts.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className="notification-item"
+                        onClick={() => setNotifications(false)}
+                      >
                         <span className="notification-item-icon">
-                          <Activity size={14} />
+                          <ShieldCheck size={14} />
                         </span>
                         <div>
-                          <strong>{entry.action.replaceAll("_", " ")}</strong>
-                          <span>
-                            {entry.user} · {entry.resource}
-                          </span>
-                          <time>
-                            {new Intl.DateTimeFormat("en-MY", {
-                              day: "2-digit",
-                              month: "short",
-                            }).format(new Date(entry.timestamp))}
-                          </time>
+                          <strong>{item.title}</strong>
+                          <span>{item.detail}</span>
+                          {item.time && (
+                            <time>
+                              {new Intl.DateTimeFormat("en-MY", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }).format(new Date(item.time))}
+                            </time>
+                          )}
                         </div>
-                      </div>
+                      </Link>
                     ))
                   ) : (
-                    <p className="notification-empty">No new activity.</p>
+                    <p className="notification-empty">
+                      {isAccountant ? "No open exceptions." : "No new activity."}
+                    </p>
                   )}
                 </div>
                 <Link
@@ -423,7 +462,8 @@ export function AppShell({
                   href={notificationHref}
                   onClick={() => setNotifications(false)}
                 >
-                  View all activity <ArrowUpRight size={14} />
+                  {isAccountant ? "View exceptions" : "View all activity"}{" "}
+                  <ArrowUpRight size={14} />
                 </Link>
               </div>
             )}
