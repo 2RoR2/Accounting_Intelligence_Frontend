@@ -190,7 +190,6 @@ export function Dashboard({ user }: { user: User }) {
         <AccountantDashboard docs={data.docs} exceptions={open} />
       ) : (
         <>
-          {/* Company / Platform pipeline health */}
           <div className="stats-grid">
             {admin ? (
               <>
@@ -372,8 +371,8 @@ export function Dashboard({ user }: { user: User }) {
             ]}
           />
         </Panel>
-      ) : (
-        <div className={local ? "dashboard-middle" : "single-grid"}>
+      ) : local ? (
+        <div className="dashboard-middle">
           <Panel
             title="Recent documents"
             action={
@@ -400,34 +399,32 @@ export function Dashboard({ user }: { user: User }) {
               ]}
             />
           </Panel>
-          {local && (
-            <Panel title="Your team" subtitle="Active accounts and reserved invitations">
-              <div className="panel-body">
-                <AccountUsage used={activeUsers.length} limit={data.tenants[0]?.accountLimit ?? 1} />
-                <div className="detail-list">
-                  <div>
-                    <span>Local administrators</span>
-                    <strong>{activeUsers.filter((u) => u.role === "LOCAL_ADMIN").length}</strong>
-                  </div>
-                  <div>
-                    <span>Active accountants</span>
-                    <strong>
-                      {activeUsers.filter((u) => u.role === "ACCOUNTANT" && u.status === "ACTIVE").length}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Pending invitations</span>
-                    <strong>{activeUsers.filter((u) => u.status === "INVITED").length}</strong>
-                  </div>
+          <Panel title="Your team" subtitle="Active accounts and reserved invitations">
+            <div className="panel-body">
+              <AccountUsage used={activeUsers.length} limit={data.tenants[0]?.accountLimit ?? 1} />
+              <div className="detail-list">
+                <div>
+                  <span>Local administrators</span>
+                  <strong>{activeUsers.filter((u) => u.role === "LOCAL_ADMIN").length}</strong>
                 </div>
-                <Link className="btn full" href="/company/users">
-                  <Plus size={15} /> Invite accountant
-                </Link>
+                <div>
+                  <span>Active accountants</span>
+                  <strong>
+                    {activeUsers.filter((u) => u.role === "ACCOUNTANT" && u.status === "ACTIVE").length}
+                  </strong>
+                </div>
+                <div>
+                  <span>Pending invitations</span>
+                  <strong>{activeUsers.filter((u) => u.status === "INVITED").length}</strong>
+                </div>
               </div>
-            </Panel>
-          )}
+              <Link className="btn full" href="/company/users">
+                <Plus size={15} /> Invite accountant
+              </Link>
+            </div>
+          </Panel>
         </div>
-      )}
+      ) : null}
 
       <Panel
         title={admin ? "Recent platform activity" : "Recent workspace activity"}
