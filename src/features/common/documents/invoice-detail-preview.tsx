@@ -1,6 +1,6 @@
 "use client";
 import { Badge } from "@/components/common/ui";
-import { decimalDisplay, fieldLabel, sourceKind } from "@/lib/api/document-contract";
+import { decimalDisplay, fieldLabel, sourceKind, MONEY_KEYS } from "@/lib/api/document-contract";
 import type { Document, Extraction } from "@/types";
 export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extraction: Extraction }) {
   const kind = sourceKind(extraction, doc.type);
@@ -9,6 +9,7 @@ export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extr
   const keys = kind === "BILL" ? ["supplier", "reference", "account_number", "billing_period", "date", "due", "currency"]
     : kind === "RECEIPT" ? ["supplier", "reference", "date", "transaction_time", "payment_method", "currency"]
     : ["supplier", "customer", "invoice", "date", "due", "currency"];
+  const amountKeys = ["subtotal", "tax", "discount", "total", "amount_due", "amount_paid", "allowances", "charges", "prepaid", "rounding"].filter(key => key in extraction.fields || kind === "INVOICE");
   const sources = [...(extraction.classification?.candidates ?? []), ...(extraction.classification?.unsupported_headings ?? [])];
   return <section className="invoice-review-page" aria-label={title}>
     <div className="invoice-review-heading"><div><span className="invoice-status">{doc.status}</span><h2>{title}</h2>
@@ -28,7 +29,7 @@ export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extr
           {keys.map(key => <div key={key}><strong>{fieldLabel(kind, key, extraction.fields[key]?.label)}</strong><span>{value(key) ?? "Not provided"}</span></div>)}
         </div></div>
         <div className="invoice-detail-card"><h3>Source amounts</h3><div className="invoice-totals">
-          {["subtotal", "tax", "discount", "total"].filter(key => kind === "INVOICE" || key in extraction.fields).map(key => <span key={key}>{fieldLabel(kind, key, extraction.fields[key]?.label)}<b>{decimalDisplay(value(key), value("currency"))}</b></span>)}
+          {amountKeys.map(key => <span key={key}>{fieldLabel(kind, key, extraction.fields[key]?.label)}<b>{decimalDisplay(value(key), value("currency"))}</b></span>)}
         </div><p>Validation and approval do not indicate payment or settlement.</p></div>
       </div>}
   </section>;
