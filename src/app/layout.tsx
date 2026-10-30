@@ -5,6 +5,7 @@ import "@/styles/landing.css";
 import "@/styles/super-admin.css";
 import "@/styles/local-admin.css";
 import "@/styles/accountant.css";
+import "@/styles/dashboard.css";
 
 export const metadata: Metadata = {
   title: "Accounting Intelligence | SAIC",
