@@ -298,7 +298,11 @@
 .outstanding-legend small { grid-column: 2 / -1; color: #7a90a3; font-size: 11.5px; }
 
 /* Quick actions */
-.detail-list { display: grid; gap: 8px; }
+.detail-list { 
+  display: grid; 
+  gap: 8px; 
+  padding: 12px 16px 16px; 
+}
 .detail-list .btn.full {
   justify-content: flex-start;
   background: #f6f1e8;
@@ -308,6 +312,7 @@
   font-weight: 600;
   min-height: 40px;
   padding: 0 14px;
+  margin: 0;
   font-size: 13.5px;
 }
 .detail-list .btn.full:hover {
