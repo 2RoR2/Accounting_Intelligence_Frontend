@@ -66,7 +66,6 @@ export function ContactsPage({ user }: { user: User }) {
     <div className="contacts-page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">DIRECTORY</p>
           <h1>Contacts</h1>
           <p>Find a customer or supplier, then open their documents for checking.</p>
         </div>
