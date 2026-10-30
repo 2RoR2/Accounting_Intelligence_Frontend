@@ -39,11 +39,11 @@ export function AccountingReportsPage({ user }: { user: User }) {
     ]);
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page reports-page">
       <PageHeader
         eyebrow="REPORTS"
         title="Accounting reports"
-        description="Review standardised output after extraction and validation. Filter by status or date, then export for downstream use. This is not the upload or validation screen."
+        description="Review standardised output after extraction and validation. Filter by status or date, then export for downstream use."
         actions={
           <>
             <button className="btn" type="button" onClick={() => refresh()}>
@@ -56,15 +56,27 @@ export function AccountingReportsPage({ user }: { user: User }) {
         }
       />
 
-      <div className="stats-grid">
-        <StatCard label="Documents" value={data.summary.documentCount} detail="In this workspace" />
+      <div className="stats-grid reports-summary">
         <StatCard
+          variant="solid"
+          label="Documents"
+          value={data.summary.documentCount}
+          detail="In this workspace"
+        />
+        <StatCard
+          variant="solid"
           label="Extracted amount"
           value={`RM ${data.summary.totalAmount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`}
           detail="From standardised records"
         />
-        <StatCard label="Open exceptions" value={data.summary.openExceptions} detail="Still need review" />
         <StatCard
+          variant="solid"
+          label="Open exceptions"
+          value={data.summary.openExceptions}
+          detail="Still need review"
+        />
+        <StatCard
+          variant="solid"
           label="Line-item amount"
           value={`RM ${data.summary.lineAmount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`}
           detail="Sum of line items"
