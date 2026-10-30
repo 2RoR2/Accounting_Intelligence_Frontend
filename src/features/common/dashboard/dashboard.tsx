@@ -13,6 +13,11 @@ import {
   Clock3,
   CircleAlert,
   ScanLine,
+  Upload,
+  FileCheck2,
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from "lucide-react";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -35,15 +40,14 @@ import {
 } from "@/components/common/ui";
 import { PerformanceCards, TrendChart } from "@/components/common/dashboard/charts";
 import { AccountantDashboard } from "@/features/users/accountant-dashboard";
+
 export function Dashboard({ user }: { user: User }) {
   const admin = user.role === "SUPER_ADMIN";
   const local = user.role === "LOCAL_ADMIN";
   const base = admin ? "/admin" : local ? "/company" : "/workspace";
+
   const { data, error, loading, refresh } = useResource(
     async () => {
-      // Documents are the dashboard's primary data. Supporting widgets are
-      // allowed to fail independently so one slow metric query cannot blank
-      // the whole dashboard.
       const optional = async <T,>(request: Promise<T>, fallback: T) => {
         try {
           return await Promise.race([
@@ -67,6 +71,7 @@ export function Dashboard({ user }: { user: User }) {
     },
     user.id,
   );
+
   useEffect(() => {
     if (admin || local) return;
     const timer = window.setInterval(() => {
@@ -74,19 +79,19 @@ export function Dashboard({ user }: { user: User }) {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [admin, local, refresh]);
+
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
-  const completed = data.docs.filter((d) => d.status === "COMPLETED").length;
-  const activeUsers = data.users.filter(
-    (u) => u.status === "ACTIVE" || u.status === "INVITED",
-  );
+
+  const completed = data.docs.filter((d) =>
+    ["COMPLETED", "VALIDATED", "STANDARDISED"].includes(d.status),
+  ).length;
+  const activeUsers = data.users.filter((u) => u.status === "ACTIVE" || u.status === "INVITED");
   const processing = data.docs.filter((d) =>
     ["QUEUED", "PROCESSING", "UPLOADED"].includes(d.status),
   ).length;
   const open = data.exceptions.filter((e) => e.status !== "RESOLVED").length;
-  const queued = data.docs.filter((d) =>
-    ["QUEUED", "UPLOADED"].includes(d.status),
-  ).length;
+  const queued = data.docs.filter((d) => ["QUEUED", "UPLOADED"].includes(d.status)).length;
   const running = data.docs.filter((d) => d.status === "PROCESSING").length;
   const failed = data.docs.filter((d) => d.status === "FAILED").length;
   const extracted = data.docs.length - queued - running - failed;
@@ -99,16 +104,22 @@ export function Dashboard({ user }: { user: User }) {
       ? `conic-gradient(#8fb7e6 0% ${completeEnd}%, #c6dbf3 ${completeEnd}% ${queueEnd}%, #dcecff ${queueEnd}% ${runningEnd}%, #b5cfee ${runningEnd}% 100%)`
       : "#eaf5ff",
   };
+
+  const exceptionRate = Math.round((open / denominator) * 100);
+  const completionRate = Math.round((completed / denominator) * 100);
+
   const exportReport = () =>
     downloadCsv("workspace-report.csv", [
       ["Metric", "Value"],
       ["Documents", String(data.docs.length)],
-      ["Completed", String(completed)],
-      ["Exceptions", String(open)],
+      ["Standardised", String(completed)],
+      ["Open exceptions", String(open)],
+      ["Exception rate", `${exceptionRate}%`],
       ...data.metrics.map((m) => [m.label, m.value]),
     ]);
+
   return (
-    <>
+    <div className="dashboard-page">
       <PageHeader
         eyebrow={admin ? "YOUR PLATFORM, AT A GLANCE" : undefined}
         title={
@@ -122,17 +133,23 @@ export function Dashboard({ user }: { user: User }) {
           admin
             ? "Monitor tenants, access requests, and AI processing health across the platform."
             : local
-              ? "Track document intake, exceptions, and standardised records for your company."
-              : undefined
+              ? "Track document intake, exceptions, standardised records, and money matching for your company."
+              : "Upload → Extract → Validate → Standardise → Money matching"
         }
         actions={
           <>
             <button className="btn" onClick={exportReport}>
               <Download size={15} /> Export report
             </button>
+            {!admin && (
+              <Link className="btn primary" href={`${base}/upload`}>
+                <Plus size={15} /> Upload
+              </Link>
+            )}
           </>
         }
       />
+
       <div className="date-line">
         <span className="pulse-dot" />
         {new Intl.DateTimeFormat("en-MY", {
@@ -142,9 +159,8 @@ export function Dashboard({ user }: { user: User }) {
           year: "numeric",
         }).format(new Date())}{" "}
       </div>
-      {(admin
-        ? data.requests.some((r) => r.status === "PENDING")
-        : open > 0) && (
+
+      {(admin ? data.requests.some((r) => r.status === "PENDING") : open > 0) && (
         <Link
           className="attention-banner"
           href={`${base}/${admin ? "approvals" : "exceptions"}`}
@@ -165,126 +181,139 @@ export function Dashboard({ user }: { user: User }) {
             </p>
           </div>
           <span className="attention-action">
-            {admin ? "Review requests" : "Open review queue"}{" "}
-            <ArrowRight size={16} />
+            {admin ? "Review requests" : "Open review queue"} <ArrowRight size={16} />
           </span>
         </Link>
       )}
+
       {!admin && !local ? (
-      <AccountantDashboard
-          docs={data.docs}
-        exceptions={open}
-        />
+        <AccountantDashboard docs={data.docs} exceptions={open} />
       ) : (
         <>
-      <div className="stats-grid">
-        {admin ? (
-          <>
-            <StatCard
-              label="Active tenants"
-              value={data.tenants.filter((t) => t.status === "ACTIVE").length}
-              icon={<Building2 size={17} />}
-            />
-            <StatCard
-              label="Pending requests"
-              value={data.requests.filter((r) => r.status === "PENDING").length}
-              icon={<ClipboardCheck size={17} />}
-              detail="awaiting your review"
-            />
-            <StatCard
-              label="Total users"
-              value={data.users.length}
-              icon={<Users size={17} />}
-            />
-            <StatCard
-              label="Documents processed"
-              value={data.docs.length}
-              icon={<Files size={17} />}
-            />
-          </>
-        ) : (
-          <>
-            <StatCard
-              label={local ? "Documents processed" : "My uploads"}
-              value={data.docs.length}
-              icon={<Files size={17} />}
-            />
-            <StatCard
-              label={local ? "Pending review" : "Processing"}
-              value={
-                local
-                  ? data.docs.filter((d) =>
-                      ["EXCEPTION", "IN_REVIEW", "CORRECTED"].includes(
-                        d.status,
-                      ),
+          {/* Company / Platform pipeline health */}
+          <div className="stats-grid">
+            {admin ? (
+              <>
+                <StatCard
+                  label="Active tenants"
+                  value={data.tenants.filter((t) => t.status === "ACTIVE").length}
+                  icon={<Building2 size={17} />}
+                />
+                <StatCard
+                  label="Pending requests"
+                  value={data.requests.filter((r) => r.status === "PENDING").length}
+                  icon={<ClipboardCheck size={17} />}
+                  detail="awaiting your review"
+                />
+                <StatCard
+                  label="Total users"
+                  value={data.users.length}
+                  icon={<Users size={17} />}
+                />
+                <StatCard
+                  label="Documents processed"
+                  value={data.docs.length}
+                  icon={<Files size={17} />}
+                />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  label="Documents processed"
+                  value={data.docs.length}
+                  icon={<Files size={17} />}
+                  detail="Total ingested"
+                />
+                <StatCard
+                  label="Standardised"
+                  value={completed}
+                  icon={<FileCheck2 size={17} />}
+                  detail={`${completionRate}% of total`}
+                />
+                <StatCard
+                  label="Open exceptions"
+                  value={open}
+                  icon={<CircleAlert size={17} />}
+                  detail={`${exceptionRate}% exception rate`}
+                />
+                <StatCard
+                  label="Pending review"
+                  value={
+                    data.docs.filter((d) =>
+                      ["EXCEPTION", "IN_REVIEW", "CORRECTED"].includes(d.status),
                     ).length
-                  : processing
-              }
-              icon={<Clock3 size={17} />}
-            />
-            <StatCard
-              label={local ? "Open exceptions" : "Needs review"}
-              value={open}
-              icon={<CircleAlert size={17} />}
-            />
-            <StatCard
-              label="Completed"
-              value={completed}
-              icon={<CheckCircle2 size={17} />}
-            />
-          </>
-        )}
-      </div>
-      <div className="section-heading">
-        <h2>
-          Performance at a glance{" "}
-          <span className="subtle-tag">Reference benchmarks</span>
-        </h2>
-        <Link
-          href={`${base}/${admin ? "performance" : local ? "reports" : "records"}`}
-        >
-          View {admin || local ? "performance" : "records"}{" "}
-          <ArrowRight size={14} />
-        </Link>
-      </div>
-      <PerformanceCards metrics={data.metrics} />
-      <div className="dashboard-middle">
-        <TrendChart />
-        <Panel
-          title="AI processing status"
-          subtitle="Extraction jobs · independent of record validation"
-          action={
-            <span className="badge green">
-              <span className="badge-dot" />
-              Processing queue
-            </span>
-          }
-        >
-          <div className="processing-total">
-            <div className="processing-ring" style={ringStyle}>
-              <ScanLine size={25} />
-              <strong>{data.docs.length}</strong>
-              <small>Total documents</small>
+                  }
+                  icon={<Clock3 size={17} />}
+                />
+              </>
+            )}
+          </div>
+
+          {local && (
+            <div className="stats-grid" style={{ marginTop: 12 }}>
+              <Link href={`${base}/upload`} className="stat-card-link">
+                <StatCard label="Upload" value="New" icon={<Upload size={17} />} detail="Add documents" />
+              </Link>
+              <Link href={`${base}/exceptions`} className="stat-card-link">
+                <StatCard label="Exceptions" value={open} icon={<AlertCircle size={17} />} detail="Review queue" />
+              </Link>
+              <Link href={`${base}/records`} className="stat-card-link">
+                <StatCard label="Records" value={completed} icon={<FileCheck2 size={17} />} detail="Standardised" />
+              </Link>
+              <Link href={`${base}/money-in`} className="stat-card-link">
+                <StatCard label="Money In" value="Match" icon={<ArrowDownToLine size={17} />} detail="Receipts" />
+              </Link>
             </div>
+          )}
+
+          <div className="section-heading">
+            <h2>
+              Performance at a glance <span className="subtle-tag">Reference benchmarks</span>
+            </h2>
+            <Link href={`${base}/${admin ? "performance" : local ? "reports" : "records"}`}>
+              View {admin || local ? "performance" : "records"} <ArrowRight size={14} />
+            </Link>
           </div>
-          <div className="processing-legend">
-            {[
-              ["Queued", queued, "amber"],
-              ["Processing", running, "blue"],
-              ["Extracted", extracted, "green"],
-              ["Failed", failed, "red"],
-            ].map(([label, count, color]) => (
-              <div key={label}>
-                <span className={`legend-dot ${color}`} />
-                <span>{label}</span>
-                <strong>{count}</strong>
+          <PerformanceCards metrics={data.metrics} />
+
+          <div className="dashboard-middle">
+            <TrendChart />
+            <Panel
+              title="AI processing status"
+              subtitle="Extraction jobs · independent of record validation"
+              action={
+                <span className="badge green">
+                  <span className="badge-dot" />
+                  Processing queue
+                </span>
+              }
+            >
+              <div className="processing-total">
+                <div className="processing-ring" style={ringStyle}>
+                  <ScanLine size={25} />
+                  <strong>{data.docs.length}</strong>
+                  <small>Total documents</small>
+                </div>
               </div>
-            ))}
+              <div className="processing-legend">
+                {[
+                  ["Queued", queued, "amber"],
+                  ["Processing", running, "blue"],
+                  ["Extracted", extracted, "green"],
+                  ["Failed", failed, "red"],
+                ].map(([label, count, color]) => (
+                  <div key={String(label)}>
+                    <span className={`legend-dot ${color}`} />
+                    <span>{label}</span>
+                    <strong>{count}</strong>
+                  </div>
+                ))}
+              </div>
+            </Panel>
           </div>
-        </Panel>
-      </div>
         </>
       )}
+
       {admin ? (
         <Panel
           title="Tenant activity"
@@ -302,10 +331,7 @@ export function Dashboard({ user }: { user: User }) {
               {
                 label: "Company",
                 render: (t) => (
-                  <Link
-                    className="company-cell"
-                    href={`/admin/tenants/${t.id}`}
-                  >
+                  <Link className="company-cell" href={`/admin/tenants/${t.id}`}>
                     <span className="company-avatar">{t.name.slice(0, 2)}</span>
                     <span>
                       <strong>{t.name}</strong>
@@ -324,18 +350,13 @@ export function Dashboard({ user }: { user: User }) {
               },
               {
                 label: "Documents",
-                render: (t) =>
-                  data.docs.filter((d) => d.tenantId === t.id).length,
+                render: (t) => data.docs.filter((d) => d.tenantId === t.id).length,
               },
               {
                 label: "Exceptions",
                 render: (t) => (
                   <span className="exception-count">
-                    {
-                      data.exceptions.filter(
-                        (e) => e.tenantId === t.id && e.status !== "RESOLVED",
-                      ).length
-                    }
+                    {data.exceptions.filter((e) => e.tenantId === t.id && e.status !== "RESOLVED").length}
                   </span>
                 ),
               },
@@ -343,11 +364,7 @@ export function Dashboard({ user }: { user: User }) {
               {
                 label: "",
                 render: (t) => (
-                  <Link
-                    className="icon-btn"
-                    aria-label={`View ${t.name}`}
-                    href={`/admin/tenants/${t.id}`}
-                  >
+                  <Link className="icon-btn" aria-label={`View ${t.name}`} href={`/admin/tenants/${t.id}`}>
                     <ArrowRight size={16} />
                   </Link>
                 ),
@@ -372,10 +389,7 @@ export function Dashboard({ user }: { user: User }) {
                 {
                   label: "Document",
                   render: (d) => (
-                    <Link
-                      className="document-link"
-                      href={`${base}/documents/${d.id}`}
-                    >
+                    <Link className="document-link" href={`${base}/documents/${d.id}`}>
                       <Files size={16} />
                       {d.name}
                     </Link>
@@ -387,41 +401,23 @@ export function Dashboard({ user }: { user: User }) {
             />
           </Panel>
           {local && (
-            <Panel
-              title="Your team"
-              subtitle="Active accounts and reserved invitations"
-            >
+            <Panel title="Your team" subtitle="Active accounts and reserved invitations">
               <div className="panel-body">
-                <AccountUsage
-                  used={activeUsers.length}
-                  limit={data.tenants[0]?.accountLimit ?? 1}
-                />
+                <AccountUsage used={activeUsers.length} limit={data.tenants[0]?.accountLimit ?? 1} />
                 <div className="detail-list">
                   <div>
                     <span>Local administrators</span>
-                    <strong>
-                      {
-                        activeUsers.filter((u) => u.role === "LOCAL_ADMIN")
-                          .length
-                      }
-                    </strong>
+                    <strong>{activeUsers.filter((u) => u.role === "LOCAL_ADMIN").length}</strong>
                   </div>
                   <div>
                     <span>Active accountants</span>
                     <strong>
-                      {
-                        activeUsers.filter(
-                          (u) =>
-                            u.role === "ACCOUNTANT" && u.status === "ACTIVE",
-                        ).length
-                      }
+                      {activeUsers.filter((u) => u.role === "ACCOUNTANT" && u.status === "ACTIVE").length}
                     </strong>
                   </div>
                   <div>
                     <span>Pending invitations</span>
-                    <strong>
-                      {activeUsers.filter((u) => u.status === "INVITED").length}
-                    </strong>
+                    <strong>{activeUsers.filter((u) => u.status === "INVITED").length}</strong>
                   </div>
                 </div>
                 <Link className="btn full" href="/company/users">
@@ -432,13 +428,11 @@ export function Dashboard({ user }: { user: User }) {
           )}
         </div>
       )}
+
       <Panel
         title={admin ? "Recent platform activity" : "Recent workspace activity"}
         action={
-          <Link
-            href={admin || local ? `${base}/audit` : `${base}/documents`}
-            className="text-link"
-          >
+          <Link href={admin || local ? `${base}/audit` : `${base}/documents`} className="text-link">
             View activity <ArrowRight size={14} />
           </Link>
         }
@@ -460,6 +454,6 @@ export function Dashboard({ user }: { user: User }) {
           ))}
         </div>
       </Panel>
-    </>
+    </div>
   );
 }
