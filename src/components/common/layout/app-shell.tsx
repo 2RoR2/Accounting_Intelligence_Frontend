@@ -73,9 +73,11 @@ const companyNav = [
   ["Upload", "upload", Upload],
   ["Exceptions", "exceptions", ShieldCheck],
   ["Standardised Records", "records", FileCheck2],
+  ["Contacts", "contacts", Users],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
   ["Reports", "reports", ChartNoAxesCombined],
+  ["Audit Trail", "audit", Activity],
   ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
   ["Settings", "settings", Settings2],
@@ -88,9 +90,11 @@ const accountantNav = [
   ["Upload", "upload", Upload],
   ["Exceptions", "exceptions", ShieldCheck],
   ["Standardised Records", "records", FileCheck2],
+  ["Contacts", "contacts", Users],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
   ["Reports", "reports", ChartNoAxesCombined],
+  ["Audit Trail", "audit", Activity],
   ["Profile", "profile", UserRound],
 ] as const;
 
