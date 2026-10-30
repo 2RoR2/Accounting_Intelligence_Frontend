@@ -147,38 +147,88 @@ export function AccountantDashboard({
         </div>
       </div>
 
-      {/* Pipeline health — aligned with success criteria */}
+      {/* Top KPI row — solid brand cards */}
       <div className="stats-grid pipeline-health-grid">
         <StatCard
           variant="solid"
           label="Documents in workspace"
           value={docs.length}
-          icon={<Files size={17} />}
+          icon={<Files size={18} />}
           detail="Total ingested"
         />
         <StatCard
           variant="solid"
           label="Standardised"
           value={standardised}
-          icon={<FileCheck2 size={17} />}
+          icon={<FileCheck2 size={18} />}
           detail={`${completionRate}% of total`}
         />
         <StatCard
           variant="solid"
           label="Open exceptions"
           value={exceptions}
-          icon={<AlertCircle size={17} />}
+          icon={<AlertCircle size={18} />}
           detail={`${exceptionRate}% exception rate`}
         />
         <StatCard
           variant="solid"
           label="Pending review"
           value={review}
-          icon={<Clock3 size={17} />}
+          icon={<Clock3 size={18} />}
           detail="Needs human check"
         />
       </div>
 
+      {/* Mixed middle: trend + quick actions + money summary */}
+      <div className="dashboard-feature-row">
+        <Panel title="Document Processing Trend" subtitle="Processed documents over the current week">
+          <div className="dashboard-trend-placeholder">
+            {(trends ?? []).map((point) => (
+              <div key={point.day}>
+                <i
+                  title={`${point.processed} processed`}
+                  style={{ height: `${Math.max(12, Math.min(100, point.processed))}%` }}
+                />
+                <span>{point.day}</span>
+              </div>
+            ))}
+          </div>
+          {!trends?.length && <p className="muted-copy">Trend data is not available yet.</p>}
+        </Panel>
+
+        <div className="dashboard-side-stack">
+          <div className="side-card side-card-ink">
+            <div className="side-card-icon"><ArrowDownToLine size={18} /></div>
+            <div>
+              <strong>{money(sales)}</strong>
+              <span>Sales invoices</span>
+            </div>
+          </div>
+          <div className="side-card side-card-wash">
+            <div className="side-card-icon"><ArrowUpFromLine size={18} /></div>
+            <div>
+              <strong>{money(purchases)}</strong>
+              <span>Purchase bills</span>
+            </div>
+          </div>
+          <div className="side-card side-card-cream">
+            <div className="side-card-icon"><FileCheck2 size={18} /></div>
+            <div>
+              <strong>{money(receipts)}</strong>
+              <span>Receipts</span>
+            </div>
+          </div>
+          <div className="side-card side-card-mist">
+            <div className="side-card-icon"><AlertCircle size={18} /></div>
+            <div>
+              <strong>{exceptions}</strong>
+              <span>Open exceptions</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Money position */}
       <h2 className="dashboard-section-title">Money position</h2>
       <div className="stats-grid accountant-money-grid">
         <StatCard
@@ -216,29 +266,8 @@ export function AccountantDashboard({
         <OutstandingPanel title="Outstanding Bills" buckets={billBuckets} />
       </div>
 
-      <h2 className="dashboard-section-title">Processing & review</h2>
-      <div className="stats-grid processing-review-grid">
-        <StatCard tone="processing" variant="solid" label="Processing" value={processing} />
-        <StatCard tone="review" variant="solid" label="Pending Review" value={review} />
-        <StatCard tone="exception" variant="solid" label="Open Exceptions" value={exceptions} />
-        <StatCard tone="failed" variant="solid" label="Failed Jobs" value={failed} />
-      </div>
-
-      <div className="dashboard-middle">
-        <Panel title="Document Processing Trend" subtitle="Processed documents over the current week">
-          <div className="dashboard-trend-placeholder">
-            {(trends ?? []).map((point) => (
-              <div key={point.day}>
-                <i
-                  title={`${point.processed} processed`}
-                  style={{ height: `${Math.max(12, Math.min(100, point.processed))}%` }}
-                />
-                <span>{point.day}</span>
-              </div>
-            ))}
-          </div>
-          {!trends?.length && <p className="muted-copy">Trend data is not available yet.</p>}
-        </Panel>
+      {/* Processing + quick actions */}
+      <div className="dashboard-feature-row dashboard-feature-row-reverse">
         <Panel title="Quick actions" subtitle="Move the pipeline forward">
           <div className="detail-list">
             <Link className="btn full" href="/workspace/upload">
@@ -258,6 +287,12 @@ export function AccountantDashboard({
             </Link>
           </div>
         </Panel>
+        <div className="stats-grid processing-review-grid processing-review-grid-compact">
+          <StatCard tone="processing" variant="solid" label="Processing" value={processing} />
+          <StatCard tone="review" variant="solid" label="Pending Review" value={review} />
+          <StatCard tone="exception" variant="solid" label="Open Exceptions" value={exceptions} />
+          <StatCard tone="failed" variant="solid" label="Failed Jobs" value={failed} />
+        </div>
       </div>
 
       <Panel
