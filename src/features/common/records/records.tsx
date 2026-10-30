@@ -10,7 +10,7 @@ import {
   getStandardisedRecords,
   openSupportView,
 } from "@/lib/api/record.service";
-import { decimalDisplay as money, type SupportViewRecord } from "@/lib/api/document-contract";
+import { decimalDisplay as money, fieldLabel, MONEY_KEYS, type SupportViewRecord } from "@/lib/api/document-contract";
 import { getTenants } from "@/lib/api/tenant.service";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { createExport, downloadExport, getExports } from "@/lib/api/workflow.service";
@@ -27,6 +27,7 @@ import {
   SearchInput,
   formatDate,
 } from "@/components/common/ui";
+
 export function RecordDetail({
   record,
   support = false,
@@ -57,11 +58,9 @@ export function RecordDetail({
         <div className="record-fields">
           {Object.entries(record.extraction.fields).map(([key, f]) => (
             <div key={key}>
-              <small>{f.label}</small>
+              <small>{fieldLabel("", key, f.label)}</small>
               <strong>
-                {["subtotal", "tax", "discount", "total"].includes(key)
-                  ? money(f.value)
-                  : f.value || "—"}
+                {MONEY_KEYS.has(key) ? money(f.value) : (f.value || "—")}
               </strong>
             </div>
           ))}
@@ -80,6 +79,7 @@ export function RecordDetail({
     </>
   );
 }
+
 export function RecordsPage({
   user,
   tenantId,
