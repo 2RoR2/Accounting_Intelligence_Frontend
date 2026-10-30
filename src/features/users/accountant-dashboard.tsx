@@ -32,7 +32,7 @@ const total = (docs: Document[], type: string, statuses: string[]) =>
     .reduce((sum, doc) => sum + asNumber(doc.totalAmount), 0);
 
 const agingLabels = ["Upcoming", "1–30 Days", "31–60 Days", "61–90 Days", "91+ Days"];
-const agingColors = ["#6eaed2", "#4894c2", "#2e78b5", "#17579c", "#12396f"];
+const agingColors = ["#a8cfe8", "#7aa8c8", "#5a8fb0", "#3d6f8f", "#2a3a4a"];
 
 function agingBuckets(docs: Document[], type: "INVOICE" | "BILL") {
   const today = new Date();
