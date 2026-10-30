@@ -6907,3 +6907,81 @@ dialog {
 .contacts-list strong { font-size: 13.5px; }
 .contacts-list span { font-size: 12px; color: #5e7384; }
 .contacts-list small { font-size: 11.5px; color: #7a90a3; }
+
+/* Standard accounting reports — Chart of Accounts, Balance Sheet, P&L
+   Brand: ink #2a3a4a · wash #7aa8c8 · mist #d7f1ff
+   Append to common.css. */
+
+.reports-page .report-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.reports-page .report-tabs button {
+  padding: 8px 16px;
+  border: 1px solid #e6eef5;
+  border-radius: 8px;
+  background: #fff;
+  color: #2a3a4a;
+  font-weight: 600;
+  cursor: pointer;
+}
+.reports-page .report-tabs button.active {
+  background: #2a3a4a;
+  color: #f6f1e8;
+  border-color: #2a3a4a;
+}
+
+.coa-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 18px 18px;
+  columns: 2;
+  column-gap: 32px;
+}
+@media (max-width: 700px) {
+  .coa-list { columns: 1; }
+}
+.coa-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f4f7fa;
+  font-size: 13.5px;
+  color: #2a3a4a;
+  break-inside: avoid;
+}
+
+.statement {
+  padding: 8px 18px 20px;
+}
+.statement h3 {
+  margin: 16px 0 8px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #2a3a4a;
+}
+.statement h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5e7384;
+}
+.statement-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13.5px;
+  color: #2a3a4a;
+  border-bottom: 1px solid #f4f7fa;
+}
+.statement-row.strong {
+  font-weight: 700;
+  border-bottom: 1px solid #e6eef5;
+}
+.statement-row.total {
+  margin-top: 4px;
+  padding: 10px 0;
+  font-weight: 700;
+  border-top: 2px solid #2a3a4a;
+  border-bottom: 2px solid #2a3a4a;
+  background: #f8fbfd;
+}
