@@ -6695,3 +6695,62 @@ dialog {
 @media (max-width: 720px) {
   .processing-summary { grid-template-columns: 1fr; }
 }
+
+/* Sidebar icon alignment */
+.workspace-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #d7f1ff;
+  color: #2a3a4a;
+  border: 1px solid #a8d3f0;
+  flex-shrink: 0;
+}
+.workspace-icon svg {
+  display: block;
+  margin: 0;
+}
+
+.sidebar .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 40px;
+}
+.sidebar .nav-item svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.sidebar-bottom .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.sidebar-bottom .nav-item svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar.rail .nav-item,
+.sidebar.rail .sidebar-bottom .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+.sidebar.rail .nav-item span,
+.sidebar.rail .sidebar-bottom .nav-item span {
+  display: none;
+}
