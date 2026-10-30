@@ -178,7 +178,6 @@ export function DocumentList({ user }: { user: User }) {
           ]}
         />
       </Panel>
-      <WorkflowControls user={user} />
     </>
   );
 }
