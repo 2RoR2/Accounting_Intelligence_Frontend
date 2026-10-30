@@ -78,15 +78,77 @@ export function sourceKind(extraction: Pick<Extraction, "classification">, intak
   }
   return intake?.toUpperCase() ?? "UNKNOWN";
 }
+
+/** Human-readable labels aligned with backend short storage keys (FIELD_KEYS). */
 export function fieldLabel(kind: string, key: string, fallback?: string): string {
-  const shared: Record<string, string> = { currency: "Currency", subtotal: "Subtotal", tax: "Tax", discount: "Discount", total: "Total", customer: "Customer", due: "Due date" };
-  const profiles: Record<string, Record<string, string>> = {
-    INVOICE: { supplier: "Supplier", invoice: "Invoice number", date: "Invoice date" },
-    BILL: { supplier: "Issuer", reference: "Bill reference", account_number: "Account number", billing_period: "Billing period", date: "Bill date", total: "Bill total", amount_due: "Amount due", amount_paid: "Amount paid", charges: "Current charges" },
-    RECEIPT: { supplier: "Merchant", reference: "Receipt reference", date: "Transaction date", transaction_time: "Transaction time", payment_method: "Payment method" },
+  const shared: Record<string, string> = {
+    currency: "Currency",
+    subtotal: "Subtotal",
+    tax: "Tax",
+    discount: "Discount",
+    total: "Total",
+    customer: "Customer",
+    due: "Due date",
+    supplier: "Supplier",
+    invoice: "Invoice number",
+    date: "Document date",
+    reference: "Reference",
+    amount_due: "Amount due",
+    amount_paid: "Amount paid",
+    allowances: "Allowances",
+    charges: "Charges",
+    prepaid: "Prepaid amount",
+    rounding: "Rounding",
+    total_excluding_tax: "Total excluding tax",
+    total_including_tax: "Total including tax",
+    tendered_amount: "Tendered amount",
+    change_given: "Change given",
+    outstanding_amount: "Outstanding amount",
+    payment_terms: "Payment terms",
+    received_date: "Received date",
+    expense_category: "Expense category",
+    payment_reference: "Payment reference",
+    purchase_order_number: "Purchase order number",
+    goods_receipt_reference: "Goods receipt reference",
+    supplier_address: "Supplier address",
+    customer_address: "Customer address",
+    supplier_tax_id: "Supplier tax ID",
+    customer_tax_id: "Customer tax ID",
+    merchant_address: "Merchant address",
+    account_number: "Account number",
+    billing_period: "Billing period",
+    transaction_time: "Transaction time",
+    payment_method: "Payment method",
   };
-  return profiles[kind]?.[key] ?? shared[key] ?? fallback ?? key;
+  const profiles: Record<string, Record<string, string>> = {
+    INVOICE: {
+      supplier: "Supplier",
+      invoice: "Invoice number",
+      date: "Invoice date",
+      customer: "Customer",
+    },
+    BILL: {
+      supplier: "Issuer",
+      reference: "Bill reference",
+      account_number: "Account number",
+      billing_period: "Billing period",
+      date: "Bill date",
+      total: "Bill total",
+      amount_due: "Amount due",
+      amount_paid: "Amount paid",
+      charges: "Current charges",
+    },
+    RECEIPT: {
+      supplier: "Merchant",
+      reference: "Receipt reference",
+      date: "Transaction date",
+      transaction_time: "Transaction time",
+      payment_method: "Payment method",
+    },
+  };
+  return profiles[kind]?.[key] ?? shared[key] ?? fallback ?? key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
+
 export function validationState(result: ValidationResult): string {
   return result.checkStatus === "NOT_CHECKED" ? "NOT_CHECKED" : result.result;
 }
@@ -94,3 +156,10 @@ export function standardisationAvailable(status: string, kind: string, report: V
   return status === "VALIDATED" && kind !== "UNKNOWN" && report?.validationStatus === "PASS"
     && report.coverageComplete !== false && !report.blocking;
 }
+
+/** Decimal field keys that should use decimalDisplay. */
+export const MONEY_KEYS = new Set([
+  "subtotal", "tax", "discount", "total", "amount_due", "amount_paid",
+  "allowances", "charges", "prepaid", "rounding", "total_excluding_tax",
+  "total_including_tax", "tendered_amount", "change_given", "outstanding_amount",
+]);
