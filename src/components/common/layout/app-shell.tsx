@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -35,7 +35,6 @@ import type { User } from "@/types";
 import { logout } from "@/lib/api/auth.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
 import { getTenants, getCompanyRequests } from "@/lib/api/tenant.service";
-import { getWorkspaceNavigation, type WorkspaceModule } from "@/lib/api/navigation.service";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { HelpCenter } from "@/features/common/help/help-center";
 import { Modal } from "@/components/common/ui";
@@ -50,154 +49,49 @@ export function Brand() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Flattened navigation for PoC (Upload → Extract → Validate → Standardise → Money + Exceptions)
+// Document-type, exception-severity and report filters live inside the pages, not the sidebar.
+// ---------------------------------------------------------------------------
+
 const adminNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
-  ["All Companies", "tenants", Building2],
-  ["Pending Company Requests", "approvals", ClipboardCheck],
-  ["Approved / Rejected Requests", "approvals", ClipboardCheck],
-  ["Suspended Companies", "tenants", Building2],
-  ["Company Details", "tenants", Building2],
-  ["Platform Users", "users", Users],
-  ["Company Administrators", "users", Users],
-  ["Account Limit Requests", "users", Users],
-  ["Seat Allocation", "users", Users],
-  ["Access Reviews", "users", Users],
-  ["Processing Overview", "processing", ScanLine],
-  ["Job Queue", "processing", ScanLine],
-  ["Failed Jobs", "processing", ShieldCheck],
-  ["AI Service Health", "processing", Activity],
-  ["Platform Usage", "performance", ChartNoAxesCombined],
-  ["Processing Performance", "performance", ChartNoAxesCombined],
-  ["Extraction Quality", "performance", ChartNoAxesCombined],
-  ["Failure Trends", "performance", ChartNoAxesCombined],
-  ["Operational Exports", "performance", ChartNoAxesCombined],
-  ["Record Overview", "records", FileCheck2],
-  ["Record Metadata", "records", FileCheck2],
-  ["Record Integrity", "records", FileCheck2],
-  ["Support Access Requests", "records", ShieldCheck],
-  ["Platform Audit Logs", "audit", Activity],
-  ["Authentication Events", "audit", Activity],
-  ["Permission Changes", "audit", Activity],
-  ["Security Alerts", "audit", ShieldCheck],
-  ["Support Access History", "audit", Activity],
-  ["Service Health", "settings", Activity],
-  ["Database & Storage", "settings", Settings2],
-  ["Background Workers", "settings", Settings2],
-  ["Backup Status", "settings", Settings2],
-  ["System Notifications", "settings", Bell],
-  ["Platform Configuration", "settings", Settings2],
-  ["Upload Policies", "settings", Settings2],
-  ["AI Provider Settings", "settings", Settings2],
-  ["Email Configuration", "settings", Settings2],
-  ["Default Security Policies", "settings", ShieldCheck],
-  ["My Profile", "profile", UserRound],
-  ["Security Settings", "profile", ShieldCheck],
-  ["MFA Recovery Requests", "approvals", ShieldCheck],
+  ["Companies", "tenants", Building2],
+  ["Pending Approvals", "approvals", ClipboardCheck],
+  ["Users", "users", Users],
+  ["AI Processing", "processing", ScanLine],
+  ["Performance", "performance", ChartNoAxesCombined],
+  ["Standardised Records", "records", FileCheck2],
+  ["Audit Logs", "audit", Activity],
+  ["Settings", "settings", Settings2],
+  ["Profile", "profile", UserRound],
 ] as const;
 
 const companyNav = [
   ["Dashboard", "dashboard", LayoutDashboard],
-  ["All Documents", "documents", Files],
-  ["Sales Invoices", "documents", Files],
-  ["Purchase Bills", "documents", Files],
-  ["Receipts", "documents", Files],
-  ["Credit Notes", "documents", Files],
-  ["Debit Notes", "documents", Files],
-  ["Upload Documents", "upload", Upload],
-  ["Batch Uploads", "upload", Upload],
-  ["Processing Queue", "documents", ScanLine],
-  ["Failed Processing", "documents", ShieldCheck],
-  ["Review Queue", "documents", ClipboardCheck],
-  ["Pending Approvals", "approvals", ClipboardCheck],
-  ["Returned for Correction", "documents", ClipboardCheck],
-  ["Approval History", "records", FileCheck2],
-  ["All Exceptions", "exceptions", ShieldCheck],
-  ["Blocking Errors", "exceptions", ShieldCheck],
-  ["Warnings", "exceptions", ShieldCheck],
-  ["Resolved Exceptions", "exceptions", ShieldCheck],
-  ["Customers", "records", Users],
-  ["Suppliers", "records", Users],
-  ["Contact Matching", "records", Users],
-  ["All Records", "records", FileCheck2],
-  ["Sales Records", "records", FileCheck2],
-  ["Purchase Records", "records", FileCheck2],
-  ["Record Amendments", "records", FileCheck2],
-  ["Processing Reports", "reports", ChartNoAxesCombined],
-  ["Validation Reports", "reports", ChartNoAxesCombined],
-  ["Review Reports", "reports", ChartNoAxesCombined],
-  ["Document Register", "reports", ChartNoAxesCombined],
-  ["Export History", "reports", ChartNoAxesCombined],
-  ["All Activities", "audit", Activity],
-  ["Document Changes", "audit", Activity],
-  ["Approval Actions", "audit", ClipboardCheck],
-  ["User Activities", "audit", Activity],
-  ["All Users", "users", Users],
-  ["Invitations", "users", Users],
-  ["Roles & Permissions", "users", ShieldCheck],
-  ["Seat Usage", "users", Users],
-  ["Workload Assignment", "users", Users],
-  ["Company Profile", "settings", Building2],
+  ["Documents", "documents", Files],
+  ["Upload", "upload", Upload],
+  ["Exceptions", "exceptions", ShieldCheck],
+  ["Standardised Records", "records", FileCheck2],
+  ["Money In", "money-in", ArrowDownToLine],
+  ["Money Out", "money-out", ArrowUpFromLine],
+  ["Reports", "reports", ChartNoAxesCombined],
+  ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
-  ["Approval Workflow", "settings", ClipboardCheck],
-  ["Notifications", "settings", Bell],
-  ["Workspace Settings", "settings", Settings2],
-  ["My Profile", "profile", UserRound],
-  ["Security Settings", "profile", ShieldCheck],
-  ["Account Limit Requests", "users", Users],
+  ["Settings", "settings", Settings2],
+  ["Profile", "profile", UserRound],
 ] as const;
 
-const adminSections = [
-  { label: "Company Management", icon: Building2, items: adminNav.slice(1, 6) },
-  { label: "Account & Access Management", icon: Users, items: [...adminNav.slice(6, 11), adminNav[41]] },
-  { label: "AI Processing", icon: ScanLine, items: adminNav.slice(11, 15) },
-  { label: "Extraction Performance", icon: ChartNoAxesCombined, items: adminNav.slice(15, 20) },
-  { label: "Platform Records", icon: FileCheck2, items: adminNav.slice(20, 24) },
-  { label: "Reports & Analytics", icon: ChartNoAxesCombined, items: [
-    ["Platform Usage", "performance", ChartNoAxesCombined],
-    ["Processing Performance", "performance", ChartNoAxesCombined],
-    ["Extraction Quality", "performance", ChartNoAxesCombined],
-    ["Failure Trends", "performance", ChartNoAxesCombined],
-    ["Operational Exports", "performance", ChartNoAxesCombined],
-  ] },
-  { label: "Security & Audit", icon: Activity, items: adminNav.slice(24, 29) },
-  { label: "System Operations", icon: Settings2, items: adminNav.slice(29, 34) },
-  { label: "System Settings", icon: Settings2, items: adminNav.slice(34, 39) },
-  { label: "Account", icon: UserRound, items: adminNav.slice(39, 41) },
-] as const;
-
-const companySections = [
-  { label: "Documents", icon: Files, items: companyNav.slice(1, 7) },
-  { label: "Digital Shoebox", icon: Upload, items: companyNav.slice(7, 11) },
-  { label: "Review & Approval", icon: ClipboardCheck, items: companyNav.slice(11, 15) },
-  { label: "Exceptions", icon: ShieldCheck, items: companyNav.slice(15, 19) },
-  { label: "Contacts", icon: Users, items: companyNav.slice(19, 22) },
-  { label: "Standardised Records", icon: FileCheck2, items: companyNav.slice(22, 26) },
-  { label: "Money In & Money Out", icon: ArrowDownToLine, items: [
-    ["Money In", "money-in", ArrowDownToLine],
-    ["Money Out", "money-out", ArrowUpFromLine],
-  ] },
-  { label: "Reports & Exports", icon: ChartNoAxesCombined, items: companyNav.slice(26, 31) },
-  { label: "Audit Trail", icon: Activity, items: companyNav.slice(31, 35) },
-  { label: "Team Management", icon: Users, items: [...companyNav.slice(35, 40), companyNav[47]] },
-  { label: "Company Settings", icon: Settings2, items: companyNav.slice(40, 45) },
-  { label: "Account", icon: UserRound, items: companyNav.slice(45, 47) },
-] as const;
-
-const accountantSections = [
-  { label: "Dashboard", icon: LayoutDashboard, items: [["Dashboard", "dashboard", LayoutDashboard]] },
-  { label: "Documents", icon: Files, items: [["All Documents", "documents", Files], ["Sales Invoices", "documents", Files], ["Purchase Bills", "documents", Files], ["Receipts", "documents", Files], ["Credit Notes", "documents", Files], ["Debit Notes", "documents", Files]] },
-  { label: "Digital Shoebox", icon: Upload, items: [["Upload Documents", "upload", Upload], ["Processing Queue", "documents", ScanLine], ["Failed Processing", "documents", ShieldCheck]] },
-  { label: "Review & Approval", icon: ClipboardCheck, items: [["My Review Queue", "documents", ClipboardCheck], ["My Submitted Approvals", "documents", ClipboardCheck], ["Returned for Correction", "documents", ClipboardCheck], ["Review History", "records", FileCheck2]] },
-  { label: "Exceptions", icon: ShieldCheck, items: [["All Exceptions", "exceptions", ShieldCheck], ["Blocking Errors", "exceptions", ShieldCheck], ["Warnings", "exceptions", ShieldCheck], ["Resolved Exceptions", "exceptions", ShieldCheck]] },
-  { label: "Contacts", icon: Users, items: [["Customers", "contacts", Users], ["Suppliers", "contacts", Users], ["Contact Matching", "contacts", Users]] },
-  { label: "Standardised Records", icon: FileCheck2, items: [["All Records", "records", FileCheck2], ["Sales Records", "records", FileCheck2], ["Purchase Records", "records", FileCheck2], ["Record Amendments", "records", FileCheck2]] },
-  { label: "Money In & Money Out", icon: ArrowDownToLine, items: [
-    ["Money In", "money-in", ArrowDownToLine],
-    ["Money Out", "money-out", ArrowUpFromLine],
-  ] },
-  { label: "Reports & Exports", icon: ChartNoAxesCombined, items: [["Processing Reports", "reports", ChartNoAxesCombined], ["Validation Reports", "reports", ChartNoAxesCombined], ["Review Reports", "reports", ChartNoAxesCombined], ["Document Register", "reports", ChartNoAxesCombined], ["Export History", "reports", ChartNoAxesCombined]] },
-  { label: "Audit Trail", icon: Activity, items: [["All Activities", "reports", Activity], ["Document Changes", "reports", Activity], ["Approvals", "reports", Activity], ["Security Events", "reports", Activity]] },
-  { label: "Control Panel", icon: Settings2, items: [["Notifications", "profile", Bell], ["My Profile", "profile", UserRound], ["Settings", "profile", Settings2]] },
+const accountantNav = [
+  ["Dashboard", "dashboard", LayoutDashboard],
+  ["Documents", "documents", Files],
+  ["Upload", "upload", Upload],
+  ["Exceptions", "exceptions", ShieldCheck],
+  ["Standardised Records", "records", FileCheck2],
+  ["Money In", "money-in", ArrowDownToLine],
+  ["Money Out", "money-out", ArrowUpFromLine],
+  ["Reports", "reports", ChartNoAxesCombined],
+  ["Profile", "profile", UserRound],
 ] as const;
 
 export function AppShell({
@@ -208,7 +102,6 @@ export function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -217,9 +110,6 @@ export function AppShell({
   const [notifications, setNotifications] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    Dashboard: true,
-  });
   const sidebarRef = useRef<HTMLElement>(null);
   const rail = !pinned && !peek;
 
@@ -279,7 +169,6 @@ export function AppShell({
     async () => ({
       tenants: user.role === "SUPER_ADMIN" ? await getTenants(user) : [],
       audit: await getAuditLogs(user),
-      navigation: await getWorkspaceNavigation(user).catch(() => [] as WorkspaceModule[]),
       pending:
         user.role === "SUPER_ADMIN"
           ? (await getCompanyRequests(user)).filter(
@@ -291,51 +180,19 @@ export function AppShell({
   );
 
   const isAdmin = user.role === "SUPER_ADMIN";
+  const isCompanyAdmin = user.role === "LOCAL_ADMIN";
   const prefix = isAdmin
     ? "admin"
-    : user.role === "LOCAL_ADMIN"
+    : isCompanyAdmin
       ? "company"
       : "workspace";
-  const roleSections = isAdmin ? adminSections : companySections;
-  const navigationSections = useMemo(() => {
-    const modules = data.data?.navigation ?? [];
-    if (!modules.length || user.role === "ACCOUNTANT") return null;
 
-    const iconMap = {
-      dashboard: LayoutDashboard,
-      documents: Files,
-      upload: Upload,
-      processing: ScanLine,
-      failed: ShieldCheck,
-      review: ClipboardCheck,
-      approval: ClipboardCheck,
-      exceptions: ShieldCheck,
-      contacts: Users,
-      records: FileCheck2,
-      reports: ChartNoAxesCombined,
-      audit: Activity,
-      users: Users,
-      settings: Settings2,
-      profile: UserRound,
-      companies: Building2,
-      performance: ChartNoAxesCombined,
-      health: Activity,
-      folder: Files,
-    } as const;
-    const groups = new Map<string, Array<readonly [string, string, typeof Files]>>();
-    for (const workspaceModule of modules) {
-      const Icon = iconMap[workspaceModule.icon as keyof typeof iconMap] ?? Files;
-      const items = groups.get(workspaceModule.section) ?? [];
-      items.push([workspaceModule.label, workspaceModule.route, Icon] as const);
-      groups.set(workspaceModule.section, items);
-    }
-    return Array.from(groups, ([label, items]) => ({
-      label,
-      icon: items[0]?.[2] ?? Files,
-      items,
-    }));
-  }, [data.data?.navigation, user.role]);
-  const effectiveRoleSections = navigationSections ?? roleSections;
+  const nav = isAdmin
+    ? adminNav
+    : isCompanyAdmin
+      ? companyNav
+      : accountantNav;
+
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
   const latestActivity = data.data?.audit.slice(0, 4) ?? [];
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
@@ -401,7 +258,7 @@ export function AppShell({
             <span>
               {isAdmin
                 ? "Super Admin"
-                : user.role === "LOCAL_ADMIN"
+                : isCompanyAdmin
                   ? "Company Admin"
                   : "Accountant"}{user.tenantCode ? ` | ${user.tenantCode}` : ""}
             </span>
@@ -409,117 +266,25 @@ export function AppShell({
         </div>
         <div className="nav-label">WORKSPACE</div>
         <nav>
-          {user.role === "ACCOUNTANT" ? accountantSections.map((section) => {
-            const SectionIcon = section.icon;
-            if (section.label === "Dashboard") {
-              return (
-                <Link
-                  key="accountant-dashboard"
-                  href={`/${prefix}/dashboard`}
-                  aria-current={currentPage === "dashboard" ? "page" : undefined}
-                  onClick={() => setOpen(false)}
-                  className={`nav-item ${currentPage === "dashboard" ? "active" : ""}`}
-                  title="Dashboard"
-                >
-                  <SectionIcon size={17} />
-                  <span>Dashboard</span>
-                </Link>
-              );
-            }
+          {nav.map(([label, path, Icon], i) => {
+            const active = currentPage === path;
             return (
-            <div className="nav-section" key={section.label}>
-              <button
-                type="button"
-                className="nav-section-label"
-                aria-expanded={expandedSections[section.label] ?? false}
-                onClick={() => {
-                  setExpandedSections((current) => ({
-                    ...current,
-                    [section.label]: true,
-                  }));
-                  const firstItem = section.items[0];
-                  const firstIsUpload = firstItem[0] === "Upload Documents";
-                  const firstIsMoney = ["money-in", "money-out"].includes(firstItem[1]);
-                  router.push(firstIsUpload ? `/${prefix}/upload` : firstIsMoney ? `/${prefix}/${firstItem[1]}` : `/${prefix}/${firstItem[1]}/view-${firstItem[0].toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
-                }}
+              <Link
+                key={path}
+                href={`/${prefix}/${path}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setOpen(false)}
+                className={`nav-item ${active ? "active" : ""} ${i === nav.length - 2 ? "nav-separator" : ""}`}
+                title={label}
               >
-                <SectionIcon className="nav-section-icon" size={16} aria-hidden="true" />
-                <span>{section.label}</span>
-                <ChevronDown
-                  size={15}
-                  aria-hidden="true"
-                  className={expandedSections[section.label] ? "nav-section-chevron expanded" : "nav-section-chevron"}
-                />
-              </button>
-              {expandedSections[section.label] && section.items.map(([label, path, Icon]) => {
-                const documentTab = label === "All Documents" ? "all" : label === "Sales Invoices" ? "sales-invoices" : label === "Purchase Bills" ? "purchase-bills" : label === "Receipts" ? "receipts" : label === "Credit Notes" ? "credit-notes" : label === "Debit Notes" ? "debit-notes" : "";
-                const uploadItem = label === "Upload Documents";
-                const profileItem = label === "My Profile";
-                const moneyItem = path === "money-in" || path === "money-out";
-                const reportItem = path === "reports";
-                const auditItem = section.label === "Audit Trail";
-                const reportTab = auditItem ? "audit" : label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                const itemHref = uploadItem || profileItem
-                  ? `/${prefix}/${uploadItem ? "upload" : "profile"}`
-                  : moneyItem
-                  ? `/${prefix}/${path}`
-                  : reportItem || auditItem
-                  ? `/${prefix}/reports?tab=${reportTab}`
-                  : documentTab
-                  ? `/${prefix}/documents${documentTab === "all" ? "" : `?tab=${documentTab}`}`
-                  : `/${prefix}/${path}/view-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-                const itemActive = uploadItem || profileItem
-                  ? pathname === `/${prefix}/${uploadItem ? "upload" : "profile"}`
-                  : reportItem || auditItem
-                  ? pathname === `/${prefix}/reports` && searchParams.get("tab") === reportTab
-                  : documentTab
-                  ? pathname === `/${prefix}/documents` && (searchParams.get("tab") || "all") === documentTab
-                  : pathname === itemHref;
-
-                return (
-                  <Link
-                    key={`${section.label}-${label}`}
-                    href={itemHref}
-                    aria-current={itemActive ? "page" : undefined}
-                    onClick={() => setOpen(false)}
-                    className={`nav-item nav-subitem ${itemActive ? "active" : ""}`}
-                    title={label}
-                  >
-                    <Icon size={17} /><span>{label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          );
-          }) : <>
-            <Link
-              href={`/${prefix}/dashboard`}
-              aria-current={currentPage === "dashboard" ? "page" : undefined}
-              onClick={() => setOpen(false)}
-              className={`nav-item ${currentPage === "dashboard" ? "active" : ""}`}
-              title="Dashboard"
-            >
-              <LayoutDashboard size={18} /><span>Dashboard</span>
-            </Link>
-            {effectiveRoleSections.map((section) => {
-            const SectionIcon = section.icon;
-            const expanded = expandedSections[section.label] ?? false;
-            return <div className="nav-section role-navigation" key={section.label}>
-              <button type="button" className="nav-section-label" aria-expanded={expanded} onClick={() => setExpandedSections((current) => ({ ...current, [section.label]: !expanded }))}>
-                <SectionIcon className="nav-section-icon" size={16} /><span>{section.label}</span><ChevronDown size={15} className={expanded ? "nav-section-chevron expanded" : "nav-section-chevron"} />
-              </button>
-              {expanded && section.items.map(([label, path, Icon], i) => {
-                // Local Admin approval items use the existing tenant review page;
-                // Super Admin approvals has its own protected route.
-                const resolvedPath = !isAdmin && path === "approvals" ? "documents" : path;
-                const active = currentPage === resolvedPath;
-                return <Link key={`${section.label}-${label}`} href={`/${prefix}/${resolvedPath}`} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-item nav-subitem ${active ? "active" : ""} ${i === section.items.length - 1 && section.label === "Account" ? "nav-separator" : ""}`} title={label}>
-                  <Icon size={17} /><span>{label}</span>{path === "approvals" && !!data.data?.pending && <span className="nav-count">{data.data.pending}</span>}
-                </Link>;
-              })}
-            </div>;
-            })}
-          </>}
+                <Icon size={18} />
+                <span>{label}</span>
+                {path === "approvals" && !!data.data?.pending && (
+                  <span className="nav-count">{data.data.pending}</span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
         <div className="sidebar-bottom">
           <div className="system-health">
@@ -567,9 +332,6 @@ export function AppShell({
                 aria-label="Go back to the previous page"
                 title="Go back"
                 onClick={() => {
-                  // A direct visit has no useful in-app destination. In that
-                  // case, return to the current workspace dashboard instead
-                  // of leaving the application through browser history.
                   if (window.history.length > 1) {
                     router.back();
                   } else {
@@ -580,6 +342,13 @@ export function AppShell({
                 <ArrowLeft size={17} />
               </button>
             )}
+            <Link className="breadcrumb-home" href={`/${prefix}/dashboard`}>
+              {isAdmin ? "SAIC Platform" : (user.tenantName || tenant?.name)}
+            </Link>
+            <span className="crumb-divider">/</span>
+            <strong>
+              {nav.find((n) => n[1] === currentPage)?.[0] ?? "Overview"}
+            </strong>
           </div>
           <div className="topbar-right">
             <button
@@ -740,4 +509,3 @@ export function AppShell({
     </div>
   );
 }
-
