@@ -6754,3 +6754,83 @@ dialog {
 .sidebar.rail .sidebar-bottom .nav-item span {
   display: none;
 }
+
+/* Reports page — brand colours and layout
+   Brand: ink #2a3a4a · wash #7aa8c8 · mist #d7f1ff · cream #f6f1e8
+   Append to common.css or dashboard.css. */
+
+.reports-page {
+  gap: 20px;
+}
+
+.reports-summary .stat-card.stat-card-solid:nth-child(1) { background: #2a3a4a !important; }
+.reports-summary .stat-card.stat-card-solid:nth-child(2) { background: #5a7a94 !important; }
+.reports-summary .stat-card.stat-card-solid:nth-child(3) { background: #8a6d4a !important; }
+.reports-summary .stat-card.stat-card-solid:nth-child(4) { background: #7aa8c8 !important; }
+
+.reports-page .report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 16px 18px 18px;
+}
+
+.reports-page .report-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e6eef5;
+  border-radius: 12px;
+  text-align: left;
+  color: #2a3a4a;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.reports-page .report-card:hover {
+  border-color: #7aa8c8;
+  background: #f8fbfd;
+}
+.reports-page .report-card.active {
+  background: #2a3a4a;
+  color: #f6f1e8;
+  border-color: #2a3a4a;
+}
+.reports-page .report-card.active .badge,
+.reports-page .report-card.active span {
+  color: #f6f1e8;
+}
+
+.reports-page .report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f0f4f8;
+}
+.reports-page .report-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid #e6eef5;
+  border-radius: 8px;
+  padding: 0 12px;
+}
+.reports-page .report-search input {
+  border: 0;
+  padding: 8px 0;
+  flex: 1;
+  background: transparent;
+}
+.reports-page .report-result-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: #5e7384;
+  font-weight: 600;
+}
+
