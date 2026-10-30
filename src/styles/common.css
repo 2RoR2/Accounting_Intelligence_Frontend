@@ -6833,4 +6833,20 @@ dialog {
   color: #5e7384;
   font-weight: 600;
 }
+.notification.icon-btn { position: relative; }
+.notification-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: #c47a3a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 
