@@ -1,12 +1,12 @@
-/* Dashboard — reference layout, brand colours
+/* Dashboard — engaging layout, brand colours
    Brand: ink #2a3a4a · wash #7aa8c8 · mist #d7f1ff · cream #f6f1e8
-   Colourful KPI cards on top (theme-matched), white panels below.
+   Mixed feature rows, solid KPI cards, stacked side cards.
    Full width. Import after common.css. */
 
 .dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
   width: 100%;
   max-width: none;
   margin: 0;
@@ -64,7 +64,7 @@
 }
 
 .dashboard-section-title {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.06em;
@@ -72,22 +72,26 @@
   color: #7a90a3;
 }
 
-/* Grids — full width */
+/* Grids */
 .stats-grid,
 .accountant-money-grid,
 .processing-review-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
   width: 100%;
 }
+.processing-review-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 
-/* Base white card */
+/* Base card */
 .stat-card {
   background: #fff;
   border: 1px solid #e6eef5;
   border-radius: 12px;
-  padding: 18px 18px 16px;
+  padding: 16px 16px 14px;
   box-shadow: 0 1px 2px rgba(42, 58, 74, 0.03);
   color: #2a3a4a;
 }
@@ -96,15 +100,15 @@
   align-items: center;
   justify-content: space-between;
   color: #5e7384;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 .stat-card .stat-value {
   display: block;
   margin-top: 8px;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #2a3a4a;
@@ -121,19 +125,20 @@
   color: #2a3a4a;
   border: 0;
   border-radius: 10px;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
 }
 
-/* Solid KPI cards — brand palette */
+/* Solid KPI cards */
 .stat-card.stat-card-solid,
 .accountant-money-grid .stat-card.stat-card-solid,
-.processing-review-grid .stat-card.stat-card-solid {
+.processing-review-grid .stat-card.stat-card-solid,
+.pipeline-health-grid .stat-card.stat-card-solid {
   border: 0 !important;
   color: #f6f1e8 !important;
-  box-shadow: 0 2px 6px rgba(42, 58, 74, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(42, 58, 74, 0.1) !important;
 }
 .stat-card.stat-card-solid .stat-top,
 .stat-card.stat-card-solid .stat-value,
@@ -144,49 +149,98 @@
 .stat-card.stat-card-solid .stat-top {
   opacity: 0.9;
   text-transform: uppercase;
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.04em;
 }
 .stat-card.stat-card-solid .stat-foot,
 .stat-card.stat-card-solid .stat-detail {
-  opacity: 0.82;
+  opacity: 0.8;
   font-size: 12px;
 }
 .stat-card.stat-card-solid .stat-icon {
-  background: rgba(246, 241, 232, 0.18) !important;
+  background: rgba(246, 241, 232, 0.2) !important;
   color: #f6f1e8 !important;
   border: 0 !important;
 }
 
-/* Pipeline health — brand solid cards */
+/* Pipeline health colours */
 .pipeline-health-grid .stat-card.stat-card-solid:nth-child(1) { background: #2a3a4a !important; }
 .pipeline-health-grid .stat-card.stat-card-solid:nth-child(2) { background: #5a7a94 !important; }
 .pipeline-health-grid .stat-card.stat-card-solid:nth-child(3) { background: #8a6d4a !important; }
 .pipeline-health-grid .stat-card.stat-card-solid:nth-child(4) { background: #7aa8c8 !important; }
+
+/* Money position */
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(1) { background: #2a3a4a !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(2) { background: #3d5266 !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(3) { background: #5a7a94 !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(4) { background: #7aa8c8 !important; }
 
-/* Processing — wash / mist / cream accents */
+/* Processing */
 .processing-review-grid .stat-card.stat-card-solid:nth-child(1) { background: #7aa8c8 !important; }
 .processing-review-grid .stat-card.stat-card-solid:nth-child(2) { background: #5a8fb0 !important; }
 .processing-review-grid .stat-card.stat-card-solid:nth-child(3) { background: #8a6d4a !important; }
 .processing-review-grid .stat-card.stat-card-solid:nth-child(4) { background: #6b4e4e !important; }
 
-/* Middle layout */
-.dashboard-middle {
+/* Feature row — trend + stacked side cards */
+.dashboard-feature-row {
   display: grid;
-  grid-template-columns: 1.55fr 0.75fr;
+  grid-template-columns: 1.6fr 0.7fr;
   gap: 16px;
   width: 100%;
 }
-.outstanding-grid {
+.dashboard-feature-row-reverse {
+  grid-template-columns: 0.7fr 1.3fr;
+}
+.dashboard-side-stack {
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 10px;
+}
+.side-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: #f6f1e8;
+  box-shadow: 0 2px 6px rgba(42, 58, 74, 0.08);
+}
+.side-card strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.side-card span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.side-card-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(246, 241, 232, 0.18);
+  flex-shrink: 0;
+}
+.side-card-ink { background: #2a3a4a; }
+.side-card-wash { background: #5a7a94; }
+.side-card-cream { background: #8a6d4a; }
+.side-card-mist { background: #7aa8c8; }
+
+/* Middle layout */
+.dashboard-middle {
+  display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
   width: 100%;
 }
+.outstanding-grid { grid-template-columns: 1fr 1fr; }
 
-/* White panels */
+/* Panels */
 .panel {
   background: #fff;
   border: 1px solid #e6eef5;
@@ -266,8 +320,8 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  height: 140px;
-  padding: 8px 4px 0;
+  height: 160px;
+  padding: 12px 8px 0;
 }
 .dashboard-trend-placeholder > div {
   flex: 1;
@@ -281,9 +335,9 @@
 .dashboard-trend-placeholder i {
   display: block;
   width: 100%;
-  max-width: 22px;
+  max-width: 24px;
   border-radius: 4px 4px 2px 2px;
-  background: #7aa8c8;
+  background: linear-gradient(180deg, #7aa8c8 0%, #2a3a4a 100%);
 }
 .dashboard-trend-placeholder span { font-size: 11px; color: #7a90a3; }
 
@@ -343,16 +397,26 @@
 
 @media (max-width: 1100px) {
   .stats-grid,
-  .accountant-money-grid,
-  .processing-review-grid {
+  .accountant-money-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .dashboard-feature-row,
+  .dashboard-feature-row-reverse,
   .dashboard-middle,
-  .outstanding-grid { grid-template-columns: 1fr; }
+  .outstanding-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-side-stack {
+    grid-template-rows: none;
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 @media (max-width: 640px) {
   .dashboard-intro { flex-direction: column; align-items: flex-start; }
   .stats-grid,
   .accountant-money-grid,
-  .processing-review-grid { grid-template-columns: 1fr; }
+  .processing-review-grid,
+  .dashboard-side-stack {
+    grid-template-columns: 1fr;
+  }
 }
