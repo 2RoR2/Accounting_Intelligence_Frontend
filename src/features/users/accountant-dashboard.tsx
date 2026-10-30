@@ -148,26 +148,30 @@ export function AccountantDashboard({
       </div>
 
       {/* Pipeline health — aligned with success criteria */}
-      <div className="stats-grid">
+      <div className="stats-grid pipeline-health-grid">
         <StatCard
+          variant="solid"
           label="Documents in workspace"
           value={docs.length}
           icon={<Files size={17} />}
           detail="Total ingested"
         />
         <StatCard
+          variant="solid"
           label="Standardised"
           value={standardised}
           icon={<FileCheck2 size={17} />}
           detail={`${completionRate}% of total`}
         />
         <StatCard
+          variant="solid"
           label="Open exceptions"
           value={exceptions}
           icon={<AlertCircle size={17} />}
           detail={`${exceptionRate}% exception rate`}
         />
         <StatCard
+          variant="solid"
           label="Pending review"
           value={review}
           icon={<Clock3 size={17} />}
