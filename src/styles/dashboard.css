@@ -158,7 +158,11 @@
   border: 0 !important;
 }
 
-/* Money position — ink / wash tones */
+/* Pipeline health — brand solid cards */
+.pipeline-health-grid .stat-card.stat-card-solid:nth-child(1) { background: #2a3a4a !important; }
+.pipeline-health-grid .stat-card.stat-card-solid:nth-child(2) { background: #5a7a94 !important; }
+.pipeline-health-grid .stat-card.stat-card-solid:nth-child(3) { background: #8a6d4a !important; }
+.pipeline-health-grid .stat-card.stat-card-solid:nth-child(4) { background: #7aa8c8 !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(1) { background: #2a3a4a !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(2) { background: #3d5266 !important; }
 .accountant-money-grid .stat-card.stat-card-solid:nth-child(3) { background: #5a7a94 !important; }
