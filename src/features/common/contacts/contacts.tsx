@@ -1,46 +1,157 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Search } from "lucide-react";
 import { getCustomers, getSuppliers } from "@/lib/api/workflow.service";
-import type { User } from "@/types";
-import { ErrorState, Panel } from "@/components/common/ui";
+import { getDocuments } from "@/lib/api/document.service";
+import type { Document, User } from "@/types";
+import { Badge, ErrorState, Panel } from "@/components/common/ui";
 
-type Contact = { id: string; name: string; registrationNumber?: string; address?: string };
+type Contact = {
+  id: string;
+  name: string;
+  registrationNumber?: string;
+  address?: string;
+  type: "Customer" | "Supplier";
+};
 
 export function ContactsPage({ user }: { user: User }) {
-  const [customers, setCustomers] = useState<Contact[]>([]);
-  const [suppliers, setSuppliers] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Contact | null>(null);
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCustomers(), getSuppliers()])
-      .then(([customerRows, supplierRows]) => {
+    Promise.all([getCustomers(), getSuppliers(), getDocuments(user)])
+      .then(([customers, suppliers, docs]) => {
         if (!active) return;
-        setCustomers(customerRows);
-        setSuppliers(supplierRows);
+        setContacts([
+          ...customers.map((c) => ({ ...c, type: "Customer" as const })),
+          ...suppliers.map((s) => ({ ...s, type: "Supplier" as const })),
+        ]);
+        setDocuments(docs);
       })
-      .catch((reason) => active && setError(reason instanceof Error ? reason.message : "Unable to load contacts."));
-    return () => { active = false; };
-  }, [user.id]);
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load contacts.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
-  const rows = [
-    ...customers.map((contact) => ({ ...contact, type: "Customer" })),
-    ...suppliers.map((contact) => ({ ...contact, type: "Supplier" })),
-  ];
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.registrationNumber || "").toLowerCase().includes(q),
+    );
+  }, [contacts, query]);
+
+  const related = useMemo(() => {
+    if (!selected) return [];
+    const name = selected.name.trim().toLowerCase();
+    return documents.filter((doc) => {
+      const party = selected.type === "Supplier" ? doc.supplier : doc.customer;
+      return (party || "").trim().toLowerCase() === name;
+    });
+  }, [selected, documents]);
 
   return (
-    <>
+    <div className="contacts-page">
       <header className="page-header">
-        <div><p className="eyebrow">DIRECTORY</p><h1>Contacts</h1><p>Customers and suppliers used for document matching.</p></div>
+        <div>
+          <p className="eyebrow">DIRECTORY</p>
+          <h1>Contacts</h1>
+          <p>Find a customer or supplier, then open their documents for checking.</p>
+        </div>
       </header>
-      {error ? <ErrorState message={error} /> : <Panel title={`Customers & suppliers (${rows.length})`} subtitle="Tenant-scoped contact records">
-        {rows.length === 0 ? <p className="empty-state">No contacts have been added to this workspace yet.</p> : (
-          <div className="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Registration</th><th>Address</th></tr></thead><tbody>
-            {rows.map((contact) => <tr key={`${contact.type}-${contact.id}`}><td><strong>{contact.name}</strong></td><td>{contact.type}</td><td>{contact.registrationNumber || "—"}</td><td>{contact.address || "—"}</td></tr>)}
-          </tbody></table></div>
-        )}
-      </Panel>}
-    </>
+
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <div className="contacts-layout">
+          <Panel title="Customers & suppliers" subtitle={`${filtered.length} shown`}>
+            <div className="contacts-search">
+              <Search size={16} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name or registration"
+              />
+            </div>
+            {filtered.length === 0 ? (
+              <p className="empty-state">No contacts match your search.</p>
+            ) : (
+              <ul className="contacts-list">
+                {filtered.map((contact) => (
+                  <li key={`${contact.type}-${contact.id}`}>
+                    <button
+                      type="button"
+                      className={selected?.id === contact.id && selected.type === contact.type ? "active" : ""}
+                      onClick={() => setSelected(contact)}
+                    >
+                      <strong>{contact.name}</strong>
+                      <span>{contact.type}</span>
+                      <small>{contact.registrationNumber || "No registration"}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title={selected ? selected.name : "Related documents"}
+            subtitle={selected ? `${related.length} document${related.length === 1 ? "" : "s"}` : "Select a contact"}
+          >
+            {!selected ? (
+              <p className="empty-state">Choose a customer or supplier to see their documents.</p>
+            ) : related.length === 0 ? (
+              <p className="empty-state">No documents linked to this contact yet.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {related.map((doc) => (
+                      <tr key={doc.id}>
+                        <td>
+                          <strong>{doc.name}</strong>
+                          <small>{doc.code || doc.id}</small>
+                        </td>
+                        <td>{doc.type}</td>
+                        <td>
+                          <Badge>{doc.status}</Badge>
+                        </td>
+                        <td>{new Date(doc.createdAt).toLocaleDateString("en-MY")}</td>
+                        <td>
+                          <Link className="text-link" href={`${base}/documents/${doc.id}`}>
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </div>
+      )}
+    </div>
   );
 }
