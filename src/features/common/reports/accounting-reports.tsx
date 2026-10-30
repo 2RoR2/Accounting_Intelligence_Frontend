@@ -66,7 +66,6 @@ export function AccountingReportsPage({ user }: { user: User }) {
   return (
     <div className="dashboard-page reports-page">
       <PageHeader
-        eyebrow="REPORTS"
         title="Standard accounting reports"
         description="Chart of Accounts, Balance Sheet, and Profit & Loss from standardised records. For internal review only — not statutory filing."
         actions={
