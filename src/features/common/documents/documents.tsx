@@ -234,7 +234,10 @@ export function UploadPage({ user }: { user: User }) {
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
         let consecutivePollErrors = 0;
-        const pollingDeadline = Date.now() + 300_000;
+        // Extraction can legitimately outlive a few transient Render/Redis
+        // requests. Keep the durable job and continue polling instead of
+        // turning a temporary refresh failure into an upload failure.
+        const pollingDeadline = Date.now() + 600_000;
         while (!terminal && Date.now() < pollingDeadline) {
           try {
             const job = await getProcessingJob(doc.jobId);
@@ -254,9 +257,7 @@ export function UploadPage({ user }: { user: User }) {
             const transient = status === undefined || status === 429 || (status >= 500 && status <= 599) || error instanceof TypeError || error instanceof DOMException;
             if (!transient) throw error;
             consecutivePollErrors += 1;
-            if (consecutivePollErrors >= 3) {
-              throw new Error(`${file.name} processing status could not be refreshed after several attempts.`);
-            }
+            if (consecutivePollErrors >= 12) break;
             setStage(`${file.name} · reconnecting to processing status…`);
           }
           if (!terminal) {
