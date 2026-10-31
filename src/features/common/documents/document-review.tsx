@@ -235,7 +235,11 @@ export function DocumentReview({
               }
             >
               <RefreshCw size={16} />{" "}
-              {failed ? "Retry extraction" : "Waiting for Docling extraction"}
+              {failed
+                ? "Retry extraction"
+                : data.doc.mimeType?.startsWith("image/")
+                  ? "Waiting for image extraction"
+                  : "Waiting for Docling extraction"}
             </button>
           </div>
         </Panel>
