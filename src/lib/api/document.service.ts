@@ -40,6 +40,10 @@ export async function getDocuments(user: User, filters: DocumentSearch = {}) {
 export async function getDocument(user: User, documentId: string) {
   return mapDocument(await get<Document & { kind?: string }>(`/api/documents/${documentId}`));
 }
+export async function deleteDocument(user: User, documentId: string) {
+  requireRole(user, ["LOCAL_ADMIN"]);
+  return api<{ deleted: boolean; id: string }>(`/api/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+}
 export async function getExtraction(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   return mapExtraction(await get<ExtractionResponse>("/api/documents/" + documentId + "/extraction"));

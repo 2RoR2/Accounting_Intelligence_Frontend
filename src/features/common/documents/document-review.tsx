@@ -6,6 +6,7 @@ import type { ExtractedField, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   retryDocumentProcessing,
+  deleteDocument,
   getDocument,
   getExceptions,
   getExtraction,
@@ -189,6 +190,22 @@ export function DocumentReview({
             <Link href={`${base}/documents`} className="btn">
               All documents
             </Link>
+            {user.role === "LOCAL_ADMIN" && (
+              <button
+                type="button"
+                className="btn danger"
+                disabled={busy}
+                onClick={() => {
+                  if (!window.confirm("Delete this unreviewed document and its source file? This cannot be undone.")) return;
+                  void run(async () => {
+                    await deleteDocument(user, documentId);
+                    window.location.assign(`${base}/documents`);
+                  }, "Document deleted.");
+                }}
+              >
+                Delete document
+              </button>
+            )}
           </>
         }
       />

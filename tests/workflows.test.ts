@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const baseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8002";
+const baseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 const headers = { Accept: "application/json", "X-Requested-With": "AccountingIntelligence" };
 
 async function backendIsRunning() {
