@@ -164,7 +164,7 @@ export function DocumentList({ user }: { user: User }) {
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
             {
               label: "Processing",
-              render: (d) => (d.status === "FAILED" ? "—" : `${d.seconds} sec`),
+    render: (d) => (d.status === "FAILED" || !d.seconds ? "—" : `${d.seconds} sec`),
             },
             { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
             {
