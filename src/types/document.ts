@@ -7,8 +7,6 @@ export interface Document {
   assignedTo: string | null;
   name: string;
   type: string;
-  /** MIME type returned by the document API, used to select the extraction label. */
-  mimeType?: string;
   kind?: string;
   code?: string;
   category?: string;

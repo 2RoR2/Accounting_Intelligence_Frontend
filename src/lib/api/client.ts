@@ -22,7 +22,7 @@ function apiUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   headers.set("X-Requested-With", "AccountingIntelligence");
@@ -44,15 +44,6 @@ export async function api<T>(path: string, init: RequestInit = {}, allowRefresh 
     // send 200 headers while the database-backed JSON response is still
     // blocked, which previously left the UI in a permanent loading state.
     const body = await response.json().catch(() => null);
-    if (response.status === 401 && allowRefresh && !path.startsWith("/api/auth/refresh") && !path.startsWith("/api/auth/login") && !path.startsWith("/api/auth/verify-mfa")) {
-      const refreshed = await fetch(apiUrl("/api/auth/refresh"), {
-        method: "POST",
-        credentials: "include",
-        headers: { Accept: "application/json", "X-Requested-With": "AccountingIntelligence" },
-        cache: "no-store",
-      });
-      if (refreshed.ok) return api<T>(path, init, false);
-    }
     if (!response.ok) {
       const detail = body && typeof body.detail === "string"
         ? body.detail

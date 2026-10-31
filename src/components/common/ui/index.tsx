@@ -132,17 +132,10 @@ export function EmptyState({
 export function LoadingState() {
   return (
     <div className="loading-state" role="status" aria-live="polite" aria-busy="true">
-      <div className="loading-skeleton-shell" aria-hidden="true">
-        <div className="loading-skeleton-heading"><span /><span /><i /></div>
-        <div className="loading-skeleton-toolbar"><i /><i /><b /></div>
-        <div className="loading-skeleton-stats"><div /><div /><div /><div /></div>
-        <div className="loading-skeleton-table">
-          <div className="loading-skeleton-table-head"><i /><i /><i /><i /><i /></div>
-          <div className="loading-skeleton-table-row"><i /><i /><i /><i /><i /></div>
-          <div className="loading-skeleton-table-row"><i /><i /><i /><i /><i /></div>
-          <div className="loading-skeleton-table-row"><i /><i /><i /><i /><i /></div>
-          <div className="loading-skeleton-table-row"><i /><i /><i /><i /><i /></div>
-        </div>
+      <div className="loading-skeleton-grid" aria-hidden="true">
+        <div className="loading-skeleton-card loading-skeleton-wide"><i /><i /><b /><b /><em /><em /><em /></div>
+        <div className="loading-skeleton-card"><i /><i /><b /><b /><em /><em /></div>
+        <div className="loading-skeleton-card"><i /><i /><b /><b /><em /><em /></div>
       </div>
       <strong>Preparing your workspace</strong>
       <span>Loading Accounting Intelligence…</span>
