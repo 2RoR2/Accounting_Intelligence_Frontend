@@ -374,32 +374,34 @@ export function Dashboard({ user }: { user: User }) {
         </Panel>
       ) : (
         <div className={local ? "dashboard-middle" : "single-grid"}>
-          <Panel
-            title="Recent documents"
-            action={
-              <Link href={`${base}/documents`} className="text-link">
-                View all <ArrowRight size={14} />
-              </Link>
-            }
-          >
-            <DataTable
-              rows={data.docs.slice(0, 5)}
-              rowKey={(d) => d.id}
-              columns={[
-                {
-                  label: "Document",
-                  render: (d) => (
-                    <Link className="document-link" href={`${base}/documents/${d.id}`}>
-                      <Files size={16} />
-                      {d.name}
-                    </Link>
-                  ),
-                },
-                { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
-                { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
-              ]}
-            />
-          </Panel>
+          {local && (
+            <Panel
+              title="Recent documents"
+              action={
+                <Link href={`${base}/documents`} className="text-link">
+                  View all <ArrowRight size={14} />
+                </Link>
+              }
+            >
+              <DataTable
+                rows={data.docs.slice(0, 5)}
+                rowKey={(d) => d.id}
+                columns={[
+                  {
+                    label: "Document",
+                    render: (d) => (
+                      <Link className="document-link" href={`${base}/documents/${d.id}`}>
+                        <Files size={16} />
+                        {d.name}
+                      </Link>
+                    ),
+                  },
+                  { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
+                  { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
+                ]}
+              />
+            </Panel>
+          )}
           {local && (
             <Panel title="Your team" subtitle="Active accounts and reserved invitations">
               <div className="panel-body">
