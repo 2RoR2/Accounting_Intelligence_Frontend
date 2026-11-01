@@ -85,7 +85,9 @@ export function ContactsPage({ user }: { user: User }) {
               />
             </div>
             {filtered.length === 0 ? (
-              <p className="empty-state">No contacts match your search.</p>
+              <div className="panel-body">
+                <p className="empty-state">No contacts match your search.</p>
+              </div>
             ) : (
               <ul className="contacts-list">
                 {filtered.map((contact) => (
@@ -110,9 +112,13 @@ export function ContactsPage({ user }: { user: User }) {
             subtitle={selected ? `${related.length} document${related.length === 1 ? "" : "s"}` : "Select a contact"}
           >
             {!selected ? (
-              <p className="empty-state">Choose a customer or supplier to see their documents.</p>
+              <div className="panel-body">
+                <p className="empty-state">Choose a customer or supplier to see their documents.</p>
+              </div>
             ) : related.length === 0 ? (
-              <p className="empty-state">No documents linked to this contact yet.</p>
+              <div className="panel-body">
+                <p className="empty-state">No documents linked to this contact yet.</p>
+              </div>
             ) : (
               <div className="table-wrap">
                 <table>
