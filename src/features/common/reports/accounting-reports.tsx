@@ -52,9 +52,9 @@ function downloadExcel(filename: string, rows: SummaryRow[]) {
           .map(
             (value) =>
               `<Cell><Data ss:Type="${/^-?\\d+(\\.\\d+)?$/.test(value) ? "Number" : "String"}">${value
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")}</Data></Cell>`,
+                .replaceAll("&", "&")
+                .replaceAll("<", "<")
+                .replaceAll(">", ">")}</Data></Cell>`,
           )
           .join("")}</Row>`,
     )
@@ -210,6 +210,7 @@ export function AccountingReportsPage({ user }: { user: User }) {
   return (
     <div className="dashboard-page reports-page">
       <PageHeader
+        eyebrow="WORKSPACE SUMMARY"
         title="Processing Summary"
         description="Overall totals, status breakdown, and performance against the success criteria. Use Documents, Exceptions, or Standardised Records for detail."
         actions={
@@ -273,7 +274,9 @@ export function AccountingReportsPage({ user }: { user: User }) {
               <strong>{summary.recordCount}</strong>
             </div>
           </div>
-          <p className="empty-state">Export the full list from Standardised Records.</p>
+          <div className="panel-body">
+            <p className="empty-state">Export the full list from Standardised Records.</p>
+          </div>
         </Panel>
       </div>
 
