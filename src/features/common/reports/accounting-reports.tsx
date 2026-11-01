@@ -210,7 +210,6 @@ export function AccountingReportsPage({ user }: { user: User }) {
   return (
     <div className="dashboard-page reports-page">
       <PageHeader
-        eyebrow="WORKSPACE SUMMARY"
         title="Processing Summary"
         description="Overall totals, status breakdown, and performance against the success criteria. Use Documents, Exceptions, or Standardised Records for detail."
         actions={
