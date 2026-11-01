@@ -1554,12 +1554,22 @@ hr {
 .workspace-icon {
   display: grid;
   place-items: center;
+  align-self: center;
   width: 34px;
   height: 34px;
   border-radius: 9px;
   color: #2a3a4a;
   background: #e8eef2;
   border: 1px solid #c5d0d8;
+  line-height: 0;
+}
+
+.workspace-icon svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .nav-label {
@@ -6697,21 +6707,7 @@ dialog {
 }
 
 /* Sidebar icon alignment */
-.workspace-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: #d7f1ff;
-  color: #2a3a4a;
-  border: 1px solid #a8d3f0;
-  flex-shrink: 0;
-}
-.workspace-icon svg {
-  display: block;
-  margin: 0;
-}
+
 
 .sidebar .nav-item {
   display: flex;
