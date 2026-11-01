@@ -7,7 +7,6 @@ import {
   Files,
   ClipboardCheck,
   ArrowRight,
-  Download,
   Plus,
   CheckCircle2,
   Clock3,
@@ -26,7 +25,6 @@ import { getTenantUsers } from "@/lib/api/user.service";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
 import { getPerformanceMetrics } from "@/lib/api/processing.service";
-import { downloadCsv } from "@/lib/api/record.service";
 import {
   AccountUsage,
   Badge,
@@ -108,16 +106,6 @@ export function Dashboard({ user }: { user: User }) {
   const exceptionRate = Math.round((open / denominator) * 100);
   const completionRate = Math.round((completed / denominator) * 100);
 
-  const exportReport = () =>
-    downloadCsv("workspace-report.csv", [
-      ["Metric", "Value"],
-      ["Documents", String(data.docs.length)],
-      ["Standardised", String(completed)],
-      ["Open exceptions", String(open)],
-      ["Exception rate", `${exceptionRate}%`],
-      ...data.metrics.map((m) => [m.label, m.value]),
-    ]);
-
   return (
     <div className="dashboard-page">
       <PageHeader
@@ -138,9 +126,6 @@ export function Dashboard({ user }: { user: User }) {
         }
         actions={
           <>
-            <button className="btn" onClick={exportReport}>
-              <Download size={15} /> Export report
-            </button>
             {!admin && (
               <Link className="btn primary" href={`${base}/upload`}>
                 <Plus size={15} /> Upload
