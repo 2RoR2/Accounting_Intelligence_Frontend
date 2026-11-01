@@ -72,7 +72,7 @@ const companyNav = [
   ["Contacts", "contacts", Users],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
-  ["Reports", "reports", ChartNoAxesCombined],
+  ["Summary", "reports", ChartNoAxesCombined],
   ["Audit Trail", "audit", Activity],
   ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
@@ -89,7 +89,7 @@ const accountantNav = [
   ["Contacts", "contacts", Users],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
-  ["Reports", "reports", ChartNoAxesCombined],
+  ["Summary", "reports", ChartNoAxesCombined],
   ["Profile", "profile", UserRound],
 ] as const;
 
