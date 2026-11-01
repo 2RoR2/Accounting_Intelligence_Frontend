@@ -8,7 +8,6 @@ import {
   ClipboardCheck,
   ArrowRight,
   Plus,
-  CheckCircle2,
   Clock3,
   CircleAlert,
   ScanLine,
@@ -415,32 +414,6 @@ export function Dashboard({ user }: { user: User }) {
           )}
         </div>
       )}
-
-      <Panel
-        title={admin ? "Recent platform activity" : "Recent workspace activity"}
-        action={
-          <Link href={admin || local ? `${base}/audit` : `${base}/documents`} className="text-link">
-            View activity <ArrowRight size={14} />
-          </Link>
-        }
-      >
-        <div className="activity-list">
-          {data.audit.slice(0, 4).map((a) => (
-            <div key={a.id}>
-              <span className="activity-icon">
-                <CheckCircle2 size={16} />
-              </span>
-              <div>
-                <strong>{a.action.toLowerCase().replaceAll("_", " ")}</strong>
-                <p>
-                  {a.user} <span>·</span> {a.resource}
-                </p>
-              </div>
-              <time>{formatDate(a.timestamp)}</time>
-            </div>
-          ))}
-        </div>
-      </Panel>
     </div>
   );
 }
