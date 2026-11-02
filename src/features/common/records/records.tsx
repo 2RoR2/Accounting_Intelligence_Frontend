@@ -115,7 +115,7 @@ export function RecordsPage({
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const records = data.records.filter(
     (r) =>
-      `${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
+      `${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
@@ -127,9 +127,11 @@ export function RecordsPage({
   const exportRows = () =>
     downloadCsv("standardised-records.csv", [
       [
+        "Record",
         "Record ID",
         "Category",
         "Invoice",
+        "Reference",
         "Supplier",
         "Invoice date",
         "Subtotal",
@@ -140,12 +142,14 @@ export function RecordsPage({
         "Validation",
       ],
       ...records.map((r) => [
+        r.code ?? "",
         r.id,
         r.category === "ACCOUNTS_RECEIVABLE"
           ? "Accounts Receivable"
           : "Accounts Payable",
+        r.extraction.fields.invoice?.value ?? "",
+        r.extraction.fields.reference?.value ?? r.extraction.fields.bill_reference?.value ?? r.extraction.fields.receipt_number?.value ?? "",
         ...[
-          "invoice",
           "supplier",
           "date",
           "subtotal",
@@ -343,7 +347,7 @@ export function RecordsPage({
                 label: "Record / invoice",
                 render: (r) => (
                   <div>
-                    <strong>{r.id}</strong>
+                    <strong title={r.id}>{r.code ?? r.id}</strong>
                     <small>{(r.extraction.fields.invoice?.value ?? "")}</small>
                   </div>
                 ),

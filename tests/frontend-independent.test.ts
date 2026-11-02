@@ -17,7 +17,8 @@ test("invalid login and protected-resource 401 retain their distinct server mess
   try {
     await assert.rejects(login("synthetic@example.test", "synthetic"), e => e instanceof ApiError && e.status === 401 && e.message.startsWith("Invalid email"));
     await assert.rejects(get("/api/documents"), e => e instanceof ApiError && e.status === 401 && e.message.startsWith("Sign in with"));
-    assert.equal(calls, 2, "no refresh or mutation replay");
+    // Login never refreshes. A protected 401 tries one refresh, and a failed refresh replays nothing.
+    assert.equal(calls, 3, "login, protected request, one refresh; no replay");
   } finally { globalThis.fetch = previous; }
 });
 test("only auth/me 401 becomes signed out; service, permission and transport failures propagate", async () => {

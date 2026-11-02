@@ -11,34 +11,19 @@ export function PerformanceCards({ metrics }: { metrics: KPI[] }) {
     <div className="kpi-grid">
       {metrics.map((m) => (
         <div className="kpi-card" key={m.label}>
-          <div className="kpi-label">
-            {m.label}
-            <span className="kpi-check">
-              <Check size={12} />
-            </span>
-          </div>
+          <div className="kpi-label">{m.label}</div>
           <div className="kpi-value">
             {m.value}
             <span>{m.change}</span>
           </div>
-          <div className="kpi-target">
-            <span>Target {m.target}</span>
-            <strong>
-              <Check size={12} /> Target met
-            </strong>
-          </div>
-          <div className="kpi-bar">
-            <span
-              style={{
-                width:
-                  m.label === "Exception rate"
-                    ? "76%"
-                    : m.label === "Avg. processing time"
-                      ? "44%"
-                      : m.value,
-              }}
-            />
-          </div>
+          {m.target && (
+            <div className="kpi-target">
+              <span>Target {m.target}</span>
+              <strong>
+                {m.met ? <><Check size={12} /> Target met</> : "Target not met"}
+              </strong>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -58,7 +43,7 @@ export function TrendChart({
     kind === "processed"
       ? "Document processing"
       : kind === "accuracy"
-        ? "Extraction accuracy"
+        ? "Job success rate"
         : "Exception trend";
   if (loading)
     return (
@@ -79,7 +64,7 @@ export function TrendChart({
       : kind === "accuracy"
         ? 100
         : 20;
-  const minimum = kind === "accuracy" ? 80 : 0;
+  const minimum = 0;
   const plotLeft = 58;
   const plotRight = 548;
   const plotTop = 30;
@@ -117,17 +102,8 @@ export function TrendChart({
         {kind === "processed"
           ? "Documents processed"
           : kind === "accuracy"
-            ? "Accuracy (%)"
-            : "Exceptions (%)"}
-        <span className="muted">
-          {period === "day"
-            ? "17 Sep 2026"
-            : period === "week"
-              ? "11–17 Sep 2026"
-              : period === "month"
-                ? "1–17 Sep 2026"
-                : "Jan–Sep 2026"}
-        </span>
+            ? "Job success (%)"
+            : "Exceptions"}
       </div>
       <div className="trend-chart">
         <svg
