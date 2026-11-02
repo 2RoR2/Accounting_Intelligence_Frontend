@@ -73,6 +73,7 @@ const companyNav = [
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
   ["Summary", "reports", ChartNoAxesCombined],
+  ["Evaluation", "evaluation", ChartNoAxesCombined],
   ["Audit Trail", "audit", Activity],
   ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
@@ -90,6 +91,7 @@ const accountantNav = [
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
   ["Summary", "reports", ChartNoAxesCombined],
+  ["Evaluation", "evaluation", ChartNoAxesCombined],
   ["Profile", "profile", UserRound],
 ] as const;
 
@@ -315,11 +317,6 @@ export function AppShell({
           })}
         </nav>
         <div className="sidebar-bottom">
-          <div className="system-health">
-            <span className="pulse-dot" />
-            <span>Systems operational</span>
-            <ArrowUpRight size={13} />
-          </div>
           <button
             type="button"
             className="nav-item"

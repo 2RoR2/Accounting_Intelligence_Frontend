@@ -1,3 +1,4 @@
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -25,6 +26,7 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "users": return <UserManagement user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
     case "reports": return <PerformancePage user={user} />;
+    case "evaluation": return <EvaluationPage />;
     case "audit": return <AuditPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <SettingsPage user={user} />;

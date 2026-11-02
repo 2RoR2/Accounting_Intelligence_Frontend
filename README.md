@@ -101,3 +101,18 @@ export default config;
 ```
 
 Do not add a legacy `tailwindcss` PostCSS plugin configuration; use the installed `@tailwindcss/postcss` package.
+
+## v3.1+ review and evaluation integration
+
+Publish together with the backend v3.1+ integration. The review screen uses the
+backend's AI Assist and validation-review endpoints, keeps source candidates apart
+from model suggestions, and saves accepted values through the existing correction
+API. Currency decisions retain human attribution. Report totals remain separated
+by currency and preserve decimal values; job success is not field accuracy.
+
+`public/evaluation/summary.json` is the historical 3 November 2026 development
+snapshot used by the Evaluation page. It is not recomputed by a frontend build or
+by new uploads. Its conditions, sample sizes, label limitations and unmeasured
+criteria must remain visible; it does not establish independent pilot acceptance
+or fresh measurements of the integrated branches. The accompanying backend PR
+contains the coordinated API, dependency and database compatibility notes.

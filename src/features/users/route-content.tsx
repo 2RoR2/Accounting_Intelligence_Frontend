@@ -1,3 +1,4 @@
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -30,6 +31,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} />;
     case "reports": return <AccountingReportsPage user={user} />;
+    case "evaluation": return <EvaluationPage />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
   }

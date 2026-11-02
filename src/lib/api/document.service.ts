@@ -1,5 +1,7 @@
 import type {
   Document,
+  AiAssistResult,
+  AiAssistState,
   Extraction,
   RecordCategory,
   User,
@@ -10,7 +12,7 @@ import type {
 import type { DocumentKind } from "@/types";
 import { requireRole } from "../permissions";
 import { api, get } from "./client";
-import { mapDocument, mapExtraction, type ExtractionResponse, type ValidationReport, type CorrectionResponse, type RevalidationResponse } from "./document-contract";
+import { mapDocument, mapExtraction, mapValidationReport, type ExtractionResponse, type ValidationReport, type CorrectionResponse, type RevalidationResponse } from "./document-contract";
 import { correctLineItem, type LineFieldKey } from "./workflow.service";
 export type DocumentSearch = {
   q?: string;
@@ -121,7 +123,19 @@ export async function getValidationResults(user: User, documentId: string) {
 }
 export async function getValidationReport(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
-  return get<ValidationReport>("/api/documents/" + documentId + "/validation");
+  return mapValidationReport(await get<ValidationReport>("/api/documents/" + documentId + "/validation"));
+}
+export async function getAiAssist(user: User, documentId: string) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return get<AiAssistState>("/api/documents/" + documentId + "/ai-assist");
+}
+export async function requestAiAssist(user: User, documentId: string, fields?: string[]) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return api<AiAssistResult>("/api/documents/" + documentId + "/ai-assist", { method: "POST", body: JSON.stringify({ fields: fields ?? null }) });
+}
+export async function decideAiAssist(user: User, documentId: string, decision: { field: string; decision: "accepted" | "rejected"; attemptId?: string }) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return api<{ recorded: boolean }>("/api/documents/" + documentId + "/ai-assist/decision", { method: "POST", body: JSON.stringify(decision) });
 }
 export async function updateExtractedField(user: User, documentId: string, key: string, value: string, expectedContentRevision: number) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
@@ -140,6 +154,12 @@ export async function revalidateDocument(user: User, documentId: string, note = 
   void note;
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   return api<RevalidationResponse>("/api/documents/" + documentId + "/revalidate", { method: "POST" });
+}
+
+/** Settles one reviewable finding with a reason. Recorded on the audit log for this revision; approval is still separate. */
+export async function acceptValidationReview(user: User, documentId: string, rule: string, note: string, expectedContentRevision: number) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  return api<RevalidationResponse>("/api/documents/" + documentId + "/validation-review", { method: "POST", body: JSON.stringify({ rule, note, expectedContentRevision }) });
 }
 
 export async function retryDocumentProcessing(user: User, documentId: string) {

@@ -829,6 +829,22 @@
 .shoebox-label { display: block; color: #172033; font-size: 16px; line-height: 1.5; }
 .shoebox-field-heading button { font-size: 14px; min-height: 32px; }
 .shoebox-field-state { color: #475569; font-size: 13px; }
+.shoebox-field-candidates { font-size: 13px; color: #475569; }
+.shoebox-field-candidates ul { margin: 4px 0 0; padding-left: 18px; }
+.ai-assist { margin: 0 0 12px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; font-size: 14px; }
+.ai-assist-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.ai-assist-head strong { display: inline-flex; gap: 6px; align-items: center; }
+.ai-assist-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ai-assist-controls select { max-width: 100%; min-height: 32px; }
+.ai-assist-results { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ai-assist-results li { padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+.ai-assist-results p { margin: 4px 0; }
+.ai-assist-outcome { font-size: 12px; color: #475569; }
+.ai-assist-results li[data-outcome="SOURCE_VERIFIED_CANDIDATE"] .ai-assist-outcome { color: #166534; font-weight: 600; }
+.ai-assist-results li[data-outcome="UNVERIFIED_MODEL_SUGGESTION"] .ai-assist-outcome, .ai-assist-results li[data-outcome="PARSER_MODEL_CONFLICT"] .ai-assist-outcome { color: #9a3412; font-weight: 600; }
+.ai-assist-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; margin-top: 6px; }
+.ai-assist-actions label { display: grid; gap: 2px; flex: 1 1 180px; font-size: 12px; }
+.ai-assist-actions input { min-height: 32px; width: 100%; }
 .shoebox-field input { min-width: 0; width: 100%; min-height: 44px; padding: 10px 12px; font-size: 16px; color: #172033; background: #fff; border-color: #94a3b8; }
 .shoebox-field input:disabled { opacity: 1; color: #475569; background: #f1f5f9; }
 .shoebox-field-metadata { font-size: 14px; color: #475569; line-height: 1.5; }
@@ -863,3 +879,7 @@
   .image-viewer-controls button span { display: none; }
   .selected-source-evidence { max-height: 190px; }
 }
+
+.review-focus-summary { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; font-size: 14px; }
+.review-field-group { margin-top: 14px; }
+.review-field-group > summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }

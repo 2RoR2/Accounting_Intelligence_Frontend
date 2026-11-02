@@ -249,7 +249,7 @@ export function MoneyFlowPage({
         setNotice(`Imported ${result.rowCount} bank rows. ${result.candidatesProposed} exact match candidates need review.`);
       } else {
         await discardBankImportPreview(user, importPreview.importId);
-        setNotice("Bank import preview discarded; source rows remain retained as ignored evidence.");
+        setNotice("Bank import preview discarded. No rows were imported, and the discarded import stays on record.");
       }
       setImportFile(null);
       setImportPreview(null);
