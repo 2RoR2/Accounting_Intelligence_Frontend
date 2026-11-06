@@ -259,15 +259,18 @@ export function AppShell({
       ? companyNav
       : accountantNav;
   const navGroups = isAdmin
-    ? [{ label: "Overview", paths: ["dashboard"] }, { label: "Workspace", paths: nav.map((item) => item[1]).filter((path) => path !== "dashboard") }]
-    : [
-        { label: "Overview", paths: ["dashboard"] },
-        { label: "Documents", paths: ["documents", "upload", "exceptions", "records"] },
-        { label: "Banking", paths: ["money-in", "money-out", "reconciliation"] },
-        { label: "Accounting", paths: ["ledger"] },
-        { label: "Insights", paths: ["reports", "evaluation"] },
-        { label: "Workspace", paths: ["contacts", "users", "settings", "profile"] },
-      ];
+  ? [
+      { label: "Overview", paths: ["dashboard"] },
+      { label: "Workspace", paths: nav.map((item) => item[1]).filter((path) => path !== "dashboard") },
+    ]
+  : [
+      { label: "Overview", paths: ["dashboard"] },
+      { label: "Documents", paths: ["documents", "upload", "exceptions", "records"] },
+      { label: "Banking", paths: ["money-in", "money-out", "reconciliation"] },
+      { label: "Accounting", paths: ["ledger"] },
+      { label: "Insights", paths: ["reports", "evaluation"] },
+      { label: "Workspace", paths: ["contacts", "users", "audit", "validation-rules", "settings", "profile"] },
+    ];
 
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
   const workspaceName = isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name || "Demo Company").split("—")[0].trim();
