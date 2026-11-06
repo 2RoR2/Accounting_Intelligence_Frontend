@@ -11,6 +11,9 @@ import { UserManagement } from "@/features/common/users/user-management";
 import { ContactsPage } from "@/features/common/contacts/contacts";
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
+// add this import near the other imports
+import { LedgerPage } from "@/features/common/ledger/ledger-page";
+
 import type { User } from "@/types";
 
 export function LocalAdminRoutes({ path, user }: { path: string[]; user: User }) {
@@ -29,6 +32,8 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "validation-rules": return <RulesPage user={user} />;
     case "reports": return <PerformancePage user={user} />;
     case "evaluation": return <EvaluationPage />;
+      // add this case inside the switch
+case "ledger": return <LedgerPage />;
     case "audit": return <AuditPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <SettingsPage user={user} />;
