@@ -1572,10 +1572,12 @@ hr {
   font-size: 12px;
 }
 
-.workspace-label div span {
-  margin-top: 3px;
-  color: #47709f;
-  font-size: 10px;
+.workspace-label > div span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .workspace-icon {
@@ -9265,8 +9267,21 @@ html,body { min-height:100%; background:linear-gradient(135deg,#f4f8fc 0%,#eaf3f
 .app-shell .sidebar:not(.rail) .workspace-label:hover{transform:translateY(-1px);border-color:#8fc1f2 !important;box-shadow:0 12px 24px rgba(3,35,76,.18) !important}
 .app-shell .sidebar:not(.rail) .workspace-label:focus-visible{outline:3px solid rgba(60,146,247,.35);outline-offset:3px}
 .app-shell .sidebar:not(.rail) .workspace-label{grid-template-columns:34px minmax(0,1fr) !important;gap:10px !important}
-.workspace-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:linear-gradient(145deg,#3c92f7,#1766b3);color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em;box-shadow:0 4px 10px rgba(24,101,178,.25)}
-.app-shell.theme-dark .workspace-avatar{background:linear-gradient(145deg,#67adff,#245789);color:#071a36}
+.workspace-avatar {
+  display: grid !important;
+  place-items: center !important;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #3c92f7, #1766b3);
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(24, 101, 178, 0.25);
+  flex-shrink: 0;
+}
 .sidebar nav{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(103,173,255,.7) transparent}
 .app-shell .sidebar nav { overflow-x:hidden; overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(45,101,159,.72) transparent; }
 .app-shell .sidebar nav::-webkit-scrollbar { width:8px; height:0; }
