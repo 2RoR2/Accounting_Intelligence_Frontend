@@ -1,0 +1,309 @@
+/* Accord AI theme contract: the final light/dark surface and navigation layer. */
+html, body { min-height:100%; }
+.app-shell:not(.theme-dark), .app-shell:not(.theme-dark) .app-main, .app-shell:not(.theme-dark) .content { background:linear-gradient(135deg,#f4f8fc 0%,#eaf3fc 48%,#dcecff 100%) !important; }
+.app-shell:not(.theme-dark) .sidebar { background:linear-gradient(180deg,#c5def7 0%,#a9ccee 54%,#8db7e3 100%) !important; border-right:1px solid #8eb9e7 !important; box-shadow:8px 0 24px rgba(35,91,150,.18) !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-item { color:#12345d !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-item svg { color:#1f609f !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-item:hover { color:#08254a !important; background:rgba(255,255,255,.48) !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-item.active { color:#08254a !important; background:#f5faff !important; border-left-color:#3c92f7 !important; }
+.app-shell.theme-dark, .app-shell.theme-dark .app-main, .app-shell.theme-dark .content { background:#071a36 !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .topbar { background:rgba(7,26,54,.96) !important; border-bottom-color:rgba(157,202,255,.24) !important; box-shadow:0 2px 14px rgba(0,0,0,.24) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .topbar-left,
+.app-shell.theme-dark .topbar-left strong,
+.app-shell.theme-dark .topbar-left a { color:#d9edff !important; }
+.app-shell.theme-dark .topbar-left a:last-child,
+.app-shell.theme-dark .topbar-left > span:last-child { color:#f5f9ff !important; font-weight:700; }
+.app-shell.theme-dark .topbar-right { color:#d9edff !important; }
+.app-shell.theme-dark .profile-button { color:#f5f9ff !important; }
+.app-shell.theme-dark .profile-button:hover { background:rgba(103,173,255,.16) !important; }
+.app-shell.theme-dark .profile-text strong { color:#f5f9ff !important; }
+.app-shell.theme-dark .profile-text span { color:#b9d5f2 !important; font-weight:600; }
+.app-shell.theme-dark .profile-button > svg { color:#b9d5f2 !important; stroke:#b9d5f2 !important; }
+.app-shell.theme-dark .page-heading { border-bottom-color:rgba(157,202,255,.22) !important; }
+.app-shell.theme-dark .page-heading h1 { color:#f5f9ff !important; }
+.app-shell.theme-dark .page-heading p { color:#b9d5f2 !important; }
+.app-shell.theme-dark .page-heading .eyebrow { color:#67adff !important; background:rgba(103,173,255,.16) !important; border-color:rgba(103,173,255,.42) !important; }
+.app-shell.theme-dark .sidebar { background:linear-gradient(180deg,#123f73 0%,#185893 55%,#2172b8 100%) !important; border-right-color:rgba(157,202,255,.38) !important; box-shadow:8px 0 26px rgba(0,0,0,.28) !important; }
+.app-shell.theme-dark .sidebar .nav-item,.app-shell.theme-dark .sidebar .nav-label,.app-shell.theme-dark .sidebar .brand { color:#f3f8ff !important; }
+.app-shell.theme-dark .sidebar .nav-item svg { color:#e3f0ff !important; }
+.app-shell.theme-dark .sidebar .nav-item:hover { background:rgba(204,227,255,.2) !important; color:#fff !important; }
+.app-shell.theme-dark .sidebar .nav-item.active { background:#dcecff !important; color:#08254a !important; border-left-color:#67adff !important; }
+.app-shell.theme-dark .sidebar .nav-item.active svg { color:#0b5fbc !important; }
+.app-shell.theme-dark .content .panel,.app-shell.theme-dark .content .table-card,.app-shell.theme-dark .content .section-card,.app-shell.theme-dark .content .plain-card,.app-shell.theme-dark .content .filter-bar,.app-shell.theme-dark .content .table-scroll { background:#0c2a52 !important; border-color:rgba(157,202,255,.3) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .content :is(h1,h2,h3,h4,p,span,strong,small,label,th,td) { color:#ecf5ff !important; }
+.app-shell.theme-dark .content :is(input,select,textarea) { background:#163f70 !important; border-color:rgba(157,202,255,.42) !important; color:#f5f9ff !important; }
+.app-shell.theme-dark .content :is(input,select,textarea)::placeholder { color:#a9c9eb !important; }
+.app-shell.theme-dark .invoice-review-page { background:#0c2a52 !important; border-color:rgba(157,202,255,.34) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .invoice-review-page :is(h2,h3,strong,b,span,p,small,label) { color:#ecf5ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-review-heading p,
+.app-shell.theme-dark .invoice-review-page .invoice-detail-card p { color:#b9d5f2 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-status { color:#ffe6a8 !important; border-color:#d99a27 !important; background:#513b16 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-review-heading > .badge { background:#513b16 !important; border-color:#d99a27 !important; color:#ffe6a8 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-review-heading > .badge .badge-dot { background:#f0b457 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-classification > div { background:#123b6d !important; border-color:rgba(157,202,255,.28) !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-classification span { color:#b9d5f2 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-classification strong { color:#f5f9ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-classification small { color:#9dcaFF !important; }
+.app-shell.theme-dark .invoice-review-page > .panel-body { background:#12345f !important; border-color:rgba(157,202,255,.3) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-card { background:#102f57 !important; border-color:rgba(157,202,255,.3) !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-columns div { background:#123b6d !important; border-color:rgba(157,202,255,.28) !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-card h3::after { background:#61aaff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-card h3 { color:#f5f9ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-columns strong { color:#b9d5f2 !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-detail-columns span { color:#f5f9ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-totals span { color:#c9e2fb !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-totals b { color:#f5f9ff !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-totals span { border-bottom-color:rgba(157,202,255,.2) !important; }
+.app-shell.theme-dark .invoice-review-page .invoice-totals span:nth-last-child(2) { border-top-color:rgba(157,202,255,.42) !important; color:#d8ebff !important; }
+.app-shell.theme-dark .table-scroll thead,.app-shell.theme-dark .table-scroll th { background:#163f70 !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .table-scroll tbody tr,.app-shell.theme-dark .table-scroll tbody td,.app-shell.theme-dark .table-scroll .table-action-cell { background:#0c2a52 !important; color:#ecf5ff !important; border-color:rgba(157,202,255,.22) !important; }
+.app-shell.theme-dark .table-scroll .text-link { color:#67adff !important; }
+.app-shell.theme-dark :is(a,button,.btn,select,input,textarea,.panel,.table-card,.section-card,.stat-card,.report-card,.dashboard-widget,.document-stack,.nav-item,.workspace-tabs a,.tab) { transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease; }
+.app-shell.theme-dark :is(.btn,button:not(.icon-btn),.text-link,.widget-inline-link,.workspace-tabs a,.tab):hover { background:#2469aa !important; border-color:#8bc4ff !important; color:#fff !important; box-shadow:0 4px 14px rgba(0,0,0,.22); }
+.app-shell.theme-dark :is(.btn.primary,button.primary):hover { background:#67adff !important; border-color:#9dcaFF !important; color:#071a36 !important; }
+.app-shell.theme-dark :is(a,button,input,select,textarea,.nav-item):focus-visible { outline:2px solid #9dcaFF !important; outline-offset:2px; box-shadow:0 0 0 4px rgba(103,173,255,.25) !important; }
+.app-shell.theme-dark :is(.panel,.table-card,.section-card,.stat-card,.report-card,.dashboard-widget,.document-stack):hover { border-color:#67adff !important; box-shadow:0 10px 24px rgba(0,0,0,.24),0 0 0 1px rgba(103,173,255,.16); }
+.app-shell.theme-dark .table-scroll tbody tr:hover,.app-shell.theme-dark .table-scroll tbody tr:hover td { background:#24609b !important; color:#fff !important; }
+.app-shell.theme-dark .table-scroll tbody tr:hover a,.app-shell.theme-dark .table-scroll tbody tr:hover strong,.app-shell.theme-dark .table-scroll tbody tr:hover small { color:#fff !important; }
+.app-shell.theme-dark .document-stack:hover,.app-shell.theme-dark .document-stack:focus-visible { background:#e8f2fc !important; color:#102f57 !important; border-color:#67adff !important; }
+.app-shell.theme-dark .document-stack:hover *,.app-shell.theme-dark .document-stack:focus-visible * { color:#102f57 !important; }
+.app-shell.theme-dark input:hover,.app-shell.theme-dark select:hover,.app-shell.theme-dark textarea:hover { border-color:#67adff !important; background:#1a4b82 !important; color:#fff !important; }
+
+/* Upload workflow: keep controls, icons, and guide steps readable in dark mode. */
+.app-shell.theme-dark .upload-workflow-steps { border-color:rgba(157,202,255,.34) !important; }
+.app-shell.theme-dark .upload-workflow-steps > div { color:#cce3ff !important; }
+.app-shell.theme-dark .upload-workflow-steps > div strong { color:#f5f9ff !important; }
+.app-shell.theme-dark .upload-workflow-steps b { background:#dcecff !important; color:#102f57 !important; }
+.app-shell.theme-dark .upload-workflow-steps .is-active { color:#fff !important; }
+.app-shell.theme-dark .upload-workflow-steps .is-active b { background:#3c92f7 !important; color:#fff !important; }
+.app-shell.theme-dark .upload-workflow-steps i { background:#67adff !important; }
+
+.app-shell.theme-dark .upload-sources .btn:not(.primary) { background:#102f57 !important; border-color:rgba(157,202,255,.48) !important; color:#f5f9ff !important; }
+.app-shell.theme-dark .upload-sources .btn svg,
+.app-shell.theme-dark .drop-zone svg,
+.app-shell.theme-dark .drop-zone .upload-icon svg { color:#67adff !important; stroke:#67adff !important; }
+.app-shell.theme-dark .drop-zone { background:#102f57 !important; border-color:#67adff !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .drop-zone strong,.app-shell.theme-dark .drop-zone span,.app-shell.theme-dark .drop-zone small { color:#ecf5ff !important; }
+.app-shell.theme-dark .drop-zone b { color:#8bc4ff !important; }
+.app-shell.theme-dark .drop-zone:hover,.app-shell.theme-dark .drop-zone.dragging { background:#163f70 !important; }
+
+.app-shell.theme-dark .upload-guide { background:#0c2a52 !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .upload-guide .step-item::before { background:rgba(157,202,255,.48) !important; }
+.app-shell.theme-dark .upload-guide .step-dot { background:#102f57 !important; border-color:#9dcaFF !important; box-shadow:0 0 0 4px #0c2a52 !important; }
+.app-shell.theme-dark .upload-guide .step-item.is-active .step-dot { background:#3c92f7 !important; border-color:#9dcaFF !important; box-shadow:0 0 0 4px #0c2a52 !important; }
+.app-shell.theme-dark .upload-guide .step-body { background:transparent !important; }
+.app-shell.theme-dark .upload-guide .step-item.is-active .step-body { background:#163f70 !important; color:#fff !important; }
+.app-shell.theme-dark .upload-guide .step-body strong { color:#fff !important; }
+.app-shell.theme-dark .upload-guide .step-body p { color:#cce3ff !important; }
+
+/* Profile, summary, and contacts pages: explicit dark surfaces and contrast. */
+.app-shell.theme-dark .profile-layout .avatar-editor { background:#163f70 !important; border-color:rgba(157,202,255,.38) !important; color:#f5f9ff !important; }
+.app-shell.theme-dark .profile-layout .avatar-editor strong,
+.app-shell.theme-dark .profile-layout .avatar-editor p { color:#f5f9ff !important; }
+.app-shell.theme-dark .profile-layout .profile-avatar-large { background:#dcecff !important; border-color:#9dcaFF !important; color:#0b5fbc !important; }
+.app-shell.theme-dark .profile-layout .profile-avatar-large svg { color:#0b5fbc !important; stroke:#0b5fbc !important; }
+.app-shell.theme-dark .profile-layout .avatar-editor .btn { background:#0b274b !important; border-color:#67adff !important; color:#fff !important; }
+.app-shell.theme-dark .profile-layout .avatar-editor .btn svg { color:#9dcaFF !important; stroke:#9dcaFF !important; }
+.app-shell.theme-dark .profile-layout .field label,
+.app-shell.theme-dark .profile-layout .field small { color:#ecf5ff !important; }
+.app-shell.theme-dark .profile-layout .btn.primary { background:#67adff !important; color:#071a36 !important; }
+
+.app-shell.theme-dark .contacts-layout .contacts-search { background:#e8f2fc !important; border-color:#c5def5 !important; }
+.app-shell.theme-dark .contacts-layout .contacts-search svg { color:#315b86 !important; stroke:#315b86 !important; }
+.app-shell.theme-dark .contacts-layout .contacts-search input { background:#163f70 !important; color:#f5f9ff !important; border-color:#67adff !important; }
+.app-shell.theme-dark .contacts-layout .contacts-search input::placeholder { color:#cce3ff !important; }
+.app-shell.theme-dark .contacts-list button { background:#102f57 !important; color:#ecf5ff !important; border-color:rgba(157,202,255,.24) !important; }
+.app-shell.theme-dark .contacts-list button strong { color:#fff !important; }
+.app-shell.theme-dark .contacts-list button span,.app-shell.theme-dark .contacts-list button small { color:#cce3ff !important; }
+.app-shell.theme-dark .contacts-list button:hover,.app-shell.theme-dark .contacts-list button.active { background:#2b74b5 !important; border-color:#9dcaFF !important; color:#fff !important; }
+.app-shell.theme-dark .contacts-list button:hover span,.app-shell.theme-dark .contacts-list button:hover small,
+.app-shell.theme-dark .contacts-list button.active span,.app-shell.theme-dark .contacts-list button.active small { color:#f5f9ff !important; }
+
+.app-shell.theme-dark .reports-page .stat-card-solid { color:#fff !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid * { color:#fff !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid svg { color:#fff !important; stroke:#fff !important; }
+
+/* Report summary cards follow the dashboard's dark-to-light progression. */
+.app-shell.theme-dark .reports-page .stat-card-solid.stat-card-invoice { background:linear-gradient(135deg,#174b87,#2369ae) !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid.stat-card-processing { background:linear-gradient(135deg,#2369ae,#3c92f7) !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid.stat-card-exception { background:linear-gradient(135deg,#3c92f7,#67adff) !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid.stat-card-failed { background:linear-gradient(135deg,#b84d62,#e27b86) !important; }
+.app-shell.theme-dark .reports-page .stat-card-solid.stat-card-failed * { color:#fff !important; }
+
+/* Keep report cards consistent in light mode too, with failure using its own red semantic color. */
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-invoice { background:linear-gradient(135deg,#1d568f,#286db1) !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-processing { background:linear-gradient(135deg,#2b79c9,#3c92f7) !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-exception { background:linear-gradient(135deg,#3c92f7,#5aa5f8) !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-failed { background:linear-gradient(135deg,#bd536b,#e27b86) !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-failed * { color:#fff !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-failed .stat-icon { background:rgba(174,45,70,.7) !important; color:#fff !important; }
+.app-shell:not(.theme-dark) .reports-page .stat-card-solid.stat-card-failed .stat-icon svg { color:#fff !important; stroke:#fff !important; }
+
+/* Help & support: avoid pale panels with near-white text in dark mode. */
+.app-shell.theme-dark .help-center { background:#0c2a52 !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .help-center .help-intro,
+.app-shell.theme-dark .help-center .help-tabs,
+.app-shell.theme-dark .help-center .help-tutorial-banner,
+.app-shell.theme-dark .help-center .help-helpline-banner { background:#163f70 !important; border-color:rgba(157,202,255,.38) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .help-center h2,
+.app-shell.theme-dark .help-center strong,
+.app-shell.theme-dark .help-center .help-intro p,
+.app-shell.theme-dark .help-center .help-tutorial-banner p,
+.app-shell.theme-dark .help-center .help-helpline-banner span { color:#f5f9ff !important; }
+.app-shell.theme-dark .help-center .help-tabs button { background:#102f57 !important; color:#cce3ff !important; border-color:rgba(157,202,255,.36) !important; }
+.app-shell.theme-dark .help-center .help-tabs button.active,
+.app-shell.theme-dark .help-center .help-tabs button:hover { background:#3c92f7 !important; color:#071a36 !important; border-color:#9dcaFF !important; }
+.app-shell.theme-dark .help-center .help-steps li { background:#163f70 !important; border-color:rgba(157,202,255,.36) !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .help-center .help-steps li > div p { color:#cce3ff !important; }
+.app-shell.theme-dark .help-center .help-step-index { color:#9dcaFF !important; }
+.app-shell.theme-dark .help-center .help-step-icon { background:#dcecff !important; color:#0b5fbc !important; border-color:#9dcaFF !important; }
+.app-shell.theme-dark .help-center .help-step-icon svg { color:#0b5fbc !important; stroke:#0b5fbc !important; }
+.app-shell.theme-dark .help-center input,.app-shell.theme-dark .help-center textarea,.app-shell.theme-dark .help-center select { background:#102f57 !important; color:#f5f9ff !important; border-color:#67adff !important; }
+.app-shell.theme-dark .help-center input::placeholder,.app-shell.theme-dark .help-center textarea::placeholder { color:#a9c9eb !important; }
+
+/* Use one consistent six-dot widget handle across every dashboard card. */
+.app-shell.theme-dark .dashboard-page .widget-drag-handle {
+  display:inline-grid !important;
+  place-items:center !important;
+  width:36px !important;
+  height:36px !important;
+  min-width:36px !important;
+  min-height:36px !important;
+  padding:0 !important;
+  border:1px solid rgba(204,227,255,.42) !important;
+  border-radius:11px !important;
+  background:#163f70 !important;
+  color:#dcecff !important;
+  cursor:grab !important;
+}
+.app-shell.theme-dark .dashboard-page .widget-drag-handle:hover,
+.app-shell.theme-dark .dashboard-page .widget-drag-handle:focus-visible {
+  background:#2469aa !important;
+  border-color:#9dcaFF !important;
+  color:#fff !important;
+  box-shadow:0 0 0 3px rgba(103,173,255,.22) !important;
+}
+.app-shell.theme-dark .dashboard-page .widget-drag-handle:active { cursor:grabbing !important; }
+.app-shell.theme-dark .dashboard-page .widget-drag-handle .drag-dots { display:grid !important; grid-template-columns:repeat(2,4px) !important; gap:3px !important; }
+.app-shell.theme-dark .dashboard-page .widget-drag-handle .drag-dots i { width:4px !important; height:4px !important; border-radius:50% !important; background:currentColor !important; }
+
+/* Dialog headings and close controls must not fall back to the light surface. */
+.app-shell.theme-dark dialog.modal,
+.app-shell.theme-dark .modal { background:#0c2a52 !important; color:#ecf5ff !important; border-color:rgba(157,202,255,.42) !important; }
+.app-shell.theme-dark dialog.modal .modal-heading,
+.app-shell.theme-dark .modal .modal-heading { background:#163f70 !important; border-bottom-color:rgba(157,202,255,.35) !important; color:#fff !important; }
+.app-shell.theme-dark dialog.modal .modal-heading h2,
+.app-shell.theme-dark .modal .modal-heading h2 { color:#fff !important; }
+.app-shell.theme-dark dialog.modal .modal-heading .icon-btn,
+.app-shell.theme-dark .modal .modal-heading .icon-btn { background:#102f57 !important; border-color:#9dcaFF !important; color:#fff !important; }
+.app-shell.theme-dark dialog.modal .modal-heading .icon-btn svg,
+.app-shell.theme-dark .modal .modal-heading .icon-btn svg { color:#fff !important; stroke:#fff !important; }
+.app-shell.theme-dark dialog.modal :is(label,p,span,strong,small,th,td) { color:#ecf5ff !important; }
+
+/* Modal uses a portal under body, so theme it from the document root as well. */
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"],
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"]::backdrop {
+  color-scheme:dark;
+}
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"] {
+  background:#0c2a52 !important;
+  color:#ecf5ff !important;
+  border:1px solid rgba(157,202,255,.48) !important;
+}
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"] .modal-heading {
+  background:#163f70 !important;
+  border-bottom:1px solid rgba(157,202,255,.38) !important;
+  color:#fff !important;
+}
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"] .modal-heading h2 {
+  color:#fff !important;
+}
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"] .modal-heading .icon-btn {
+  background:#0c2a52 !important;
+  border:1px solid #9dcaFF !important;
+  color:#fff !important;
+}
+html:has(.app-shell.theme-dark) dialog[aria-label="Help & support"] .modal-heading .icon-btn svg {
+  color:#fff !important;
+  stroke:#fff !important;
+}
+
+/* Shared pagination and back-to-top controls for every workspace screen. */
+.app-shell.theme-dark .pagination {
+  background:#0c2a52 !important;
+  color:#ecf5ff !important;
+  border-top-color:rgba(157,202,255,.32) !important;
+}
+.app-shell.theme-dark .pagination button {
+  background:#163f70 !important;
+  border-color:#67adff !important;
+  color:#f5f9ff !important;
+}
+.app-shell.theme-dark .pagination button:hover:not(:disabled),
+.app-shell.theme-dark .pagination button:focus-visible {
+  background:#3c92f7 !important;
+  border-color:#9dcaFF !important;
+  color:#071a36 !important;
+}
+.app-shell.theme-dark .pagination button:disabled {
+  background:#294a70 !important;
+  border-color:rgba(204,227,255,.28) !important;
+  color:#9db8d5 !important;
+  opacity:1 !important;
+}
+.app-shell .back-to-top {
+  position:fixed !important;
+  right:28px !important;
+  bottom:28px !important;
+  display:grid !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  z-index:100 !important;
+  width:46px !important;
+  height:46px !important;
+  min-width:46px !important;
+  min-height:46px !important;
+  background:rgba(157,202,255,.46) !important;
+  border-color:rgba(103,173,255,.72) !important;
+  color:#16355d !important;
+  box-shadow:0 12px 28px rgba(60,146,247,.24), inset 0 1px 0 rgba(255,255,255,.88) !important;
+  backdrop-filter:blur(14px) saturate(1.45);
+  -webkit-backdrop-filter:blur(14px) saturate(1.45);
+}
+.app-shell .back-to-top:hover,.app-shell .back-to-top:focus-visible {
+  background:rgba(103,173,255,.72) !important;
+  border-color:#fff !important;
+  color:#071a36 !important;
+}
+.app-shell:has(.toast) .back-to-top {
+  bottom:88px !important;
+}
+.app-shell.theme-dark .back-to-top {
+  background:#67adff !important;
+  border-color:#dcecff !important;
+  color:#071a36 !important;
+  box-shadow:0 10px 28px rgba(0,0,0,.42) !important;
+}
+
+/* Document icons: the pale tile needs a dark blue glyph, not inherited white text. */
+.app-shell.theme-dark .file-icon,
+.app-shell.theme-dark .document-icon,
+.app-shell.theme-dark .table-file-icon {
+  background:#dcecff !important;
+  border-color:#9dcaFF !important;
+  color:#0b5fbc !important;
+}
+.app-shell.theme-dark .file-icon svg,
+.app-shell.theme-dark .document-icon svg,
+.app-shell.theme-dark .table-file-icon svg {
+  color:#0b5fbc !important;
+  stroke:#0b5fbc !important;
+  opacity:1 !important;
+}
+.app-shell.theme-dark .file-icon svg *,
+.app-shell.theme-dark .document-icon svg *,
+.app-shell.theme-dark .table-file-icon svg * {
+  stroke:#0b5fbc !important;
+  color:#0b5fbc !important;
+}
