@@ -9558,11 +9558,11 @@ select option { background:#fff; color:#183452; font-weight:500; }
   overflow: hidden;
 }
 
-.company-performance-page .performance-metric-row div:nth-child(1) { background: #164895; }
-.company-performance-page .performance-metric-row div:nth-child(2) { background: #1d6abd; }
-.company-performance-page .performance-metric-row div:nth-child(3) { background: #2f80ed; }
-.company-performance-page .performance-metric-row div:nth-child(4) { background: #55a8f5; }
-.company-performance-page .performance-metric-row div:nth-child(5) { background: #164895; }
+.company-performance-page .performance-metric-row div:nth-child(1) { background: #2f80ed; }
+.company-performance-page .performance-metric-row div:nth-child(2) { background: #4c9dff; }
+.company-performance-page .performance-metric-row div:nth-child(3) { background: #6eb3ff; }
+.company-performance-page .performance-metric-row div:nth-child(4) { background: #8fc6ff; }
+.company-performance-page .performance-metric-row div:nth-child(5) { background: #2f80ed; }
 
 .company-performance-page .performance-metric-row strong {
   display: block;
@@ -9657,6 +9657,34 @@ select option { background:#fff; color:#183452; font-weight:500; }
 @media (max-width: 720px) {
   .company-performance-page .performance-metric-row { grid-template-columns: 1fr 1fr; }
 }
+
+.app-shell.theme-dark .company-performance-page .performance-block,
+.theme-dark .company-performance-page .performance-block,
+.app-shell.theme-dark .company-performance-page .performance-trends > .panel,
+.theme-dark .company-performance-page .performance-trends > .panel {
+  border-color: rgba(157, 202, 255, 0.28);
+  background: rgba(12, 42, 82, 0.82);
+  box-shadow: none;
+}
+
+.app-shell.theme-dark .company-performance-page .performance-heading h2,
+.theme-dark .company-performance-page .performance-heading h2 {
+  color: #ecf5ff;
+}
+
+.app-shell.theme-dark .company-performance-page .performance-metric-row div:nth-child(1),
+.theme-dark .company-performance-page .performance-metric-row div:nth-child(1),
+.app-shell.theme-dark .company-performance-page .performance-metric-row div:nth-child(5),
+.theme-dark .company-performance-page .performance-metric-row div:nth-child(5) { background: #1d4f8f; }
+
+.app-shell.theme-dark .company-performance-page .performance-metric-row div:nth-child(2),
+.theme-dark .company-performance-page .performance-metric-row div:nth-child(2) { background: #245ea8; }
+
+.app-shell.theme-dark .company-performance-page .performance-metric-row div:nth-child(3),
+.theme-dark .company-performance-page .performance-metric-row div:nth-child(3) { background: #2f74c4; }
+
+.app-shell.theme-dark .company-performance-page .performance-metric-row div:nth-child(4),
+.theme-dark .company-performance-page .performance-metric-row div:nth-child(4) { background: #3d8ad8; }
 
 
 .approval-list { display:grid; gap:14px; padding:0 16px 16px; }
