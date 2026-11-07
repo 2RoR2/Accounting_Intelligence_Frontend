@@ -9569,19 +9569,30 @@ select option { background:#fff; color:#183452; font-weight:500; }
   width: 100%;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
-.company-performance-page .performance-trends .panel-body,
+.company-performance-page .performance-trends .panel-body {
+  overflow: visible;
+  padding-bottom: 18px;
+}
+
 .company-performance-page .performance-trends .trend-chart {
   width: 100%;
-  min-width: 0;
+  min-height: 240px;
 }
 
 .company-performance-page .performance-trends .trend-chart svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 240px;
+  overflow: visible;
+}
+
+.company-performance-page .performance-trends .chart-source {
+  display: block;
+  margin-top: 8px;
+  padding-bottom: 4px;
 }
 
 .company-performance-page .performance-trends .chart-style-badge {
