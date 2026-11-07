@@ -9565,19 +9565,22 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .company-performance-page .performance-metric-row div:nth-child(4) { background: #55a8f5; }
 .company-performance-page .performance-metric-row div:nth-child(5) { background: #164895; }
 
-.company-performance-page .performance-metric-row strong {
+.company-performance-page .performance-metric-row strong,
+.app-shell .company-performance-page .performance-metric-row strong,
+.app-shell:not(.theme-dark) .company-performance-page .performance-metric-row strong {
   display: block;
-  color: #fff;
+  color: #fff !important;
   font-size: 28px;
   line-height: 1;
   letter-spacing: -0.04em;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
 }
 
-.company-performance-page .performance-metric-row span {
+.company-performance-page .performance-metric-row span,
+.app-shell .company-performance-page .performance-metric-row span {
   display: block;
   margin-top: 6px;
-  color: #fff;
+  color: #fff !important;
   font-size: 12px;
   opacity: 0.92;
 }
@@ -9691,7 +9694,6 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .theme-dark .company-performance-page .performance-metric-row span {
   color: #cce3ff;
 }
-
 
 .approval-list { display:grid; gap:14px; padding:0 16px 16px; }
 .approval-card { display:grid; gap:12px; padding:16px; border:1px solid #d7e6f6; border-radius:16px; background:#fff; }
