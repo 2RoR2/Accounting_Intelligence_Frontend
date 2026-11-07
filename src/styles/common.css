@@ -9762,14 +9762,25 @@ select option { background:#fff; color:#183452; font-weight:500; }
     background: #fff;
   }
 }
-
+/* Validation overview cards — match dashboard metric cards */
+.validation-overview-page .validation-metrics {
+  margin: 16px 0 28px;
+  padding: 0 0 8px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
 .validation-overview-page .widget-metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 18px !important;
+  column-gap: 18px !important;
+  row-gap: 18px !important;
+  margin-top: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
 }
 .validation-overview-page .widget-metric-grid a {
   min-height: 116px;
@@ -9812,5 +9823,4 @@ select option { background:#fff; color:#183452; font-weight:500; }
 @media (max-width: 640px) {
   .validation-overview-page .widget-metric-grid { grid-template-columns: 1fr; }
 }
-
 
