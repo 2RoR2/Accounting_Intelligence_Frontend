@@ -69,13 +69,15 @@ export function TrendChart({
       </Panel>
     );
   const vals = data.map((point) => point[kind]);
+  const peak = Math.max(0, ...vals);
   const maximum =
-    kind === "processed"
-      ? Math.max(50, Math.ceil(Math.max(...vals) / 50) * 50)
-      : kind === "accuracy"
-        ? 100
-        : 20;
+    kind === "accuracy"
+      ? 100
+      : kind === "processed"
+        ? Math.max(50, Math.ceil(peak / 50) * 50)
+        : Math.max(5, Math.ceil(peak / 5) * 5);
   const minimum = 0;
+  const unit = kind === "accuracy" ? "%" : "";
   const plotLeft = 78;
   const plotRight = 548;
   const plotTop = 30;
@@ -141,7 +143,7 @@ export function TrendChart({
               />
               <text x="8" y={y + 4} fill="var(--chart-muted)" fontSize="10">
                 {Math.round(maximum - i * ((maximum - minimum) / 3))}
-                {kind !== "processed" ? "%" : ""}
+                {unit}
               </text>
             </g>
           ))}
@@ -167,11 +169,11 @@ export function TrendChart({
               strokeWidth="2"
               tabIndex={0}
               role="button"
-              aria-label={`Open ${data[i].day}: ${v}${kind === "processed" ? " documents" : "%"}`}
+              aria-label={`Open ${data[i].day}: ${v}${unit ? unit : kind === "processed" ? " documents" : ""}`}
               onClick={() => router.push(kind === "exceptions" ? "/workspace/exceptions" : kind === "accuracy" ? "/workspace/records" : "/workspace/documents")}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push(kind === "exceptions" ? "/workspace/exceptions" : kind === "accuracy" ? "/workspace/records" : "/workspace/documents"); }}
             >
-              <title>{`${data[i].day}: ${v}${kind === "processed" ? " documents" : "%"}`}</title>
+              <title>{`${data[i].day}: ${v}${unit ? unit : kind === "processed" ? " documents" : ""}`}</title>
             </circle>
           ))}
           {data.map(({ day: label }, i) => (
