@@ -9558,7 +9558,13 @@ select option { background:#fff; color:#183452; font-weight:500; }
   font-size: 12px;
 }
 
-.company-performance-page > .panel {
+.company-performance-page .performance-trends {
+  display: grid;
+  gap: 16px;
+}
+
+.company-performance-page .performance-trends > .panel {
+  display: block !important;
   width: 100%;
 }
 
