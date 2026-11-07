@@ -208,9 +208,11 @@ export function PerformancePage({ user }: { user: User }) {
         </div>
       </section>
 
-      <TrendChart />
-      <TrendChart kind="accuracy" />
-      <TrendChart kind="exceptions" />
+      <div className="performance-trends">
+        <TrendChart />
+        <TrendChart kind="accuracy" />
+        <TrendChart kind="exceptions" />
+      </div>
     </div>
   );
 }
