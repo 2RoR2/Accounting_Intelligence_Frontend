@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Activity, Download, ScanLine, Eye, RefreshCw } from "lucide-react";
+import { Activity, Download, ScanLine, Eye, RefreshCw, Files, FileCheck2, CircleAlert } from "lucide-react";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -172,9 +172,9 @@ export function PerformancePage({ user }: { user: User }) {
         }
         description={
           user.role === "LOCAL_ADMIN"
-            ? "Company-level volume, accuracy, exception rate, and processing trends."
+            ? "Company totals, standardised records, exception rate, and processing trends."
             : "Project success criteria and processing trends. Benchmark values reflect current workspace performance."
-        }  
+        }
         actions={
           <button
             className="btn"
@@ -222,6 +222,13 @@ export function PerformancePage({ user }: { user: User }) {
           </button>
         }
       />
+
+      <div className="stats-grid">
+        <StatCard label="Company documents" value={data.docs.length} icon={<Files size={17} />} detail="Live company count" />
+        <StatCard label="Standardised" value={data.docs.filter((d) => ["COMPLETED", "VALIDATED", "STANDARDISED"].includes(d.status)).length} icon={<FileCheck2 size={17} />} detail="Ready records" />
+        <StatCard label="Open exceptions" value={data.docs.filter((d) => d.status === "EXCEPTION").length} icon={<CircleAlert size={17} />} detail="Need attention" />
+        <StatCard label="Processing jobs" value={data.metrics.find((m) => m.label.toLowerCase().includes("processed"))?.value ?? "—"} icon={<ScanLine size={17} />} detail="Jobs, not documents" />
+      </div>
       <PerformanceCards metrics={data.metrics} />
       <div className="two-col">
         <TrendChart />
