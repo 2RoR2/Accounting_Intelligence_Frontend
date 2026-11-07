@@ -216,21 +216,36 @@ export function PerformancePage({ user }: { user: User }) {
         </section>
       </section>
 
-      <div className="dashboard-widget-grid">
-        <div className="dashboard-widget-slot">
-          <section className="dashboard-widget">
-            <div className="dashboard-widget-heading"><div><h2>Processing</h2><p>Jobs can be higher than documents because a document may be retried.</p></div></div>
-            <div className="widget-metric-grid">
-              <div><strong>{jobs}</strong><span>Processing jobs</span></div>
-              <div><strong>{failed}</strong><span>Failed documents</span></div>
-            </div>
-            <PerformanceCards metrics={data.metrics} />
-          </section>
+      <section className="performance-block">
+        <div className="workspace-documents-toolbar">
+          <div>
+            <span className="workspace-dashboard-kicker">PROCESSING</span>
+            <h2>Jobs and quality</h2>
+            <p>Jobs can be higher than documents because a document may be retried.</p>
+          </div>
         </div>
-        <div className="dashboard-widget-slot"><TrendChart /></div>
-        <div className="dashboard-widget-slot"><TrendChart kind="accuracy" /></div>
-        <div className="dashboard-widget-slot"><TrendChart kind="exceptions" /></div>
-      </div>
+        <div className="performance-metric-row">
+          <div><strong>{jobs}</strong><span>Processing jobs</span></div>
+          <div><strong>{failed}</strong><span>Failed documents</span></div>
+          {data.metrics.filter((m) => !m.label.toLowerCase().includes("processed")).map((m) => (
+            <div key={m.label}><strong>{m.value}</strong><span>{m.label}</span></div>
+          ))}
+        </div>
+      </section>
+
+      <section className="performance-block">
+        <div className="workspace-documents-toolbar">
+          <div>
+            <span className="workspace-dashboard-kicker">TRENDS</span>
+            <h2>How the company is moving</h2>
+          </div>
+        </div>
+        <div className="performance-chart-grid">
+          <TrendChart />
+          <TrendChart kind="accuracy" />
+          <TrendChart kind="exceptions" />
+        </div>
+      </section>
     </div>
   );
 }
