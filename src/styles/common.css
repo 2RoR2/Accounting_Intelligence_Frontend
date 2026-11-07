@@ -9516,36 +9516,29 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .app-shell .sidebar:not(.rail) .workspace-label>div{width:auto !important;padding:0 !important}.app-shell .sidebar:not(.rail) .workspace-label strong{font-size:13px !important;line-height:1.2 !important}.app-shell .sidebar:not(.rail) .workspace-label div span{margin-top:4px !important;font-size:10px !important;line-height:1.1 !important}.app-shell .sidebar:not(.rail) .workspace-avatar{width:34px;height:34px;border-radius:11px}
 .app-shell.theme-dark .sidebar:not(.rail) .workspace-label{min-height:58px !important;height:58px !important;padding:10px 12px !important;border-radius:17px !important;background:#173f6e !important;border-color:rgba(157,202,255,.42) !important;box-shadow:0 8px 18px rgba(0,0,0,.18) !important}
 
-/* Company Performance: two clear metric rows, then charts one by one. */
+/* Company Performance — dashboard banner, solid blue metric cards, two trends per line. */
 .company-performance-page {
   display: grid;
   gap: 16px;
 }
 
-.company-performance-page .performance-block,
-.company-performance-page .performance-trends > .panel {
-  border-color: var(--color-2);
+.company-performance-page .performance-block {
+  overflow: hidden;
+  border: 1px solid var(--color-2);
+  border-radius: 18px;
   background: linear-gradient(145deg, #fff, var(--color-4));
   box-shadow: 0 10px 26px rgba(60, 146, 247, 0.08);
 }
 
-.company-performance-page .performance-metric-row div {
-  border-color: var(--color-2);
-  background: linear-gradient(145deg, #fff, var(--color-4));
-  box-shadow: 0 8px 20px rgba(60, 146, 247, 0.06);
+.company-performance-page .performance-heading {
+  padding: 16px 16px 0;
 }
 
-.company-performance-page .performance-metric-row strong {
+.company-performance-page .performance-heading h2 {
+  margin: 4px 0 0;
   color: #16355d;
-}
-
-.company-performance-page .performance-metric-row span {
-  color: #47709f;
-}
-
-.company-performance-page .performance-trends > .panel .panel-heading {
-  border-color: var(--color-3);
-  background: transparent;
+  font-size: 18px;
+  letter-spacing: -0.03em;
 }
 
 .company-performance-page .performance-metric-row {
@@ -9556,16 +9549,24 @@ select option { background:#fff; color:#183452; font-weight:500; }
 }
 
 .company-performance-page .performance-metric-row div {
-  min-height: 88px;
-  padding: 16px;
-  border: 1px solid var(--color-2);
-  border-radius: 14px;
-  background: linear-gradient(145deg, #fff, var(--color-4));
+  position: relative;
+  min-height: 92px;
+  padding: 18px 16px;
+  border: 0;
+  border-radius: 16px;
+  color: #fff;
+  overflow: hidden;
 }
+
+.company-performance-page .performance-metric-row div:nth-child(1) { background: #164895; }
+.company-performance-page .performance-metric-row div:nth-child(2) { background: #1d6abd; }
+.company-performance-page .performance-metric-row div:nth-child(3) { background: #2f80ed; }
+.company-performance-page .performance-metric-row div:nth-child(4) { background: #55a8f5; }
+.company-performance-page .performance-metric-row div:nth-child(5) { background: #164895; }
 
 .company-performance-page .performance-metric-row strong {
   display: block;
-  color: #16355d;
+  color: #fff;
   font-size: 28px;
   line-height: 1;
 }
@@ -9573,8 +9574,33 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .company-performance-page .performance-metric-row span {
   display: block;
   margin-top: 8px;
-  color: #47709f;
+  color: #fff;
+  opacity: 0.85;
   font-size: 12px;
+}
+
+.company-performance-page .performance-metric-row div::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 44px;
+  height: 18px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  transform: skewY(-12deg);
+}
+
+.company-performance-page .performance-metric-row div::before {
+  content: "";
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  z-index: 1;
 }
 
 .company-performance-page .performance-trends {
@@ -9582,6 +9608,7 @@ select option { background:#fff; color:#183452; font-weight:500; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
+  padding: 12px 16px 16px;
 }
 
 .company-performance-page .performance-trends > .panel {
@@ -9590,6 +9617,9 @@ select option { background:#fff; color:#183452; font-weight:500; }
   min-width: 0;
   margin: 0;
   overflow: hidden;
+  border-color: var(--color-2);
+  background: linear-gradient(145deg, #fff, var(--color-4));
+  box-shadow: 0 10px 26px rgba(60, 146, 247, 0.08);
 }
 
 .company-performance-page .performance-trends .panel-body {
@@ -9613,21 +9643,21 @@ select option { background:#fff; color:#183452; font-weight:500; }
   display: block;
   margin: 6px 0 0;
   padding-left: 4px;
-  overflow: visible;
   white-space: nowrap;
-}
-
-@media (max-width: 900px) {
-  .company-performance-page .performance-trends { grid-template-columns: 1fr; }
 }
 
 .company-performance-page .performance-trends .chart-style-badge {
   display: none;
 }
 
+@media (max-width: 900px) {
+  .company-performance-page .performance-trends { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 720px) {
   .company-performance-page .performance-metric-row { grid-template-columns: 1fr 1fr; }
 }
+
 
 .approval-list { display:grid; gap:14px; padding:0 16px 16px; }
 .approval-card { display:grid; gap:12px; padding:16px; border:1px solid #d7e6f6; border-radius:16px; background:#fff; }
