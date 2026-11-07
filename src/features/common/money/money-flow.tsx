@@ -108,8 +108,7 @@ export function MoneyFlowPage({
   direction: MoneyDirection;
 }) {
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [month, setMonth] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
@@ -280,8 +279,7 @@ export function MoneyFlowPage({
       .toLowerCase();
     if (q && !searchable.includes(q)) return false;
     if (statusFilter && r.matchStatus !== statusFilter) return false;
-    if (dateFrom && r.postedDate < dateFrom) return false;
-    if (dateTo && r.postedDate > dateTo) return false;
+    if (month && !r.postedDate.startsWith(month)) return false;
     return true;
   });
   const matched = filtered.filter((r) => r.matchStatus === "matched").length;
@@ -412,27 +410,14 @@ export function MoneyFlowPage({
             </div>
             <div>
               <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-                Date from
+                Month
               </label>
               <input
-                aria-label="Date from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                style={{ minWidth: 150 }}
-              />
-            </div>
-            <div style={{ fontSize: 13, color: "var(--muted)", paddingBottom: 8 }}>until</div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-                Date to
-              </label>
-              <input
-                aria-label="Date to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                style={{ minWidth: 150 }}
+                aria-label="Month"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                style={{ minWidth: 160 }}
               />
             </div>
             <div ref={statusRef} style={{ position: "relative" }}>
@@ -498,14 +483,13 @@ export function MoneyFlowPage({
                 </div>
               )}
             </div>
-            {(search || dateFrom || dateTo || statusFilter) && (
+            {(search || month || statusFilter) && (
               <button
                 className="btn small"
                 type="button"
                 onClick={() => {
                   setSearch("");
-                  setDateFrom("");
-                  setDateTo("");
+                  setMonth("");
                   setStatusFilter("");
                 }}
                 style={{ marginBottom: 2 }}
@@ -515,7 +499,7 @@ export function MoneyFlowPage({
             )}
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 12px" }}>
-            Date filter uses the bank row Date column. Showing {filtered.length} of {rows.length} rows.
+            Month filter uses the bank row Date column. Showing {filtered.length} of {rows.length} rows.
           </div>
         </div>
         <DataTable
