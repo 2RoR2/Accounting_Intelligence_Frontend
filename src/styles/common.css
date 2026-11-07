@@ -9762,5 +9762,55 @@ select option { background:#fff; color:#183452; font-weight:500; }
     background: #fff;
   }
 }
+}
+.validation-overview-page .widget-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+}
+.validation-overview-page .widget-metric-grid a {
+  min-height: 116px;
+  padding: 20px 18px;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 18px;
+  color: #fff !important;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(49,91,233,.2), inset 0 1px 0 rgba(255,255,255,.18);
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.validation-overview-page .widget-metric-grid a strong {
+  display: block;
+  color: #fff !important;
+  font-size: 34px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+  text-shadow: 0 2px 5px rgba(7,37,74,.34);
+}
+.validation-overview-page .widget-metric-grid a span {
+  display: block;
+  margin-top: 8px;
+  color: #fff !important;
+  font-size: 12px;
+  text-shadow: 0 1px 3px rgba(7,37,74,.28);
+}
+.validation-overview-page .widget-metric-grid a:nth-child(1) { background: linear-gradient(145deg,#1d568f 0%,#286db1 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(2) { background: linear-gradient(145deg,#2b79c9 0%,#3c92f7 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(3) { background: linear-gradient(145deg,#3c92f7 0%,#5aa5f8 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(4) { background: linear-gradient(145deg,#5aa5f8 0%,#7eb8f1 100%) !important; }
+.validation-overview-page .widget-metric-grid a:hover { transform: translateY(-3px); box-shadow: 0 14px 26px rgba(49,91,233,.28); }
+.validation-overview-page .widget-metric-grid a:nth-child(1):hover { background: linear-gradient(145deg,#194c8b 0%,#2874c6 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(2):hover { background: linear-gradient(145deg,#287bcf 0%,#4b9cff 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(3):hover { background: linear-gradient(145deg,#4b9cff 0%,#7dbbff 100%) !important; }
+.validation-overview-page .widget-metric-grid a:nth-child(4):hover { background: linear-gradient(145deg,#6eaff0 0%,#91c4f5 100%) !important; }
+@media (max-width: 980px) {
+  .validation-overview-page .widget-metric-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .validation-overview-page .widget-metric-grid { grid-template-columns: 1fr; }
+}
 
 
