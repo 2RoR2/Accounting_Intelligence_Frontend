@@ -35,6 +35,7 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { PerformanceCards, TrendChart } from "@/components/common/dashboard/charts";
+import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-night";
 import { AccountantDashboard } from "@/features/users/accountant-dashboard";
 
 export function Dashboard({ user }: { user: User }) {
@@ -103,33 +104,32 @@ export function Dashboard({ user }: { user: User }) {
   const completionRate = Math.round((completed / denominator) * 100);
 
   return (
-    <div className="dashboard-page">
-      {!accountant && <PageHeader
-        eyebrow={admin ? "YOUR PLATFORM, AT A GLANCE" : undefined}
-        title={
-          admin
-            ? "Platform overview"
-            : local
-              ? "Company overview"
-              : "Overview"
-        }
-        description={
-          admin
-            ? "Monitor tenants, access requests, and AI processing health across the platform."
-            : local
-              ? "Track document intake, exceptions, standardised records, and money matching for your company."
+    <div className={`dashboard-page${local ? " company-dashboard" : ""}`}>
+      {local ? (
+        <div className="workspace-dashboard-header dashboard-reference-header">
+          <MalaysiaDayNight />
+          <div>
+            <span className="workspace-dashboard-kicker">OVERVIEW</span>
+            <h1>Company overview</h1>
+            <p>Track document intake, exceptions, standardised records, and money matching for your company.</p>
+          </div>
+          <div className="workspace-dashboard-actions">
+            <Link className="btn primary" href={`${base}/upload`}>
+              <Plus size={15} /> Upload documents
+            </Link>
+          </div>
+        </div>
+      ) : !accountant && (
+        <PageHeader
+          eyebrow={admin ? "YOUR PLATFORM, AT A GLANCE" : undefined}
+          title={admin ? "Platform overview" : "Overview"}
+          description={
+            admin
+              ? "Monitor tenants, access requests, and AI processing health across the platform."
               : "Your documents, reviews, and processing activity in one place."
-        }
-        actions={
-          <>
-            {!admin && local && (
-              <Link className="btn primary" href={`${base}/upload`}>
-                <Plus size={15} /> Upload documents
-              </Link>
-            )}
-          </>
-        }
-      />}
+          }
+        />
+      )}
 
       {!accountant && <div className="date-line">
         <span className="pulse-dot" />
