@@ -7,7 +7,7 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   company: new Set([
   "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
-  "records", "users", "validation-rules", "reports", "audit",
+  "records", "users", "validation-overview", "validation-rules", "reports", "audit",
   "settings", "profile", "money-in", "money-out", "ledger"
 ]),
   workspace: new Set(["dashboard", "evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
