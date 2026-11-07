@@ -71,6 +71,7 @@ const companyNav = [
   ["Documents", "documents", Files],
   ["Upload", "upload", Upload],
   ["Exceptions", "exceptions", ShieldCheck],
+  ["Validation Overview", "validation-overview", ShieldCheck],
   ["Approvals", "approvals", ClipboardCheck],
   ["Standardised Records", "records", FileCheck2],
   ["Contacts", "contacts", Users],
@@ -265,7 +266,7 @@ export function AppShell({
     ]
   : [
       { label: "Overview", paths: ["dashboard"] },
-      { label: "Documents", paths: ["documents", "upload", "exceptions", "records", "approvals"] },
+      { label: "Documents", paths: ["documents", "upload", "exceptions", "validation-overview", "records", "approvals"] },
       { label: "Banking", paths: ["reconciliation", "money-in", "money-out"] },
       { label: "Accounting", paths: ["ledger"] },
       { label: "Insights", paths: ["reports", "evaluation"] },
