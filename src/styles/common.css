@@ -9718,5 +9718,49 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .public-info-page .hp-lead {
   color: #315b86 !important;
 }
+@media (min-width: 901px) {
+  .auth-wash.auth-no-nav .mfa-stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+    align-items: center;
+    width: min(1180px, calc(100% - 96px));
+    max-width: 1180px;
+    min-height: calc(100vh - 96px);
+    margin: 48px auto;
+    padding: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 24px 65px rgba(19, 45, 78, 0.16);
+    overflow: hidden;
+  }
+
+  .auth-wash.auth-no-nav .mfa-stage .otp-wait,
+  .auth-wash.auth-no-nav .mfa-stage .auth-card {
+    grid-column: 1;
+    width: min(100%, 520px);
+    margin: 0 auto;
+    box-shadow: none;
+  }
+
+  .auth-wash.auth-no-nav .mfa-stage .auth-preview-panel {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 900px) {
+  .auth-wash.auth-no-nav .mfa-stage {
+    width: calc(100% - 28px);
+    margin: 14px auto;
+    border-radius: 20px;
+    background: #fff;
+  }
+}
 
 
