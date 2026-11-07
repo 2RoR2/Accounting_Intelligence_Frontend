@@ -79,12 +79,12 @@ const companyNav = [
   ["Reconciliation", "reconciliation", ClipboardCheck],
   ["Ledger", "ledger", BookOpen],
   ["Summary", "reports", ChartNoAxesCombined],
-  ["Evaluation", "evaluation", ChartNoAxesCombined],
   ["Audit Trail", "audit", Activity],
   ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
   ["Settings", "settings", Settings2],
   ["Profile", "profile", UserRound],
+  ["Company Performance", "reports", ChartNoAxesCombined],
 ] as const;
 
 const accountantNav = [
