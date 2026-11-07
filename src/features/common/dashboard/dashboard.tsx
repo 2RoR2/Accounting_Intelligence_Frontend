@@ -15,6 +15,9 @@ import {
   FileCheck2,
   AlertCircle,
   ArrowDownToLine,
+  BookOpen,
+  Scale,
+  Contact,
 } from "lucide-react";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -102,6 +105,8 @@ export function Dashboard({ user }: { user: User }) {
 
   const exceptionRate = Math.round((open / denominator) * 100);
   const completionRate = Math.round((completed / denominator) * 100);
+  const waitingApproval = data.docs.filter((d) => d.status === "IN_REVIEW").length;
+  const firstName = user.name?.split(" ")[0] || "there";
 
   return (
     <div className={`dashboard-page${local ? " company-dashboard" : ""}`}>
@@ -109,11 +114,12 @@ export function Dashboard({ user }: { user: User }) {
         <div className="workspace-dashboard-header dashboard-reference-header">
           <MalaysiaDayNight />
           <div>
-            <span className="workspace-dashboard-kicker">OVERVIEW</span>
-            <h1>Company overview</h1>
-            <p>Track document intake, exceptions, standardised records, and money matching for your company.</p>
+            <span className="workspace-dashboard-kicker">COMPANY OVERVIEW</span>
+            <h1>Good to see you, {firstName}</h1>
+            <p>Approve work, clear exceptions, and keep company records moving.</p>
           </div>
           <div className="workspace-dashboard-actions">
+            <Link className="btn" href={`${base}/documents`}>Search documents</Link>
             <Link className="btn primary" href={`${base}/upload`}>
               <Plus size={15} /> Upload documents
             </Link>
@@ -131,7 +137,7 @@ export function Dashboard({ user }: { user: User }) {
         />
       )}
 
-      {!accountant && <div className="date-line">
+      {!local && !accountant && <div className="date-line">
         <span className="pulse-dot" />
         {new Intl.DateTimeFormat("en-MY", {
           weekday: "long",
@@ -141,7 +147,42 @@ export function Dashboard({ user }: { user: User }) {
         }).format(new Date())}{" "}
       </div>}
 
-      {!accountant && (admin ? data.requests.some((r) => r.status === "PENDING") : open > 0 || failed > 0) && (
+      {local && (waitingApproval > 0 || open > 0 || failed > 0) && (
+        <div className="company-attention-row">
+          {waitingApproval > 0 && (
+            <Link className="company-attention-card" href={`${base}/approvals`}>
+              <ClipboardCheck size={18} />
+              <div>
+                <strong>{waitingApproval} waiting for approval</strong>
+                <span>Submitted after revalidation</span>
+              </div>
+              <ArrowRight size={16} />
+            </Link>
+          )}
+          {open > 0 && (
+            <Link className="company-attention-card" href={`${base}/exceptions`}>
+              <CircleAlert size={18} />
+              <div>
+                <strong>{open} open exception{open === 1 ? "" : "s"}</strong>
+                <span>Need correction before approval</span>
+              </div>
+              <ArrowRight size={16} />
+            </Link>
+          )}
+          {failed > 0 && (
+            <Link className="company-attention-card is-danger" href={`${base}/documents?status=FAILED`}>
+              <AlertCircle size={18} />
+              <div>
+                <strong>{failed} failed job{failed === 1 ? "" : "s"}</strong>
+                <span>Retry or replace the source file</span>
+              </div>
+              <ArrowRight size={16} />
+            </Link>
+          )}
+        </div>
+      )}
+
+      {!local && !accountant && (admin ? data.requests.some((r) => r.status === "PENDING") : open > 0 || failed > 0) && (
         <Link
           className="attention-banner"
           href={`${base}/${admin ? "approvals" : failed > 0 ? "documents?status=FAILED" : "exceptions"}`}
@@ -172,249 +213,152 @@ export function Dashboard({ user }: { user: User }) {
       )}
 
       {accountant ? (
-        <AccountantDashboard docs={data.docs} exceptions={open} userName={user.name?.split(" ")[0] ?? "there"} />
+        <AccountantDashboard docs={data.docs} exceptions={open} userName={firstName} />
       ) : (
         <>
-          {/* Company / Platform pipeline health */}
           <div className="stats-grid">
             {admin ? (
               <>
-                <StatCard
-                  label="Active tenants"
-                  value={data.tenants.filter((t) => t.status === "ACTIVE").length}
-                  icon={<Building2 size={17} />}
-                />
-                <StatCard
-                  label="Pending requests"
-                  value={data.requests.filter((r) => r.status === "PENDING").length}
-                  icon={<ClipboardCheck size={17} />}
-                  detail="awaiting your review"
-                />
-                <StatCard
-                  label="Total users"
-                  value={data.users.length}
-                  icon={<Users size={17} />}
-                />
-                <StatCard
-                  label="Documents processed"
-                  value={data.docs.length}
-                  icon={<Files size={17} />}
-                />
+                <StatCard label="Active tenants" value={data.tenants.filter((t) => t.status === "ACTIVE").length} icon={<Building2 size={17} />} />
+                <StatCard label="Pending requests" value={data.requests.filter((r) => r.status === "PENDING").length} icon={<ClipboardCheck size={17} />} detail="awaiting your review" />
+                <StatCard label="Total users" value={data.users.length} icon={<Users size={17} />} />
+                <StatCard label="Documents processed" value={data.docs.length} icon={<Files size={17} />} />
               </>
             ) : (
               <>
-                <StatCard
-                  label="Documents processed"
-                  value={data.docs.length}
-                  icon={<Files size={17} />}
-                  detail="Total ingested"
-                />
-                <StatCard
-                  label="Standardised"
-                  value={completed}
-                  icon={<FileCheck2 size={17} />}
-                  detail={`${completionRate}% of total`}
-                />
-                <StatCard
-                  label="Open exceptions"
-                  value={open}
-                  icon={<CircleAlert size={17} />}
-                  detail={`${exceptionRate}% exception rate`}
-                />
-                <StatCard
-                  label="Pending review"
-                  value={
-                    data.docs.filter((d) =>
-                      ["EXCEPTION", "IN_REVIEW", "CORRECTED"].includes(d.status),
-                    ).length
-                  }
-                  icon={<Clock3 size={17} />}
-                />
+                <StatCard label="Documents" value={data.docs.length} icon={<Files size={17} />} detail="In this company" />
+                <StatCard label="Waiting approval" value={waitingApproval} icon={<ClipboardCheck size={17} />} detail="Ready for your decision" />
+                <StatCard label="Open exceptions" value={open} icon={<CircleAlert size={17} />} detail={`${exceptionRate}% exception rate`} />
+                <StatCard label="Standardised" value={completed} icon={<FileCheck2 size={17} />} detail={`${completionRate}% of total`} />
               </>
             )}
           </div>
 
           {local && (
-            <div className="stats-grid" style={{ marginTop: 12 }}>
-              <Link href={`${base}/upload`} className="stat-card-link">
-                <StatCard label="Upload" value="New" icon={<Upload size={17} />} detail="Add documents" />
-              </Link>
-              <Link href={`${base}/exceptions`} className="stat-card-link">
-                <StatCard label="Exceptions" value={open} icon={<AlertCircle size={17} />} detail="Review queue" />
-              </Link>
-              <Link href={`${base}/records`} className="stat-card-link">
-                <StatCard label="Records" value={completed} icon={<FileCheck2 size={17} />} detail="Standardised" />
-              </Link>
-              <Link href={`${base}/money-in`} className="stat-card-link">
-                <StatCard label="Money In" value="Match" icon={<ArrowDownToLine size={17} />} detail="Receipts" />
-              </Link>
-            </div>
+            <section className="company-actions">
+              <h2>What needs you</h2>
+              <div className="company-action-grid">
+                <Link href={`${base}/approvals`} className="company-action-card">
+                  <ClipboardCheck size={18} />
+                  <strong>Approve documents</strong>
+                  <span>Queue after revalidation</span>
+                </Link>
+                <Link href={`${base}/exceptions`} className="company-action-card">
+                  <AlertCircle size={18} />
+                  <strong>Clear exceptions</strong>
+                  <span>{open} still open</span>
+                </Link>
+                <Link href={`${base}/contacts`} className="company-action-card">
+                  <Contact size={18} />
+                  <strong>Contacts</strong>
+                  <span>Customers and suppliers</span>
+                </Link>
+                <Link href={`${base}/reconciliation`} className="company-action-card">
+                  <Scale size={18} />
+                  <strong>Reconciliation</strong>
+                  <span>Match money to records</span>
+                </Link>
+                <Link href={`${base}/ledger`} className="company-action-card">
+                  <BookOpen size={18} />
+                  <strong>Ledger</strong>
+                  <span>Journals and trial balance</span>
+                </Link>
+                <Link href={`${base}/upload`} className="company-action-card">
+                  <Upload size={18} />
+                  <strong>Upload</strong>
+                  <span>Add a new document</span>
+                </Link>
+              </div>
+            </section>
           )}
 
-          <div className="section-heading">
-            <h2>
-              Performance at a glance <span className="subtle-tag">Reference benchmarks</span>
-            </h2>
-            <Link href={`${base}/${admin ? "performance" : local ? "reports" : "records"}`}>
-              View {admin || local ? "performance" : "records"} <ArrowRight size={14} />
-            </Link>
-          </div>
-          <PerformanceCards metrics={data.metrics} />
+          {!local && (
+            <div className="section-heading">
+              <h2>Performance at a glance <span className="subtle-tag">Reference benchmarks</span></h2>
+              <Link href={`${base}/${admin ? "performance" : "records"}`}>View performance <ArrowRight size={14} /></Link>
+            </div>
+          )}
+          {!local && <PerformanceCards metrics={data.metrics} />}
 
-          <div className="dashboard-middle">
-            <TrendChart />
-            <Panel
-              title="AI processing status"
-              subtitle="Extraction jobs · independent of record validation"
-              action={
-                <span className="badge green">
-                  <span className="badge-dot" />
-                  Processing queue
-                </span>
-              }
-            >
-              <div className="processing-total">
-                <div className="processing-ring" style={ringStyle}>
-                  <ScanLine size={25} />
-                  <strong>{data.docs.length}</strong>
-                  <small>Total documents</small>
-                </div>
-              </div>
-              <div className="processing-legend">
-                {[
-                  ["Queued", queued, "amber"],
-                  ["Processing", running, "blue"],
-                  ["Extracted", extracted, "green"],
-                  ["Failed", failed, "red"],
-                ].map(([label, count, color]) => (
-                  <div key={String(label)}>
-                    <span className={`legend-dot ${color}`} />
-                    <span>{label}</span>
-                    <strong>{count}</strong>
+          {!local && (
+            <div className="dashboard-middle">
+              <TrendChart />
+              <Panel title="AI processing status" subtitle="Extraction jobs · independent of record validation" action={<span className="badge green"><span className="badge-dot" />Processing queue</span>}>
+                <div className="processing-total">
+                  <div className="processing-ring" style={ringStyle}>
+                    <ScanLine size={25} />
+                    <strong>{data.docs.length}</strong>
+                    <small>Total documents</small>
                   </div>
-                ))}
-              </div>
-            </Panel>
-          </div>
+                </div>
+                <div className="processing-legend">
+                  {[["Queued", queued, "amber"], ["Processing", running, "blue"], ["Extracted", extracted, "green"], ["Failed", failed, "red"]].map(([label, count, color]) => (
+                    <div key={String(label)}>
+                      <span className={`legend-dot ${color}`} />
+                      <span>{label}</span>
+                      <strong>{count}</strong>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+          )}
         </>
       )}
 
       {admin ? (
-        <Panel
-          title="Tenant activity"
-          subtitle="Account usage and document activity across your companies"
-          action={
-            <Link className="text-link" href="/admin/tenants">
-              View all tenants <ArrowRight size={14} />
-            </Link>
-          }
-        >
+        <Panel title="Tenant activity" subtitle="Account usage and document activity across your companies" action={<Link className="text-link" href="/admin/tenants">View all tenants <ArrowRight size={14} /></Link>}>
           <DataTable
             rows={data.tenants}
             rowKey={(t) => t.id}
             columns={[
-              {
-                label: "Company",
-                render: (t) => (
-                  <Link className="company-cell" href={`/admin/tenants/${t.id}`}>
-                    <span className="company-avatar">{t.name.slice(0, 2)}</span>
-                    <span>
-                      <strong>{t.name}</strong>
-                    </span>
-                  </Link>
-                ),
-              },
-              {
-                label: "Users / limit",
-                render: (t) => (
-                  <span>
-                    {activeUsers.filter((u) => u.tenantId === t.id).length}{" "}
-                    <span className="muted">/ {t.accountLimit}</span>
-                  </span>
-                ),
-              },
-              {
-                label: "Documents",
-                render: (t) => data.docs.filter((d) => d.tenantId === t.id).length,
-              },
-              {
-                label: "Exceptions",
-                render: (t) => (
-                  <span className="exception-count">
-                    {data.exceptions.filter((e) => e.tenantId === t.id && e.status !== "RESOLVED").length}
-                  </span>
-                ),
-              },
+              { label: "Company", render: (t) => <Link className="company-cell" href={`/admin/tenants/${t.id}`}><span className="company-avatar">{t.name.slice(0, 2)}</span><span><strong>{t.name}</strong></span></Link> },
+              { label: "Users / limit", render: (t) => <span>{activeUsers.filter((u) => u.tenantId === t.id).length} <span className="muted">/ {t.accountLimit}</span></span> },
+              { label: "Documents", render: (t) => data.docs.filter((d) => d.tenantId === t.id).length },
+              { label: "Exceptions", render: (t) => <span className="exception-count">{data.exceptions.filter((e) => e.tenantId === t.id && e.status !== "RESOLVED").length}</span> },
               { label: "Status", render: (t) => <Badge>{t.status}</Badge> },
-              {
-                label: "",
-                render: (t) => (
-                  <Link className="icon-btn" aria-label={`View ${t.name}`} href={`/admin/tenants/${t.id}`}>
-                    <ArrowRight size={16} />
-                  </Link>
-                ),
-              },
+              { label: "", render: (t) => <Link className="icon-btn" aria-label={`View ${t.name}`} href={`/admin/tenants/${t.id}`}><ArrowRight size={16} /></Link> },
             ]}
           />
         </Panel>
-      ) : (
-        <div className={local ? "dashboard-middle" : "single-grid"}>
-          {local && (
-            <Panel
-              title="Recent documents"
-              action={
-                <Link href={`${base}/documents`} className="text-link">
-                  View all <ArrowRight size={14} />
-                </Link>
-              }
-            >
-              <DataTable
-                rows={data.docs.slice(0, 5)}
-                rowKey={(d) => d.id}
-                columns={[
-                  {
-                    label: "Document",
-                    render: (d) => (
-                      <Link className="document-link" href={`${base}/documents/${d.id}`}>
-                        <Files size={16} />
-                        {d.name}
-                      </Link>
-                    ),
-                  },
-                  { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
-                  { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
-                ]}
-              />
-            </Panel>
-          )}
-          {local && (
-            <Panel title="Your team" subtitle="Active accounts and reserved invitations">
+      ) : local ? (
+        <div className="company-work-grid">
+          <Panel title="Recent documents" subtitle="Latest intake in this company" action={<Link href={`${base}/documents`} className="text-link">View all <ArrowRight size={14} /></Link>}>
+            <DataTable
+              rows={data.docs.slice(0, 6)}
+              rowKey={(d) => d.id}
+              columns={[
+                { label: "Document", render: (d) => <Link className="document-link" href={`${base}/documents/${d.id}`}><Files size={16} />{d.name}</Link> },
+                { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
+                { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
+              ]}
+            />
+          </Panel>
+          <div className="company-side-stack">
+            <Panel title="Your team" subtitle="Active accounts and invitations">
               <div className="panel-body">
-                <AccountUsage used={activeUsers.length} limit={data.tenants[0]?.accountLimit ?? 1} />
+                <AccountUsage used={activeUsers.length} limit={data.tenants[0]?.accountLimit ?? 25} />
                 <div className="detail-list">
-                  <div>
-                    <span>Local administrators</span>
-                    <strong>{activeUsers.filter((u) => u.role === "LOCAL_ADMIN").length}</strong>
-                  </div>
-                  <div>
-                    <span>Active accountants</span>
-                    <strong>
-                      {activeUsers.filter((u) => u.role === "ACCOUNTANT" && u.status === "ACTIVE").length}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Pending invitations</span>
-                    <strong>{activeUsers.filter((u) => u.status === "INVITED").length}</strong>
-                  </div>
+                  <div><span>Local administrators</span><strong>{activeUsers.filter((u) => u.role === "LOCAL_ADMIN").length}</strong></div>
+                  <div><span>Active accountants</span><strong>{activeUsers.filter((u) => u.role === "ACCOUNTANT" && u.status === "ACTIVE").length}</strong></div>
+                  <div><span>Pending invitations</span><strong>{activeUsers.filter((u) => u.status === "INVITED").length}</strong></div>
                 </div>
-                <Link className="btn full" href="/company/users">
-                  <Plus size={15} /> Invite accountant
-                </Link>
+                <Link className="btn full" href="/company/users"><Plus size={15} /> Invite accountant</Link>
               </div>
             </Panel>
-          )}
+            <Panel title="Processing" subtitle="Extraction queue">
+              <div className="panel-body company-processing">
+                <div className="processing-ring small" style={ringStyle}><ScanLine size={18} /><strong>{data.docs.length}</strong></div>
+                <div className="processing-legend">
+                  {[["Queued", queued, "amber"], ["Processing", running, "blue"], ["Extracted", extracted, "green"], ["Failed", failed, "red"]].map(([label, count, color]) => (
+                    <div key={String(label)}><span className={`legend-dot ${color}`} /><span>{label}</span><strong>{count}</strong></div>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+          </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
