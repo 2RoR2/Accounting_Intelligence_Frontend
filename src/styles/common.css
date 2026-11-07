@@ -9711,5 +9711,8 @@ select option { background:#fff; color:#183452; font-weight:500; }
 @media (max-width:800px) {
   .approval-card dl, .approval-changes li { grid-template-columns:1fr; }
 }
+.dashboard-widget-attention {
+  grid-column: span 12;
+}
 
 
