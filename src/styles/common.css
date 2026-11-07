@@ -9561,14 +9561,35 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .company-performance-page .performance-trends {
   display: grid;
   gap: 16px;
+  width: 100%;
 }
 
 .company-performance-page .performance-trends > .panel {
   display: block !important;
   width: 100%;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.company-performance-page .performance-trends .panel-body,
+.company-performance-page .performance-trends .trend-chart {
+  width: 100%;
+  min-width: 0;
+}
+
+.company-performance-page .performance-trends .trend-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.company-performance-page .performance-trends .chart-style-badge {
+  display: none;
 }
 
 @media (max-width: 720px) {
   .company-performance-page .performance-metric-row { grid-template-columns: 1fr 1fr; }
 }
+
 
