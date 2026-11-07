@@ -8190,6 +8190,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .app-shell .sidebar .nav-item.active { color:#08254a !important; background:var(--color-3); border-left-color:var(--color-0); box-shadow:0 4px 14px rgba(60,146,247,.2); }
 .app-shell .sidebar .nav-item.active svg { color:#0b5fbc; }
 .app-shell .sidebar .nav-label { color:#eaf5ff !important; }
+.app-shell .sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app-shell .sidebar nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 /* AccountantDashboard owns its own widget-based header and attention flow. */
 .dashboard-page:has(.workspace-dashboard-header) > .page-header,
