@@ -217,35 +217,20 @@ export function PerformancePage({ user }: { user: User }) {
       </section>
 
       <section className="performance-block">
-        <div className="workspace-documents-toolbar">
-          <div>
-            <span className="workspace-dashboard-kicker">PROCESSING</span>
-            <h2>Jobs and quality</h2>
-            <p>Jobs can be higher than documents because a document may be retried.</p>
-          </div>
-        </div>
         <div className="performance-metric-row">
           <div><strong>{jobs}</strong><span>Processing jobs</span></div>
           <div><strong>{failed}</strong><span>Failed documents</span></div>
-          {data.metrics.filter((m) => !m.label.toLowerCase().includes("processed")).map((m) => (
-            <div key={m.label}><strong>{m.value}</strong><span>{m.label}</span></div>
-          ))}
+          {data.metrics
+            .filter((m) => !/processed|field accuracy|manual-effort/i.test(m.label))
+            .map((m) => (
+              <div key={m.label}><strong>{m.value}</strong><span>{m.label}</span></div>
+            ))}
         </div>
       </section>
 
-      <section className="performance-block">
-        <div className="workspace-documents-toolbar">
-          <div>
-            <span className="workspace-dashboard-kicker">TRENDS</span>
-            <h2>How the company is moving</h2>
-          </div>
-        </div>
-        <div className="performance-chart-grid">
-          <TrendChart />
-          <TrendChart kind="accuracy" />
-          <TrendChart kind="exceptions" />
-        </div>
-      </section>
+      <TrendChart />
+      <TrendChart kind="accuracy" />
+      <TrendChart kind="exceptions" />
     </div>
   );
 }
