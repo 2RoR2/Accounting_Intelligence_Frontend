@@ -53,7 +53,7 @@ export function RecordDetail({
       </div>
       <Panel
         title={record.id}
-        subtitle={`Document ${record.documentId}${"createdAt" in record ? " | Processed " + formatDate(record.createdAt) : ""}`}
+        subtitle={"createdAt" in record ? `Processed ${formatDate(record.createdAt)}` : "Standardised fields only"}
       >
         <div className="record-fields">
           {Object.entries(record.extraction.fields).map(([key, f]) => (
@@ -175,11 +175,11 @@ export function RecordsPage({
         description={
           admin
             ? "Tenant-level monitoring. Detailed accounting data is available only through Support View."
-            : "Consistent, validated accounting records, ready to export."
+            : "One standardised record for each extracted document. Open a record to review the standardised fields. The original document stays hidden until you choose View original document."
         }
         actions={
           !admin && (
-            <div className="page-header-actions">
+            <div className="page-header-actions" style={{ display: "flex", gap: 12 }}>
               <button className="btn" type="button" disabled={!records.length} onClick={exportRows}><Download size={16} /> Export CSV</button>
               <button className="btn primary" type="button" disabled={!records.length} onClick={() => void createBackendExport()}><Download size={16} /> Create backend export</button>
               <button className="btn" type="button" onClick={() => void loadExportHistory()}>Export history</button>
@@ -488,7 +488,7 @@ export function RecordsPage({
                 className="btn"
                 href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/documents/${detail.documentId}`}
               >
-                View source document
+                View original document
               </Link>
             )}
           </div>
