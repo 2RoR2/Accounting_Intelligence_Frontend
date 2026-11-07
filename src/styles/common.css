@@ -9714,5 +9714,9 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .dashboard-widget-attention {
   grid-column: span 12;
 }
+.public-info-page.home-wash .hp-lead,
+.public-info-page .hp-lead {
+  color: #315b86 !important;
+}
 
 
