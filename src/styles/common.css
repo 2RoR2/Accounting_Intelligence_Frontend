@@ -9582,6 +9582,70 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .dashboard-page:has(.workspace-dashboard-header) .workspace-summary-total strong {
   font-size: 32px;
 }
+/* Company Performance — dashboard banner, then full-width sections. */
+.company-performance-page,
+.dashboard-page:has(.workspace-dashboard-header) {
+  display: grid;
+  gap: 18px;
+}
+
+.performance-block {
+  overflow: hidden;
+  border: 1px solid var(--ui-border, #d7e6f6);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.performance-metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px 22px;
+}
+
+.performance-metric-row div {
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid #e1ebf8;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #f6faff);
+}
+
+.performance-metric-row strong {
+  display: block;
+  color: #16355d;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.performance-metric-row span {
+  display: block;
+  margin-top: 8px;
+  color: #47709f;
+  font-size: 12px;
+}
+
+.performance-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px 20px 22px;
+}
+
+.performance-chart-grid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.performance-chart-grid .panel,
+.performance-chart-grid .trend-card {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .performance-metric-row,
+  .performance-chart-grid { grid-template-columns: 1fr; }
+}
 
 
 @media (max-width: 900px) {
