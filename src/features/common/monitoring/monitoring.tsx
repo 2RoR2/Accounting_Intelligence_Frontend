@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Activity, Download, ScanLine, Eye, RefreshCw, Files, FileCheck2, CircleAlert } from "lucide-react";
+import { Activity, Download, ScanLine, Eye, RefreshCw, Files, FileCheck2, CircleAlert, ClipboardCheck, AlertCircle } from "lucide-react";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -161,106 +161,79 @@ export function PerformancePage({ user }: { user: User }) {
   );
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
+  const company = user.role !== "SUPER_ADMIN";
+  const standardised = data.docs.filter((d) => ["COMPLETED", "VALIDATED", "STANDARDISED"].includes(d.status)).length;
+  const exceptions = data.docs.filter((d) => d.status === "EXCEPTION").length;
+  const inReview = data.docs.filter((d) => d.status === "IN_REVIEW").length;
+  const failed = data.docs.filter((d) => d.status === "FAILED").length;
+  const jobs = data.metrics.find((m) => m.label.toLowerCase().includes("processed"))?.value ?? "—";
   return (
-    <>
-      <PageHeader
-        eyebrow="INSIGHTS & REPORTING"
-        title={
-          user.role === "SUPER_ADMIN"
-            ? "Platform performance"
-            : "Company Performance"
-        }
-        description={
-          user.role === "LOCAL_ADMIN"
-            ? "Company totals, standardised records, exception rate, and processing trends."
-            : "Project success criteria and processing trends. Benchmark values reflect current workspace performance."
-        }
-        actions={
-          <button
-            className="btn"
-            onClick={() =>
-              downloadCsv("performance-report.csv", [
-                [
-                  "Report section",
-                  "Metric",
-                  "Value",
-                  "Target",
-                  "Met",
-                  "Period",
-                ],
-                ...data.metrics.map((m) => [
-                  "Performance",
-                  m.label,
-                  m.value,
-                  m.target,
-                  String(m.met),
-                  "Current period",
-                ]),
-                ...data.tenants.map((tenant) => [
-                  "Tenant volume",
-                  tenant.name,
-                  String(
-                    data.docs.filter((doc) => doc.tenantId === tenant.id)
-                      .length,
-                  ),
-                  "Tracked documents",
-                  "Yes",
-                  "Current period",
-                ]),
-                ...data.docs.map((doc) => [
-                  "Document detail",
-                  doc.name,
-                  doc.status,
-                  `${doc.seconds} sec processing`,
-                  doc.status === "COMPLETED" ? "Yes" : "Review",
-                  formatDate(doc.createdAt),
-                ]),
-              ])
-            }
-          >
-            <Download size={16} /> Export report
-          </button>
-        }
-      />
+    <div className="dashboard-page company-performance-page">
+      <div className="workspace-dashboard-header dashboard-reference-header">
+        <div>
+          <span className="workspace-dashboard-kicker">{company ? "COMPANY PERFORMANCE" : "PLATFORM PERFORMANCE"}</span>
+          <h1>{company ? "How the company is doing" : "Platform performance"}</h1>
+          <p>{company ? "Company totals, records, exceptions, and processing trends in one place." : "Project success criteria and processing trends across tenants."}</p>
+        </div>
+        <div className="workspace-dashboard-actions">
+          <button className="btn primary" onClick={() => downloadCsv("performance-report.csv", [
+            ["Report section", "Metric", "Value", "Target", "Met", "Period"],
+            ...data.metrics.map((m) => ["Performance", m.label, m.value, m.target, String(m.met), "Current period"]),
+            ...data.docs.map((doc) => ["Document", doc.name, doc.status, `${doc.seconds} sec processing`, doc.status === "COMPLETED" ? "Yes" : "Review", formatDate(doc.createdAt)]),
+          ])}><Download size={16} /> Export report</button>
+        </div>
+      </div>
 
-      <div className="stats-grid">
-        <StatCard label="Company documents" value={data.docs.length} icon={<Files size={17} />} detail="Live company count" />
-        <StatCard label="Standardised" value={data.docs.filter((d) => ["COMPLETED", "VALIDATED", "STANDARDISED"].includes(d.status)).length} icon={<FileCheck2 size={17} />} detail="Ready records" />
-        <StatCard label="Open exceptions" value={data.docs.filter((d) => d.status === "EXCEPTION").length} icon={<CircleAlert size={17} />} detail="Need attention" />
-        <StatCard label="Processing jobs" value={data.metrics.find((m) => m.label.toLowerCase().includes("processed"))?.value ?? "—"} icon={<ScanLine size={17} />} detail="Jobs, not documents" />
-      </div>
-      <PerformanceCards metrics={data.metrics} />
-      <div className="two-col">
-        <TrendChart />
-        <TrendChart kind="accuracy" />
-        <TrendChart kind="exceptions" />
-        <Panel
-          title="Documents processed by tenant"
-          subtitle="Current counts in the workspace"
-        >
-          <div className="panel-body tenant-bars">
-            {data.tenants.map((t) => {
-              const count = data.docs.filter((d) => d.tenantId === t.id).length;
-              return (
-                <div key={t.id}>
-                  <div>
-                    <strong>{t.name}</strong>
-                    <span>{count} documents</span>
+      <section className="performance-group">
+        <h2>Company totals</h2>
+        <p>Live document counts for this company. These are documents, not processing jobs.</p>
+        <div className="stats-grid">
+          <StatCard label="Documents" value={data.docs.length} icon={<Files size={17} />} detail="In this company" />
+          <StatCard label="Standardised" value={standardised} icon={<FileCheck2 size={17} />} detail="Ready records" />
+          <StatCard label="In review" value={inReview} icon={<ClipboardCheck size={17} />} detail="Waiting for approval" />
+          <StatCard label="Exceptions" value={exceptions} icon={<CircleAlert size={17} />} detail="Need attention" />
+        </div>
+      </section>
+
+      <section className="performance-group">
+        <h2>Processing</h2>
+        <p>Jobs can be higher than documents because one document may be retried or revalidated.</p>
+        <div className="stats-grid">
+          <StatCard label="Processing jobs" value={jobs} icon={<ScanLine size={17} />} detail="Succeeded or failed jobs" />
+          <StatCard label="Failed documents" value={failed} icon={<AlertCircle size={17} />} detail="Need a retry or replacement" />
+        </div>
+        <PerformanceCards metrics={data.metrics} />
+      </section>
+
+      <section className="performance-group">
+        <h2>Trends</h2>
+        <p>How volume, accuracy, and exceptions move over time.</p>
+        <div className="performance-trend-grid">
+          <TrendChart />
+          <TrendChart kind="accuracy" />
+          <TrendChart kind="exceptions" />
+        </div>
+      </section>
+
+      {!company && (
+        <section className="performance-group">
+          <h2>Volume by company</h2>
+          <Panel title="Documents processed by tenant" subtitle="Current counts in the workspace">
+            <div className="panel-body tenant-bars">
+              {data.tenants.map((t) => {
+                const count = data.docs.filter((d) => d.tenantId === t.id).length;
+                return (
+                  <div key={t.id}>
+                    <div><strong>{t.name}</strong><span>{count} documents</span></div>
+                    <div className="progress-track"><div style={{ width: `${data.docs.length ? (count / data.docs.length) * 100 : 0}%` }} /></div>
                   </div>
-                  <div className="progress-track">
-                    <div
-                      style={{
-                        width: `${data.docs.length ? (count / data.docs.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-      </div>
-    </>
+                );
+              })}
+            </div>
+          </Panel>
+        </section>
+      )}
+    </div>
   );
 }
 export function AuditPage({
