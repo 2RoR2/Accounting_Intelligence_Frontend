@@ -6,9 +6,9 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   admin: new Set(["dashboard", "approvals", "tenants", "users", "processing", "performance", "records", "audit", "settings", "profile"]),
   company: new Set([
   "dashboard", "evaluation", "documents", "upload", "exceptions",
-  "approvals", "contacts",
+  "approvals", "contacts", "reconciliation",
   "records", "users", "validation-rules", "reports", "audit",
-  "settings", "profile", "money-in", "money-out", "reconciliation", "ledger"
+  "settings", "profile", "money-in", "money-out", "ledger"
 ]),
   workspace: new Set(["dashboard", "evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
 };
