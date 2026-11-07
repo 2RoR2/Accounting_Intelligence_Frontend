@@ -26,6 +26,7 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { PerformanceCards, TrendChart } from "@/components/common/dashboard/charts";
+import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-night";
 export function ProcessingPage({
   user,
   tenantId,
@@ -168,71 +169,68 @@ export function PerformancePage({ user }: { user: User }) {
   const failed = data.docs.filter((d) => d.status === "FAILED").length;
   const jobs = data.metrics.find((m) => m.label.toLowerCase().includes("processed"))?.value ?? "—";
   return (
-    <div className="dashboard-page company-performance-page">
+    <div className="dashboard-page">
       <div className="workspace-dashboard-header dashboard-reference-header">
+        <MalaysiaDayNight />
         <div>
           <span className="workspace-dashboard-kicker">{company ? "COMPANY PERFORMANCE" : "PLATFORM PERFORMANCE"}</span>
           <h1>{company ? "How the company is doing" : "Platform performance"}</h1>
-          <p>{company ? "Company totals, records, exceptions, and processing trends in one place." : "Project success criteria and processing trends across tenants."}</p>
         </div>
         <div className="workspace-dashboard-actions">
           <button className="btn primary" onClick={() => downloadCsv("performance-report.csv", [
-            ["Report section", "Metric", "Value", "Target", "Met", "Period"],
-            ...data.metrics.map((m) => ["Performance", m.label, m.value, m.target, String(m.met), "Current period"]),
-            ...data.docs.map((doc) => ["Document", doc.name, doc.status, `${doc.seconds} sec processing`, doc.status === "COMPLETED" ? "Yes" : "Review", formatDate(doc.createdAt)]),
-          ])}><Download size={16} /> Export report</button>
+            ["Report section", "Metric", "Value", "Period"],
+            ["Documents", String(data.docs.length), "Live company count", "Current"],
+            ["Standardised", String(standardised), "Ready records", "Current"],
+            ["Exceptions", String(exceptions), "Need attention", "Current"],
+            ["Processing jobs", String(jobs), "Succeeded or failed jobs", "Current"],
+            ...data.docs.map((doc) => ["Document", doc.name, doc.status, formatDate(doc.createdAt)]),
+          ])}><Download size={16} /> Export</button>
         </div>
       </div>
 
-      <section className="performance-group">
-        <h2>Company totals</h2>
-        <p>Live document counts for this company. These are documents, not processing jobs.</p>
-        <div className="stats-grid">
-          <StatCard label="Documents" value={data.docs.length} icon={<Files size={17} />} detail="In this company" />
-          <StatCard label="Standardised" value={standardised} icon={<FileCheck2 size={17} />} detail="Ready records" />
-          <StatCard label="In review" value={inReview} icon={<ClipboardCheck size={17} />} detail="Waiting for approval" />
-          <StatCard label="Exceptions" value={exceptions} icon={<CircleAlert size={17} />} detail="Need attention" />
-        </div>
-      </section>
-
-      <section className="performance-group">
-        <h2>Processing</h2>
-        <p>Jobs can be higher than documents because one document may be retried or revalidated.</p>
-        <div className="stats-grid">
-          <StatCard label="Processing jobs" value={jobs} icon={<ScanLine size={17} />} detail="Succeeded or failed jobs" />
-          <StatCard label="Failed documents" value={failed} icon={<AlertCircle size={17} />} detail="Need a retry or replacement" />
-        </div>
-        <PerformanceCards metrics={data.metrics} />
-      </section>
-
-      <section className="performance-group">
-        <h2>Trends</h2>
-        <p>How volume, accuracy, and exceptions move over time.</p>
-        <div className="performance-trend-grid">
-          <TrendChart />
-          <TrendChart kind="accuracy" />
-          <TrendChart kind="exceptions" />
-        </div>
-      </section>
-
-      {!company && (
-        <section className="performance-group">
-          <h2>Volume by company</h2>
-          <Panel title="Documents processed by tenant" subtitle="Current counts in the workspace">
-            <div className="panel-body tenant-bars">
-              {data.tenants.map((t) => {
-                const count = data.docs.filter((d) => d.tenantId === t.id).length;
-                return (
-                  <div key={t.id}>
-                    <div><strong>{t.name}</strong><span>{count} documents</span></div>
-                    <div className="progress-track"><div style={{ width: `${data.docs.length ? (count / data.docs.length) * 100 : 0}%` }} /></div>
-                  </div>
-                );
-              })}
+      <section className="workspace-dashboard-layout">
+        <section className="workspace-documents-card">
+          <div className="workspace-documents-toolbar">
+            <div>
+              <span className="workspace-dashboard-kicker">COMPANY TOTALS</span>
+              <h2>{data.docs.length} documents in this company</h2>
+              <p>Documents and processing jobs are counted separately.</p>
             </div>
-          </Panel>
+          </div>
+          <div className="workspace-invoice-summary">
+            <div className="workspace-summary-total"><strong>{data.docs.length}</strong><span>Documents</span></div>
+            <div className="workspace-summary-total"><strong>{standardised}</strong><span>Standardised</span></div>
+            <div className="workspace-summary-total"><strong>{inReview}</strong><span>In review</span></div>
+            <div className="workspace-summary-total"><strong>{exceptions}</strong><span>Exceptions</span></div>
+            <div className="workspace-status-bar" aria-hidden="true">
+              <i className="is-approved" style={{ flex: standardised || 1 }} />
+              <i className="is-review" style={{ flex: inReview || 1 }} />
+              <i className="is-failed" style={{ flex: exceptions || 1 }} />
+            </div>
+            <div className="workspace-status-legend">
+              <span><i className="is-approved" /> Standardised</span>
+              <span><i className="is-review" /> In review</span>
+              <span><i className="is-failed" /> Exceptions</span>
+            </div>
+          </div>
         </section>
-      )}
+      </section>
+
+      <div className="dashboard-widget-grid">
+        <div className="dashboard-widget-slot">
+          <section className="dashboard-widget">
+            <div className="dashboard-widget-heading"><div><h2>Processing</h2><p>Jobs can be higher than documents because a document may be retried.</p></div></div>
+            <div className="widget-metric-grid">
+              <div><strong>{jobs}</strong><span>Processing jobs</span></div>
+              <div><strong>{failed}</strong><span>Failed documents</span></div>
+            </div>
+            <PerformanceCards metrics={data.metrics} />
+          </section>
+        </div>
+        <div className="dashboard-widget-slot"><TrendChart /></div>
+        <div className="dashboard-widget-slot"><TrendChart kind="accuracy" /></div>
+        <div className="dashboard-widget-slot"><TrendChart kind="exceptions" /></div>
+      </div>
     </div>
   );
 }
