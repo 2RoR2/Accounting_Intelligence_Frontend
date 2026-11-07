@@ -9560,6 +9560,7 @@ select option { background:#fff; color:#183452; font-weight:500; }
 
 .company-performance-page .performance-trends {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
 }
@@ -9569,30 +9570,42 @@ select option { background:#fff; color:#183452; font-weight:500; }
   width: 100%;
   min-width: 0;
   margin: 0;
-  overflow: visible;
+  overflow: hidden;
+}
+
+.company-performance-page .performance-trends > .panel:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .company-performance-page .performance-trends .panel-body {
-  overflow: visible;
-  padding-bottom: 18px;
+  overflow: hidden;
+  padding: 0 16px 14px;
 }
 
 .company-performance-page .performance-trends .trend-chart {
   width: 100%;
-  min-height: 240px;
+  height: 220px;
 }
 
 .company-performance-page .performance-trends .trend-chart svg {
   display: block;
   width: 100%;
-  height: 240px;
-  overflow: visible;
+  height: 100%;
 }
 
+.company-performance-page .performance-trends .chart-style-badge {
+  display: none;
+}
+
+.company-performance-page .performance-trends .chart-key,
 .company-performance-page .performance-trends .chart-source {
   display: block;
-  margin-top: 8px;
-  padding-bottom: 4px;
+  margin: 0;
+  padding: 0 2px;
+}
+
+@media (max-width: 900px) {
+  .company-performance-page .performance-trends { grid-template-columns: 1fr; }
 }
 
 .company-performance-page .performance-trends .chart-style-badge {
@@ -9602,5 +9615,4 @@ select option { background:#fff; color:#183452; font-weight:500; }
 @media (max-width: 720px) {
   .company-performance-page .performance-metric-row { grid-template-columns: 1fr 1fr; }
 }
-
 
