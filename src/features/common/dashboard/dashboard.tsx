@@ -101,6 +101,15 @@ export function Dashboard({ user }: { user: User }) {
       : "#eaf5ff",
   };
   const waitingApproval = data.docs.filter((d) => d.status === "IN_REVIEW").length;
+  const receiptCount = data.docs.filter((d) => (d.kind || d.type) === "RECEIPT").length;
+  const uploadedToday = data.docs.filter((d) => {
+    const created = new Date(d.createdAt);
+    const now = new Date();
+    return created.toDateString() === now.toDateString();
+  }).length;
+  const contactCount = new Set(
+    data.docs.flatMap((d) => [d.supplier, d.customer].filter(Boolean) as string[]),
+  ).size;
   const firstName = user.name?.split(" ")[0] || "there";
 
   return (
@@ -216,12 +225,12 @@ export function Dashboard({ user }: { user: User }) {
 
           {local && (
             <div className="stats-grid" style={{ marginTop: 12 }}>
-              <Link href={`${base}/approvals`} className="stat-card-link"><StatCard label="Approvals" value="Queue" icon={<ClipboardCheck size={17} />} detail="Decide now" /></Link>
+              <Link href={`${base}/approvals`} className="stat-card-link"><StatCard label="Approvals" value={waitingApproval} icon={<ClipboardCheck size={17} />} detail="Waiting for you" /></Link>
               <Link href={`${base}/exceptions`} className="stat-card-link"><StatCard label="Exceptions" value={open} icon={<AlertCircle size={17} />} detail="Review queue" /></Link>
-              <Link href={`${base}/contacts`} className="stat-card-link"><StatCard label="Contacts" value="People" icon={<Contact size={17} />} detail="Customers and suppliers" /></Link>
-              <Link href={`${base}/reconciliation`} className="stat-card-link"><StatCard label="Reconciliation" value="Match" icon={<Scale size={17} />} detail="Money to records" /></Link>
-              <Link href={`${base}/upload`} className="stat-card-link"><StatCard label="Upload" value="New" icon={<Upload size={17} />} detail="Add documents" /></Link>
-              <Link href={`${base}/money-in`} className="stat-card-link"><StatCard label="Money In" value="View" icon={<ArrowDownToLine size={17} />} detail="Receipts" /></Link>
+              <Link href={`${base}/contacts`} className="stat-card-link"><StatCard label="Contacts" value={contactCount} icon={<Contact size={17} />} detail="Customers and suppliers" /></Link>
+              <Link href={`${base}/reconciliation`} className="stat-card-link"><StatCard label="Reconciliation" value={completed} icon={<Scale size={17} />} detail="Standardised records" /></Link>
+              <Link href={`${base}/upload`} className="stat-card-link"><StatCard label="Upload" value={uploadedToday} icon={<Upload size={17} />} detail="Uploaded today" /></Link>
+              <Link href={`${base}/money-in`} className="stat-card-link"><StatCard label="Money In" value={receiptCount} icon={<ArrowDownToLine size={17} />} detail="Receipts" /></Link>
             </div>
           )}
 
