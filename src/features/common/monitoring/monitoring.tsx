@@ -168,9 +168,13 @@ export function PerformancePage({ user }: { user: User }) {
         title={
           user.role === "SUPER_ADMIN"
             ? "Platform performance"
-            : "Company reports"
+            : "Company Performance"
         }
-        description="Project success criteria and processing trends. Benchmark values reflect current workspace performance."
+        description={
+          user.role === "LOCAL_ADMIN"
+            ? "Company-level volume, accuracy, exception rate, and processing trends."
+            : "Project success criteria and processing trends. Benchmark values reflect current workspace performance."
+        }  
         actions={
           <button
             className="btn"
