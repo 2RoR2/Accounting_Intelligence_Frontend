@@ -9569,6 +9569,20 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .performance-trend-grid > :last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
+/* Company Performance follows the dashboard page, not a separate card system. */
+.dashboard-page:has(.workspace-dashboard-header) .workspace-invoice-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 22px 20px;
+}
+
+.dashboard-page:has(.workspace-dashboard-header) .workspace-summary-total {
+  justify-items: start;
+}
+
+.dashboard-page:has(.workspace-dashboard-header) .workspace-summary-total strong {
+  font-size: 32px;
+}
+
 
 @media (max-width: 900px) {
   .company-performance-page { padding: 18px 14px 28px; }
