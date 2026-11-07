@@ -80,7 +80,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
         {rows.length === 0 ? (
           <div className="panel-body">
             <p>No documents are waiting for approval.</p>
-          </div>a
+          </div>
         ) : (
           <DataTable
             rows={rows}
