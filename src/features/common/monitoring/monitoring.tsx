@@ -169,7 +169,7 @@ export function PerformancePage({ user }: { user: User }) {
   const failed = data.docs.filter((d) => d.status === "FAILED").length;
   const jobs = data.metrics.find((m) => m.label.toLowerCase().includes("processed"))?.value ?? "—";
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page company-performance-page">
       <div className="workspace-dashboard-header dashboard-reference-header">
         <MalaysiaDayNight />
         <div>
@@ -178,53 +178,33 @@ export function PerformancePage({ user }: { user: User }) {
         </div>
         <div className="workspace-dashboard-actions">
           <button className="btn primary" onClick={() => downloadCsv("performance-report.csv", [
-            ["Report section", "Metric", "Value", "Period"],
-            ["Documents", String(data.docs.length), "Live company count", "Current"],
-            ["Standardised", String(standardised), "Ready records", "Current"],
-            ["Exceptions", String(exceptions), "Need attention", "Current"],
-            ["Processing jobs", String(jobs), "Succeeded or failed jobs", "Current"],
-            ...data.docs.map((doc) => ["Document", doc.name, doc.status, formatDate(doc.createdAt)]),
+            ["Metric", "Value"],
+            ["Documents", String(data.docs.length)],
+            ["Standardised", String(standardised)],
+            ["In review", String(inReview)],
+            ["Exceptions", String(exceptions)],
+            ["Processing jobs", String(jobs)],
+            ["Failed documents", String(failed)],
           ])}><Download size={16} /> Export</button>
         </div>
       </div>
 
-      <section className="workspace-dashboard-layout">
-        <section className="workspace-documents-card">
-          <div className="workspace-documents-toolbar">
-            <div>
-              <span className="workspace-dashboard-kicker">COMPANY TOTALS</span>
-              <h2>{data.docs.length} documents in this company</h2>
-              <p>Documents and processing jobs are counted separately.</p>
-            </div>
-          </div>
-          <div className="workspace-invoice-summary">
-            <div className="workspace-summary-total"><strong>{data.docs.length}</strong><span>Documents</span></div>
-            <div className="workspace-summary-total"><strong>{standardised}</strong><span>Standardised</span></div>
-            <div className="workspace-summary-total"><strong>{inReview}</strong><span>In review</span></div>
-            <div className="workspace-summary-total"><strong>{exceptions}</strong><span>Exceptions</span></div>
-            <div className="workspace-status-bar" aria-hidden="true">
-              <i className="is-approved" style={{ flex: standardised || 1 }} />
-              <i className="is-review" style={{ flex: inReview || 1 }} />
-              <i className="is-failed" style={{ flex: exceptions || 1 }} />
-            </div>
-            <div className="workspace-status-legend">
-              <span><i className="is-approved" /> Standardised</span>
-              <span><i className="is-review" /> In review</span>
-              <span><i className="is-failed" /> Exceptions</span>
-            </div>
-          </div>
-        </section>
+      <section className="performance-block">
+        <div className="performance-metric-row">
+          <div><strong>{data.docs.length}</strong><span>Documents</span></div>
+          <div><strong>{standardised}</strong><span>Standardised</span></div>
+          <div><strong>{inReview}</strong><span>In review</span></div>
+          <div><strong>{exceptions}</strong><span>Exceptions</span></div>
+        </div>
       </section>
 
       <section className="performance-block">
         <div className="performance-metric-row">
           <div><strong>{jobs}</strong><span>Processing jobs</span></div>
           <div><strong>{failed}</strong><span>Failed documents</span></div>
-          {data.metrics
-            .filter((m) => !/processed|field accuracy|manual-effort/i.test(m.label))
-            .map((m) => (
-              <div key={m.label}><strong>{m.value}</strong><span>{m.label}</span></div>
-            ))}
+          <div><strong>{data.metrics.find((m) => m.label.toLowerCase().includes("success"))?.value ?? "—"}</strong><span>Processing success rate</span></div>
+          <div><strong>{data.metrics.find((m) => m.label.toLowerCase().includes("time"))?.value ?? "—"}</strong><span>Avg. processing time</span></div>
+          <div><strong>{data.metrics.find((m) => m.label.toLowerCase().includes("exception rate"))?.value ?? "—"}</strong><span>Open exception rate</span></div>
         </div>
       </section>
 
