@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2, UploadCloud } from "lucide-react";
+import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -128,7 +129,6 @@ export function MoneyFlowPage({
   const [dateFormat, setDateFormat] = useState<"" | "iso" | "dmy" | "mdy">("");
   const [defaultCurrency, setDefaultCurrency] = useState("MYR");
   const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -288,40 +288,19 @@ export function MoneyFlowPage({
     amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
   }));
 
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Bank statement credits. Import a statement, then review each row against a standardised record."
-      : "Bank statement debits. Import a statement, then review each row against a standardised record.";
+      ? "Bank statement credits from Reconciliation. Compare each row with the linked standardised record or original document."
+      : "Bank statement debits from Reconciliation. Compare each row with the linked standardised record or original document.";
 
   return (
     <>
       <PageHeader
         title={title}
         description={description}
-        actions={
-          <>
-            <input
-              ref={fileRef}
-              hidden
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                void onImport(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              className="btn primary"
-              type="button"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              <UploadCloud size={16} /> Import bank statement
-            </button>
-          </>
-        }
+        actions={null}
       />
 
       {notice && (
@@ -523,7 +502,15 @@ export function MoneyFlowPage({
             },
             {
               label: "Related record",
-              render: (r) => r.relatedRecordCode || "—",
+              render: (r) => r.relatedRecordId
+                ? <Link href={`${base}/records/${r.relatedRecordId}`}>{r.relatedRecordCode || "Record"}</Link>
+                : r.relatedRecordCode || "—",
+            },
+            {
+              label: "Original document",
+              render: (r) => r.relatedDocumentId
+                ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
+                : "—",
             },
             {
               label: "Action",
