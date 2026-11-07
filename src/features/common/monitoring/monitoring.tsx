@@ -190,6 +190,10 @@ export function PerformancePage({ user }: { user: User }) {
       </div>
 
       <section className="performance-block">
+        <div className="performance-heading">
+          <span className="workspace-dashboard-kicker">COMPANY TOTALS</span>
+          <h2>Documents in this company</h2>
+        </div>
         <div className="performance-metric-row">
           <div><strong>{data.docs.length}</strong><span>Documents</span></div>
           <div><strong>{standardised}</strong><span>Standardised</span></div>
@@ -199,6 +203,10 @@ export function PerformancePage({ user }: { user: User }) {
       </section>
 
       <section className="performance-block">
+        <div className="performance-heading">
+          <span className="workspace-dashboard-kicker">PROCESSING</span>
+          <h2>Jobs and quality</h2>
+        </div>
         <div className="performance-metric-row">
           <div><strong>{jobs}</strong><span>Processing jobs</span></div>
           <div><strong>{failed}</strong><span>Failed documents</span></div>
@@ -208,11 +216,17 @@ export function PerformancePage({ user }: { user: User }) {
         </div>
       </section>
 
-      <div className="performance-trends">
-        <TrendChart />
-        <TrendChart kind="accuracy" />
-        <TrendChart kind="exceptions" />
-      </div>
+      <section className="performance-block">
+        <div className="performance-heading">
+          <span className="workspace-dashboard-kicker">TRENDS</span>
+          <h2>How the company is moving</h2>
+        </div>
+        <div className="performance-trends">
+          <TrendChart />
+          <TrendChart kind="accuracy" />
+          <TrendChart kind="exceptions" />
+        </div>
+      </section>
     </div>
   );
 }
