@@ -9762,7 +9762,7 @@ select option { background:#fff; color:#183452; font-weight:500; }
     background: #fff;
   }
 }
-}
+
 .validation-overview-page .widget-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
