@@ -76,7 +76,7 @@ export function TrendChart({
         ? 100
         : 20;
   const minimum = 0;
-  const plotLeft = 58;
+  const plotLeft = 78;
   const plotRight = 548;
   const plotTop = 30;
   const plotBottom = 170;
@@ -139,7 +139,7 @@ export function TrendChart({
                 stroke="var(--chart-grid)"
                 strokeDasharray="4 4"
               />
-              <text x="5" y={y + 4} fill="var(--chart-muted)" fontSize="10">
+              <text x="8" y={y + 4} fill="var(--chart-muted)" fontSize="10">
                 {Math.round(maximum - i * ((maximum - minimum) / 3))}
                 {kind !== "processed" ? "%" : ""}
               </text>
