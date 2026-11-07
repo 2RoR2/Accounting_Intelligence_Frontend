@@ -62,7 +62,7 @@ export function ValidationOverviewPage({ user }: { user: User }) {
             <span>Open exceptions · {exceptionRate}%</span>
           </Link>
           <Link href={`${base}/exceptions`}>
-            <strong>< 10%</strong>
+            <strong>{"< 10%"}</strong>
             <span>Exception rate goal</span>
           </Link>
         </div>
