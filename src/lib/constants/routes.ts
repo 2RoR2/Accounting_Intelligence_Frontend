@@ -5,7 +5,7 @@ export const WORKSPACE_AREA: Record<Role, string> = { SUPER_ADMIN: "admin", LOCA
 export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   admin: new Set(["dashboard", "approvals", "tenants", "users", "processing", "performance", "records", "audit", "settings", "profile"]),
   company: new Set([
-  "dashboard", "evaluation", "documents", "upload", "exceptions",
+  "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
   "records", "users", "validation-rules", "reports", "audit",
   "settings", "profile", "money-in", "money-out", "ledger"
