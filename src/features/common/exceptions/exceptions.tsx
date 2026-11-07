@@ -70,24 +70,28 @@ export function ExceptionsPage({ user }: { user: User }) {
             onChange={setSeverity}
             options={["LOW", "MEDIUM", "HIGH"]}
           />
-          <Filter
-            label="Types"
-            value={type}
-            onChange={setType}
-            options={Array.from(new Set(data.exceptions.map((e) => e.type)))}
-          />
-          <select
-            aria-label="Assigned user"
-            value={assigned}
-            onChange={(e) => setAssigned(e.target.value)}
-          >
-            <option value="">All assigned users</option>
-            {data.users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
+          {user.role === "LOCAL_ADMIN" && (
+            <>
+              <Filter
+                label="Types"
+                value={type}
+                onChange={setType}
+                options={Array.from(new Set(data.exceptions.map((e) => e.type)))}
+              />
+              <select
+                aria-label="Assigned user"
+                value={assigned}
+                onChange={(e) => setAssigned(e.target.value)}
+              >
+                <option value="">All assigned users</option>
+                {data.users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <input
             aria-label="Exception date"
             type="date"
