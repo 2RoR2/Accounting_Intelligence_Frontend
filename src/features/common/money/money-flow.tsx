@@ -513,6 +513,10 @@ export function MoneyFlowPage({
               render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
             },
             {
+              label: "Anomaly",
+              render: (r) => <Badge>{r.anomaly?.label ?? "Not checked"}</Badge>,
+            },
+            {
               label: "Accounting",
               render: (r) => <Badge>{r.codingDecision ? "Coded" : "Uncoded"}</Badge>,
             },
@@ -636,6 +640,25 @@ export function MoneyFlowPage({
                 <strong>{detail.relatedDocumentCode || "—"}</strong>
               </div>
             </div>
+
+            {detail.anomaly && (
+              <section className="transaction-review-section transaction-anomaly-section">
+                <div className="transaction-review-section-heading">
+                  <h3>{detail.anomaly.isAnomaly ? "Needs review" : "Anomaly check"}</h3>
+                  <Badge>{detail.anomaly.label}</Badge>
+                </div>
+                <p>{detail.anomaly.reason}</p>
+                <details>
+                  <summary>{detail.anomaly.isAnomaly ? "Why was this flagged?" : "Show comparison details"}</summary>
+                  <div className="detail-list" style={{ marginTop: 12 }}>
+                    <div><span>Compared with</span><strong>{detail.anomaly.baselineCount} prior {detail.direction === "money_in" ? "Money In" : "Money Out"} transactions</strong></div>
+                    <div><span>Typical amount</span><strong>{money(detail.anomaly.baselineMedian, detail.anomaly.currency)}</strong></div>
+                    <div><span>Review threshold</span><strong>{money(detail.anomaly.upperBound, detail.anomaly.currency)}</strong></div>
+                    {detail.anomaly.anomalyScore && <div><span>Amount / threshold</span><strong>{detail.anomaly.anomalyScore}×</strong></div>}
+                  </div>
+                </details>
+              </section>
+            )}
 
             <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Code transaction</h3><span>{detail.codingDecision ? "Coding confirmed" : "Ledger posting remains separate"}</span></div>

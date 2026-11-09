@@ -30,6 +30,21 @@ export interface BankReconciliationCandidate {
 /** Simplified match state for the Money In / Money Out UI. */
 export type MatchStatus = "unmatched" | "proposed" | "matched" | "ignored";
 
+export type BankTransactionAnomalyStatus = "anomaly" | "normal" | "insufficient_baseline";
+
+export interface BankTransactionAnomaly {
+  status: BankTransactionAnomalyStatus;
+  isAnomaly: boolean;
+  label: string;
+  reason: string;
+  amount: string;
+  currency: string;
+  baselineMedian: string | null;
+  upperBound: string | null;
+  baselineCount: number;
+  anomalyScore: string | null;
+}
+
 /**
  * Bank money movement shown on Money In / Money Out.
  * Amount is always positive; direction decides in vs out.
@@ -62,6 +77,7 @@ export interface BankMoneyTransaction {
   costCentreId?: string | null;
   codingDecision?: string | null;
   codingReason?: string | null;
+  anomaly?: BankTransactionAnomaly | null;
 }
 
 export interface BankMoneyTransactionDetail extends BankMoneyTransaction {

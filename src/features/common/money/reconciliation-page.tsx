@@ -136,6 +136,7 @@ export function ReconciliationPage({ user }: { user: User }) {
   const [accountFilter, setAccountFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState("");
   const [selectedRow, setSelectedRow] = useState<BankMoneyTransaction | null>(null);
+  const [reviewRow, setReviewRow] = useState<BankMoneyTransaction | null>(null);
   // Show every confirmed bank row. Rows without an exact candidate still need
   // to be visible so the user can see what was imported and review it.
   const rows = useMemo(() => (data ?? []).flat(), [data]);
@@ -153,6 +154,10 @@ export function ReconciliationPage({ user }: { user: User }) {
   }, {} as Record<string, { moneyIn: number; moneyOut: number }>), [visibleRows]);
   const primaryCurrency = Object.keys(totals)[0] ?? "MYR";
   const primaryTotals = totals[primaryCurrency] ?? { moneyIn: 0, moneyOut: 0 };
+  const reviewCandidate = reviewRow?.candidates?.find((candidate) => candidate.status === "proposed")
+    ?? reviewRow?.candidates?.find((candidate) => candidate.status === "confirmed")
+    ?? reviewRow?.candidates?.[0]
+    ?? null;
 
   async function onImport(file: File | undefined) {
     if (!file) return;
@@ -242,6 +247,8 @@ export function ReconciliationPage({ user }: { user: User }) {
       await decideMatch(user, candidate.id, decision, candidate.revision, decision === "reject" ? "Rejected during reconciliation review" : undefined);
       setNotice(decision === "confirm" ? "Match confirmed." : "Candidate rejected.");
       await refresh();
+      setReviewRow(null);
+      setSelectedRow(null);
     } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to save reconciliation decision."); }
     finally { setBusyId(null); }
   }
@@ -292,7 +299,7 @@ export function ReconciliationPage({ user }: { user: User }) {
     </Panel>}
     {activeTab === "transactions" && <Panel title="Transactions" subtitle="Imported from bank statements. Review and reconcile each transaction.">
       <div className="bank-transaction-toolbar"><SearchInput value={transactionSearch} onChange={setTransactionSearch} placeholder="Search transactions" /><div className="bank-transaction-filters">{([['all','All'],['money_in','Money In'],['money_out','Money Out']] as const).map(([value,label]) => <button key={value} className={transactionView === value ? "active" : ""} onClick={() => setTransactionView(value)}>{label}</button>)}</div><span className="bank-transaction-count">{visibleRows.length} transactions</span></div>
-      <div className="bank-transaction-workspace"><div className="bank-transaction-list">{visibleRows.map((row) => <button className={`bank-transaction-row ${selectedRow?.id === row.id ? "selected" : ""}`} key={row.id} onClick={() => setSelectedRow(row)}><span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong><b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b><Badge>{row.status === "needs_review" ? "NEEDS REVIEW" : row.status === "matched" ? "MATCHED" : "UNRECONCILED"}</Badge></button>)}</div><aside className="bank-transaction-detail">{selectedRow ? <><div className="bank-detail-heading"><h3>{selectedRow.description || "Bank transaction"}</h3><Badge>{selectedRow.direction === "money_in" ? "MONEY IN" : "MONEY OUT"}</Badge></div><p>{selectedRow.postedDate} · {selectedRow.reference || "No reference"}</p><div className="bank-detail-amount"><span>Amount</span><strong>{money(selectedRow.amount, selectedRow.currency)}</strong></div><div className="bank-detail-actions"><button className="btn primary" onClick={() => { window.location.href = `${base}/${selectedRow.direction === "money_in" ? "money-in" : "money-out"}`; }}>Open review</button><span>{selectedRow.status === "matched" ? "Matched" : "Awaiting transaction decision"}</span></div></> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside></div>
+      <div className="bank-transaction-workspace"><div className="bank-transaction-list">{visibleRows.map((row) => <button className={`bank-transaction-row ${selectedRow?.id === row.id ? "selected" : ""}`} key={row.id} onClick={() => setSelectedRow(row)}><span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong><b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b><Badge>{row.status === "needs_review" ? "NEEDS REVIEW" : row.status === "matched" ? "MATCHED" : "UNRECONCILED"}</Badge></button>)}</div><aside className="bank-transaction-detail">{selectedRow ? <><div className="bank-detail-heading"><h3>{selectedRow.description || "Bank transaction"}</h3><Badge>{selectedRow.direction === "money_in" ? "MONEY IN" : "MONEY OUT"}</Badge></div><p>{selectedRow.postedDate} · {selectedRow.reference || "No reference"}</p><div className="bank-detail-amount"><span>Amount</span><strong>{money(selectedRow.amount, selectedRow.currency)}</strong></div><div className="bank-detail-actions"><button className="btn primary" onClick={() => setReviewRow(selectedRow)}>Open review</button><span>{selectedRow.status === "matched" ? "Matched" : "Awaiting transaction decision"}</span></div></> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside></div>
     </Panel>}
     {false && <>
     <div className="reconciliation-stats">
@@ -329,6 +336,53 @@ export function ReconciliationPage({ user }: { user: User }) {
       </div>}
     </Panel>
     </>}
+
+    {reviewRow && (
+      <Modal title="Review reconciliation match" onClose={() => setReviewRow(null)}>
+        <div className="panel-body reconciliation-review-modal">
+          <div className="reconciliation-review-summary">
+            <div>
+              <span>Bank transaction</span>
+              <strong>{reviewRow.description || "Bank transaction"}</strong>
+              <small>{reviewRow.postedDate} · {reviewRow.reference || "No reference"}</small>
+            </div>
+            <div>
+              <span>{reviewRow.direction === "money_in" ? "Money In" : "Money Out"}</span>
+              <strong>{money(reviewRow.amount, reviewRow.currency)}</strong>
+              <small>{reviewRow.matchStatus === "matched" ? "Matched" : "Awaiting match decision"}</small>
+            </div>
+          </div>
+
+          {reviewCandidate ? <section className="reconciliation-match-record">
+            <div className="transaction-review-section-heading">
+              <h3>Suggested standardised record</h3>
+              <Badge>{reviewCandidate.status === "confirmed" ? "MATCHED" : "PROPOSED"}</Badge>
+            </div>
+            <div className="reconciliation-match-record-grid">
+              <div><span>Record</span><strong>{reviewCandidate.recordCode}</strong></div>
+              <div><span>Category</span><strong>{reviewCandidate.category.replace(/_/g, " ")}</strong></div>
+              <div><span>Reference</span><strong>{reviewCandidate.reference || "—"}</strong></div>
+              <div><span>Party</span><strong>{reviewCandidate.party || "—"}</strong></div>
+              <div><span>Record amount</span><strong>{money(reviewCandidate.amount, reviewCandidate.currency)}</strong></div>
+              <div><span>Difference</span><strong>{money(reviewCandidate.amountDelta, reviewCandidate.currency)}</strong></div>
+              <div className="reconciliation-match-record-wide"><span>Match evidence</span><strong>{reviewCandidate.reasons.join(", ") || "Suggested match"}</strong></div>
+            </div>
+            <div className="reconciliation-review-links">
+              <Link className="btn small" href={`${base}/records/${reviewCandidate.recordId}`}>View standardised record</Link>
+              {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
+            </div>
+          </section> : <section className="reconciliation-match-record">
+            <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3><Badge>UNMATCHED</Badge></div>
+            <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
+          </section>}
+
+          {reviewCandidate && reviewCandidate.status === "proposed" && <div className="reconciliation-review-actions">
+            <button className="btn primary" type="button" disabled={busyId === reviewCandidate.id} onClick={() => void decide(reviewRow, reviewCandidate, "confirm")}>Confirm match</button>
+            <button className="btn" type="button" disabled={busyId === reviewCandidate.id} onClick={() => void decide(reviewRow, reviewCandidate, "reject")}>Reject match</button>
+          </div>}
+        </div>
+      </Modal>
+    )}
 
     {importFile && (
       <Modal title={importPreview ? "Review bank statement import" : "Map bank statement columns"} onClose={() => {
