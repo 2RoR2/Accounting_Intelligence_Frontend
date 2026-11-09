@@ -8,6 +8,7 @@ import {
   confirmBankImport,
   decideMatch,
   discardBankImportPreview,
+  inspectBankStatement,
   getMoneyTransactions,
   previewBankImport,
   getReconciliationPeriods,
@@ -156,21 +157,30 @@ export function ReconciliationPage({ user }: { user: User }) {
   async function onImport(file: File | undefined) {
     if (!file) return;
     setActionError("");
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setActionError("Bank statement import currently supports CSV files only.");
+    if (!/\.(csv|xlsx|pdf)$/i.test(file.name)) {
+      setActionError("Choose a CSV, Excel (.xlsx), or PDF bank statement.");
       return;
     }
     try {
-      const headers = csvHeaders(await file.text());
+      let headers: string[];
+      let detectedDate = "" as "" | "iso" | "dmy" | "mdy";
+      if (/\.csv$/i.test(file.name)) {
+        const text = await file.text();
+        headers = csvHeaders(text);
+        const detectedDateHeader = headers.find((header) => headerMatchesField(header, "posted_date"));
+        detectedDate = detectedDateHeader ? detectDateFormat(text, detectedDateHeader) : "";
+      } else {
+        const inspected = await inspectBankStatement(file);
+        headers = inspected.headers;
+      }
       setImportFile(file);
       setImportHeaders(headers);
       setImportMapping(autoMapColumns(headers));
       setImportPreview(null);
       setAccountRef("");
-      const detectedDate = headers.find((header) => headerMatchesField(header, "posted_date"));
-      setDateFormat(detectedDate ? detectDateFormat(await file.text(), detectedDate) : "");
+      setDateFormat(detectedDate);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Unable to read the CSV header.");
+      setActionError(e instanceof Error ? e.message : "Unable to inspect the bank statement.");
     }
   }
 
@@ -250,7 +260,7 @@ export function ReconciliationPage({ user }: { user: User }) {
       description="Review and match imported bank transactions to your accounting records."
       actions={
         <>
-          <input ref={fileRef} hidden type="file" accept=".csv,text/csv" onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ""; }} />
+          <input ref={fileRef} hidden type="file" accept=".csv,.xlsx,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf" onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ""; }} />
           <button className="btn primary" type="button" disabled={busy} onClick={() => fileRef.current?.click()}><UploadCloud size={16} /> Upload bank statement</button>
         </>
       }
@@ -328,7 +338,7 @@ export function ReconciliationPage({ user }: { user: User }) {
       }}>
         <div className="panel-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
           {!importPreview ? <>
-            <p>Upload the statement once. Credits are separated into Money In and debits into Money Out.</p>
+            <p>Upload a CSV, Excel, or PDF statement once. Credits are separated into Money In and debits into Money Out.</p>
             <p><strong>File:</strong> {importFile.name}</p>
             <label style={{ display: "block", margin: "12px 0" }}>Bank account label
               <input value={accountRef} onChange={(event) => setAccountRef(event.target.value)} maxLength={64} placeholder="Main current account" style={{ display: "block", width: "100%", marginTop: 4 }} />

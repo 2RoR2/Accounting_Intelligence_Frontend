@@ -112,6 +112,13 @@ export async function previewBankImport(
   return api<BankImportPreview>("/api/bank/imports", { method: "POST", body: form });
 }
 
+export async function inspectBankStatement(file: File): Promise<{ format: string; headers: string[] }> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("inspect_only", "true");
+  return api<{ format: string; headers: string[] }>("/api/bank/imports", { method: "POST", body: form });
+}
+
 export async function confirmBankImport(_user: User, importId: string) {
   return api<{ importId: string; status: string; rowCount: number; candidatesProposed: number }>(
     `/api/bank-imports/${encodeURIComponent(importId)}/confirm`,
