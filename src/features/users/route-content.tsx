@@ -38,7 +38,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;
     case "contacts": return <ContactsPage user={user} />;
-    case "records": return <RecordsPage user={user} />;
+    case "records": return <RecordsPage user={user} initialRecordId={id} />;
     case "reports": return <AccountingReportsPage user={user} />;
     case "evaluation": return <EvaluationPage />;
     case "profile": return <ProfilePage user={user} />;

@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Download, ShieldCheck } from "lucide-react";
 import type { StandardisedRecord, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   getRecordMetadata,
+  getStandardisedRecord,
   getStandardisedRecords,
   openSupportView,
 } from "@/lib/api/record.service";
@@ -82,9 +83,11 @@ export function RecordDetail({
 export function RecordsPage({
   user,
   tenantId,
+  initialRecordId,
 }: {
   user: User;
   tenantId?: string;
+  initialRecordId?: string;
 }) {
   const admin = user.role === "SUPER_ADMIN";
   const { data, error, loading, refresh } = useResource(
@@ -112,8 +115,28 @@ export function RecordsPage({
   const [exportsLoaded, setExportsLoaded] = useState(false);
   const [exportError, setExportError] = useState("");
   const [metadataId, setMetadataId] = useState("");
+  const [deepLinkDismissed, setDeepLinkDismissed] = useState(false);
+  useEffect(() => {
+    if (!initialRecordId || admin) return;
+    let cancelled = false;
+    void getStandardisedRecord(user, initialRecordId)
+      .then((matched) => {
+        if (!cancelled && matched) setDetail(matched);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const matched = data?.records.find((record) => record.id === initialRecordId || record.code === initialRecordId);
+          if (matched) setDetail(matched);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [admin, data, initialRecordId, user]);
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
+  const linkedRecord = initialRecordId
+    ? data.records.find((record) => record.id === initialRecordId || record.code === initialRecordId)
+    : undefined;
+  const visibleDetail = detail ?? (!deepLinkDismissed ? linkedRecord : undefined);
   const records = data.records.filter(
     (r) =>
       `${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
@@ -451,17 +474,17 @@ export function RecordsPage({
           </form>
         </Modal>
       )}
-      {detail && (
+      {visibleDetail && (
         <Modal
           title={admin ? "Read-only support record" : "Standardised record"}
-          onClose={() => setDetail(undefined)}
+          onClose={() => { setDetail(undefined); setDeepLinkDismissed(true); }}
         >
           <div className="panel-body">
-            <RecordDetail record={detail} support={admin} />
+            <RecordDetail record={visibleDetail} support={admin} />
             {!admin && (
               <Link
                 className="btn"
-                href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/documents/${detail.documentId}`}
+                href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/documents/${visibleDetail.documentId}`}
               >
                 View original document
               </Link>
