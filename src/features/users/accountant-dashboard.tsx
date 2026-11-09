@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, Files, FileCheck2, Plus } from "lucide-react";
-import type { Document } from "@/types";
+import type { Document, User } from "@/types";
+import type { BankMoneyTransaction } from "@/types/money";
 import { Badge, formatDate, SpinningCounter } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getTrends } from "@/lib/api/processing.service";
 import { TotalSalesChart } from "@/components/common/charts/total-sales-chart";
 import { DocumentStackWidget } from "@/components/common/documents/document-stack-widget";
 import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-night";
+import { getMoneyTransactions } from "@/lib/api/money.service";
 
 const approvedStatuses = ["COMPLETED", "VALIDATED", "STANDARDISED"];
 const totalApproved = (docs: Document[], type: string) => docs.filter((doc) => doc.type === type && approvedStatuses.includes(doc.status)).reduce((sum, doc) => sum + (Number(doc.totalAmount) || 0), 0);
@@ -39,18 +41,22 @@ function DashboardWidget({ id, title, subtitle, onDragStart, onDrop, onKeyboardM
   </section>;
 }
 
-export function AccountantDashboard({ docs, exceptions, userName = "there", base = "/workspace" }: { docs: Document[]; exceptions: number; userName?: string; base?: string }) {
+export function AccountantDashboard({ user, docs, exceptions, userName = "there", base = "/workspace" }: { user: User; docs: Document[]; exceptions: number; userName?: string; base?: string }) {
   const malaysiaHour = Number(new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", hour12: false }).format(new Date()));
   const greeting = malaysiaHour < 5 ? "Good night" : malaysiaHour < 12 ? "Good morning" : malaysiaHour < 17 ? "Good afternoon" : malaysiaHour < 21 ? "Good evening" : "Good night";
   const { data: trends } = useResource(() => getTrends("week"), "accountant-dashboard-week");
-  const [widgetOrder, setWidgetOrder] = useState(["attention", "metrics", "activity", "review-queue", "documents", "stacks", "health", "review-activity", "finance", "bank", "actions"]);
+  const { data: bankTransactions } = useResource(
+    () => Promise.all([getMoneyTransactions(user, "money_in"), getMoneyTransactions(user, "money_out")]).then(([moneyIn, moneyOut]) => [...moneyIn, ...moneyOut]),
+    `${user.id}:accountant-dashboard-bank-anomalies`,
+  );
+  const [widgetOrder, setWidgetOrder] = useState(["attention", "metrics", "activity", "review-queue", "documents", "stacks", "health", "review-activity", "finance", "bank", "transaction-insights", "actions"]);
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(`accordai-dashboard-widgets-${base}`) || "null");
       if (Array.isArray(saved) && saved.every((value) => typeof value === "string")) {
-        const defaults = ["attention", "metrics", "activity", "review-queue", "documents", "stacks", "health", "review-activity", "finance", "bank", "actions"];
+        const defaults = ["attention", "metrics", "activity", "review-queue", "documents", "stacks", "health", "review-activity", "finance", "bank", "transaction-insights", "actions"];
         const savedOrder = saved.filter((value) => defaults.includes(value));
         setWidgetOrder([...savedOrder, ...defaults.filter((value) => !savedOrder.includes(value))]);
       }
@@ -94,6 +100,8 @@ export function AccountantDashboard({ docs, exceptions, userName = "there", base
     return result;
   }, {});
   const salesChartData = Object.entries(salesByDay).slice(-7).map(([label, value]) => ({ label, value }));
+  const flaggedTransactions = (bankTransactions ?? []).filter((transaction) => transaction.anomaly?.isAnomaly).sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()).slice(0, 6);
+  const largestFlaggedAmount = Math.max(1, ...flaggedTransactions.map((transaction) => Number(transaction.amount) || 0));
   const widgetProps = { onDragStart: setDraggedWidget, onDrop: reorderWidget, onKeyboardMove: moveWidget };
 
   const widgets: Record<string, ReactNode> = {
@@ -106,6 +114,7 @@ export function AccountantDashboard({ docs, exceptions, userName = "there", base
     finance: <DashboardWidget id="finance" title="Money position" subtitle="Approved document totals only" {...widgetProps}><div className="widget-finance-grid"><Link href={`${base}/money-in`}><strong><SpinningCounter value={invoiceTotal} /></strong><span>Sales invoices</span></Link><Link href={`${base}/money-out`}><strong><SpinningCounter value={billTotal} /></strong><span>Purchase bills</span></Link><Link href={`${base}/documents?type=RECEIPT`}><strong><SpinningCounter value={receiptTotal} /></strong><span>Receipts</span></Link><div><strong>{overdueInvoices + overdueBills}</strong><span>Overdue documents</span></div></div><TotalSalesChart data={salesChartData} /></DashboardWidget>,
     health: <DashboardWidget id="health" title="Processing health" subtitle="Current document processing status" {...widgetProps}><div className="widget-health-diagram"><div><strong>{queued}</strong><span>Queued</span></div><div><strong>{active}</strong><span>Active</span></div><div><strong>{review}</strong><span>Review</span></div><div><strong>{standardised}</strong><span>Standardised</span></div></div><div className="widget-health-line"><i /><i /><i /><i /></div><p className="widget-health-note">{oldestWaiting ? `Oldest active item: ${formatDate(oldestWaiting.createdAt)}` : "All processing stages are clear."}</p></DashboardWidget>,
     bank: <DashboardWidget id="bank" title="Bank reconciliation" subtitle="Match imported bank transactions to approved records" {...widgetProps}><div className="widget-bank-summary"><Link href={`${base}/money-in`}><strong>{approvedInvoices}</strong><span>Approved Money In</span><small>Incoming records</small></Link><Link href={`${base}/money-out`}><strong>{approvedBills}</strong><span>Approved Money Out</span><small>Outgoing records</small></Link><Link href={`${base}/money-in`}><strong>0</strong><span>Suggested matches</span><small>Awaiting review</small></Link><Link href={`${base}/money-in`}><strong>{exceptions}</strong><span>Needs review</span><small>Human confirmation</small></Link></div><Link className="widget-inline-link" href={`${base}/money-in`}>Review reconciliation <ArrowRight size={15} /></Link></DashboardWidget>,
+    "transaction-insights": <DashboardWidget id="transaction-insights" title="Transaction insights" subtitle="Amount anomalies in imported bank rows" {...widgetProps}><div className="transaction-insights-note">Amount anomaly detection only. Duplicates and unusual frequency are not checked.</div>{flaggedTransactions.length ? <div className="transaction-insights-list">{flaggedTransactions.map((transaction: BankMoneyTransaction) => { const directionPath = transaction.direction === "money_in" ? "money-in" : "money-out"; const width = Math.max(10, ((Number(transaction.amount) || 0) / largestFlaggedAmount) * 100); return <Link className="transaction-insight-row" key={transaction.id} href={`${base}/${directionPath}?transaction=${encodeURIComponent(transaction.id)}`}><span className="transaction-insight-main"><strong>{transaction.description || "Bank transaction"}</strong><small>{transaction.postedDate} · {transaction.direction === "money_in" ? "Money In" : "Money Out"}</small><i><em style={{ width: `${width}%` }} /></i></span><span className="transaction-insight-amount">{transaction.currency ?? "MYR"} {Number(transaction.amount || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<ArrowRight size={15} /></span></Link>})}</div> : <div className="widget-empty">No amount anomalies have been flagged.</div>}</DashboardWidget>,
     "review-activity": <DashboardWidget id="review-activity" title="Recent activity" subtitle="The latest events in your accounting workflow" {...widgetProps}><div className="widget-history-list"><div className="widget-history-item"><i className="history-blue" /><div><strong>{docs.length ? `Uploaded ${docs.length} document${docs.length === 1 ? "" : "s"}` : "No documents uploaded yet"}</strong><span>{docs[0] ? formatDate(docs[0].createdAt) : "Upload a document to begin"}</span></div></div><div className="widget-history-item"><i className="history-green" /><div><strong>{standardised ? `${standardised} record${standardised === 1 ? "" : "s"} approved` : "Approval activity"}</strong><span>{standardised ? "Ready for accounting use" : "No approvals yet"}</span></div></div><div className="widget-history-item"><i className="history-red" /><div><strong>{failed ? `${failed} failed job${failed === 1 ? "" : "s"}` : "Processing is healthy"}</strong><span>{failed ? "Review the error details" : `${active} active document${active === 1 ? "" : "s"}`}</span></div></div></div></DashboardWidget>,
     actions: <DashboardWidget id="actions" title="Next actions" subtitle="Shortcuts for the accounting workflow" {...widgetProps}><div className="widget-actions"><Link href={`${base}/exceptions`}>Open exception queue <ArrowRight size={16} /></Link><Link href={`${base}/records`}>View standardised records <ArrowRight size={16} /></Link><Link href={`${base}/upload`}>Upload a new document <ArrowRight size={16} /></Link></div></DashboardWidget>,
   };

@@ -9698,6 +9698,21 @@ html,body { min-height:100%; background:linear-gradient(135deg,#f4f8fc 0%,#eaf3f
 .app-shell.theme-dark .widget-bank-summary a:hover{background:#245789;border-color:#67adff}
 .app-shell.theme-dark .widget-bank-summary strong,.app-shell.theme-dark .widget-bank-summary span{color:#fff}
 .app-shell.theme-dark .widget-bank-summary small{color:#c4d9ef}
+.transaction-insights-note{margin:4px 0 14px;padding:10px 12px;border:1px solid var(--ui-border);border-radius:10px;background:var(--ui-surface-2);color:var(--ui-text-2);font-size:11px;line-height:1.45}
+.transaction-insights-list{display:grid;gap:8px}
+.transaction-insight-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid var(--ui-border);border-radius:11px;background:var(--ui-surface-2);color:var(--ui-text);text-decoration:none}
+.transaction-insight-row:hover{border-color:var(--ui-primary);background:var(--color-4)}
+.transaction-insight-main{display:grid;min-width:0;flex:1;gap:3px}
+.transaction-insight-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.transaction-insight-main small{color:var(--ui-text-2);font-size:10px}
+.transaction-insight-main i{display:block;height:5px;margin-top:5px;border-radius:999px;background:var(--ui-border);overflow:hidden}
+.transaction-insight-main i em{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#e8878d,#f2b5b5)}
+.transaction-insight-amount{display:flex;align-items:center;gap:7px;white-space:nowrap;color:#b7464f;font-size:12px;font-weight:800}
+.app-shell.theme-dark .transaction-insights-note,.app-shell.theme-dark .transaction-insight-row{background:#163f70;border-color:rgba(157,202,255,.3);color:#ecf5ff}
+.app-shell.theme-dark .transaction-insights-note,.app-shell.theme-dark .transaction-insight-main small{color:#cce3ff}
+.app-shell.theme-dark .transaction-insight-row:hover{background:#245789;border-color:#67adff}
+.app-shell.theme-dark .transaction-insight-main i{background:rgba(204,227,255,.25)}
+.app-shell.theme-dark .transaction-insight-amount{color:#ffc7c9}
 .app-shell.theme-dark select option { background:#163f70; color:#f5f9ff; }
 
 /* Upload queue: keep selected files readable on the dark workspace surface. */

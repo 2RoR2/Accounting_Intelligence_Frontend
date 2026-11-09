@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { User } from "@/types";
 import type {
@@ -105,6 +106,8 @@ export function MoneyFlowPage({
   const [defaultCurrency, setDefaultCurrency] = useState("MYR");
   const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
   const statusRef = useRef<HTMLDivElement>(null);
+  const autoOpenedTransaction = useRef("");
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -147,6 +150,15 @@ export function MoneyFlowPage({
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    const transactionId = searchParams.get("transaction");
+    if (!transactionId || !rows || autoOpenedTransaction.current === transactionId) return;
+    if (rows.some((row) => row.id === transactionId)) {
+      autoOpenedTransaction.current = transactionId;
+      void openDetail(transactionId);
+    }
+  }, [rows, searchParams]);
 
   const onCode = async () => {
     if (!detail || !selectedAccountId) return;

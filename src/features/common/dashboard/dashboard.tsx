@@ -86,6 +86,7 @@ export function Dashboard({ user }: { user: User }) {
   if (local || accountant) {
     return (
       <AccountantDashboard
+        user={user}
         docs={data.docs}
         exceptions={open}
         userName={firstName}
