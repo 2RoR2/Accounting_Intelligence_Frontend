@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { CheckCircle2, Landmark, Sparkles, UploadCloud } from "lucide-react";
+import { CheckCircle2, Eye, Landmark, Sparkles, UploadCloud } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Badge, Modal, PageHeader, Panel } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -78,6 +78,7 @@ export function ReconciliationPage({ user }: { user: User }) {
   const [dateFormat, setDateFormat] = useState<"" | "iso" | "dmy" | "mdy">("");
   const [defaultCurrency, setDefaultCurrency] = useState("MYR");
   const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
+  const [detail, setDetail] = useState<{ row: BankMoneyTransaction; candidate: BankReconciliationCandidate } | null>(null);
   const rows = useMemo(() => (data ?? []).flat().filter((row) => row.candidates?.some((candidate) => candidate.status === "proposed")), [data]);
 
   async function onImport(file: File | undefined) {
@@ -141,6 +142,7 @@ export function ReconciliationPage({ user }: { user: User }) {
     try {
       await decideMatch(user, candidate.id, decision, candidate.revision, decision === "reject" ? "Rejected during reconciliation review" : undefined);
       setNotice(decision === "confirm" ? "Match confirmed." : "Candidate rejected.");
+      setDetail(null);
       await refresh();
     } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to save reconciliation decision."); }
     finally { setBusyId(null); }
@@ -174,18 +176,76 @@ export function ReconciliationPage({ user }: { user: User }) {
           <div className="reconciliation-card-heading"><div><strong>{row.description || "Bank transaction"}</strong><span>{row.postedDate} · {row.direction === "money_in" ? "Money In" : "Money Out"}</span></div><Badge>PROPOSED</Badge></div>
           <div className="reconciliation-card-grid">
             <div><span>Bank amount</span><strong>{row.currency ?? ""} {row.amount ?? "—"}</strong></div>
-            <div><span>Record</span><strong>{candidate.recordId ? <Link href={`${base}/records/${candidate.recordId}`}>{candidate.recordCode}</Link> : candidate.recordCode}</strong></div>
-            <div><span>Original document</span><strong>{candidate.documentId ? <Link href={`${base}/documents/${candidate.documentId}`}>{candidate.documentCode || "Open document"}</Link> : "—"}</strong></div>
+            <div><span>Record</span><strong>{candidate.recordCode || "—"}</strong></div>
+            <div><span>Original document</span><strong>{candidate.documentCode || "—"}</strong></div>
             <div><span>Candidate amount</span><strong>{candidate.currency ?? ""} {candidate.amount ?? "—"}</strong></div>
             <div><span>Reason</span><strong>{candidate.reasons.join(", ") || "Suggested match"}</strong></div>
           </div>
           <div className="reconciliation-actions">
+            <button className="btn" type="button" onClick={() => setDetail({ row, candidate })}><Eye size={16} /> View details</button>
             <button className="btn primary" disabled={busyId === candidate.id} onClick={() => void decide(row, candidate, "confirm")}>Confirm match</button>
             <button className="btn" disabled={busyId === candidate.id} onClick={() => void decide(row, candidate, "reject")}>Reject</button>
           </div>
         </div>))}
       </div>}
     </Panel>
+
+    {detail && (
+      <Modal title="Bank statement match" onClose={() => setDetail(null)}>
+        <div className="panel-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+          <div style={{ display: "grid", gap: 20 }}>
+            <section>
+              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Bank statement line</p>
+              <div className="reconciliation-card-grid">
+                <div><span>Description</span><strong>{detail.row.description || "—"}</strong></div>
+                <div><span>Posted date</span><strong>{detail.row.postedDate || "—"}</strong></div>
+                <div><span>Direction</span><strong>{detail.row.direction === "money_in" ? "Money In" : "Money Out"}</strong></div>
+                <div><span>Amount</span><strong>{detail.row.currency ?? ""} {detail.row.amount ?? "—"}</strong></div>
+                <div><span>Reference</span><strong>{detail.row.reference || "—"}</strong></div>
+                <div><span>Account</span><strong>{detail.row.bankAccountRef || "—"}</strong></div>
+              </div>
+            </section>
+
+            <section>
+              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Matched standardised record</p>
+              <div className="reconciliation-card-grid">
+                <div><span>Record</span><strong>{detail.candidate.recordCode || "—"}</strong></div>
+                <div><span>Category</span><strong>{detail.candidate.category || "—"}</strong></div>
+                <div><span>Party</span><strong>{detail.candidate.party || "—"}</strong></div>
+                <div><span>Amount</span><strong>{detail.candidate.currency ?? ""} {detail.candidate.amount ?? "—"}</strong></div>
+                <div><span>Reference</span><strong>{detail.candidate.reference || "—"}</strong></div>
+                <div><span>Amount delta</span><strong>{detail.candidate.amountDelta ?? "—"}</strong></div>
+              </div>
+              {detail.candidate.recordId && (
+                <p style={{ marginTop: 12 }}>
+                  <Link className="btn small" href={`${base}/records`}>Open records list</Link>
+                </p>
+              )}
+            </section>
+
+            <section>
+              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Original document</p>
+              <div className="reconciliation-card-grid">
+                <div><span>Document</span><strong>{detail.candidate.documentCode || "—"}</strong></div>
+                <div><span>Date delta (days)</span><strong>{detail.candidate.dateDeltaDays ?? "—"}</strong></div>
+                <div><span>Match reason</span><strong>{detail.candidate.reasons.join(", ") || "Suggested match"}</strong></div>
+              </div>
+              {detail.candidate.documentId && (
+                <p style={{ marginTop: 12 }}>
+                  <Link className="btn small primary" href={`${base}/documents/${detail.candidate.documentId}`}>Open original document</Link>
+                </p>
+              )}
+            </section>
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: 20 }}>
+            <button className="btn" type="button" onClick={() => setDetail(null)}>Close</button>
+            <button className="btn" disabled={busyId === detail.candidate.id} onClick={() => void decide(detail.row, detail.candidate, "reject")}>Reject</button>
+            <button className="btn primary" disabled={busyId === detail.candidate.id} onClick={() => void decide(detail.row, detail.candidate, "confirm")}>Confirm match</button>
+          </div>
+        </div>
+      </Modal>
+    )}
 
     {importFile && (
       <Modal title={importPreview ? "Review bank statement import" : "Map bank statement columns"} onClose={() => {
