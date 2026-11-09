@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { CheckCircle2, Eye, Landmark, Sparkles, UploadCloud } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { Badge, Modal, PageHeader, Panel } from "@/components/common/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Badge, Modal, PageHeader, Panel, LoadingState, ErrorState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   confirmBankImport,
@@ -12,7 +12,9 @@ import {
   previewBankImport,
   type BankImportPreview,
 } from "@/lib/api/money.service";
-import type { BankReconciliationCandidate, BankMoneyTransaction, User } from "@/types";
+import { getStandardisedRecord } from "@/lib/api/record.service";
+import { RecordDetail } from "@/features/common/records/records";
+import type { BankReconciliationCandidate, BankMoneyTransaction, StandardisedRecord, User } from "@/types";
 
 type ImportColumn = "posted_date" | "value_date" | "description" | "reference" | "debit" | "credit" | "currency";
 const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolean }> = [
@@ -79,7 +81,34 @@ export function ReconciliationPage({ user }: { user: User }) {
   const [defaultCurrency, setDefaultCurrency] = useState("MYR");
   const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
   const [detail, setDetail] = useState<{ row: BankMoneyTransaction; candidate: BankReconciliationCandidate } | null>(null);
+  const [record, setRecord] = useState<StandardisedRecord | undefined>();
+  const [recordLoading, setRecordLoading] = useState(false);
+  const [recordError, setRecordError] = useState("");
   const rows = useMemo(() => (data ?? []).flat().filter((row) => row.candidates?.some((candidate) => candidate.status === "proposed")), [data]);
+
+  useEffect(() => {
+    if (!detail?.candidate.recordId) {
+      setRecord(undefined);
+      setRecordError("");
+      return;
+    }
+    let cancelled = false;
+    setRecordLoading(true);
+    setRecordError("");
+    getStandardisedRecord(user, detail.candidate.recordId)
+      .then((found) => {
+        if (cancelled) return;
+        setRecord(found);
+        if (!found) setRecordError("Standardised record not found.");
+      })
+      .catch((e) => {
+        if (!cancelled) setRecordError(e instanceof Error ? e.message : "Unable to load standardised record.");
+      })
+      .finally(() => {
+        if (!cancelled) setRecordLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [detail, user]);
 
   async function onImport(file: File | undefined) {
     if (!file) return;
@@ -192,51 +221,44 @@ export function ReconciliationPage({ user }: { user: User }) {
 
     {detail && (
       <Modal title="Bank statement match" onClose={() => setDetail(null)}>
-        <div className="panel-body" style={{ maxHeight: "70vh", overflowY: "auto" }}>
-          <div style={{ display: "grid", gap: 20 }}>
-            <section>
-              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Bank statement line</p>
-              <div className="reconciliation-card-grid">
-                <div><span>Description</span><strong>{detail.row.description || "—"}</strong></div>
-                <div><span>Posted date</span><strong>{detail.row.postedDate || "—"}</strong></div>
-                <div><span>Direction</span><strong>{detail.row.direction === "money_in" ? "Money In" : "Money Out"}</strong></div>
-                <div><span>Amount</span><strong>{detail.row.currency ?? ""} {detail.row.amount ?? "—"}</strong></div>
-                <div><span>Reference</span><strong>{detail.row.reference || "—"}</strong></div>
-                <div><span>Account</span><strong>{detail.row.bankAccountRef || "—"}</strong></div>
-              </div>
-            </section>
+        <div className="panel-body" style={{ maxHeight: "75vh", overflowY: "auto" }}>
+          <section style={{ marginBottom: 24 }}>
+            <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Bank statement line</p>
+            <div className="reconciliation-card-grid">
+              <div><span>Description</span><strong>{detail.row.description || "—"}</strong></div>
+              <div><span>Posted date</span><strong>{detail.row.postedDate || "—"}</strong></div>
+              <div><span>Direction</span><strong>{detail.row.direction === "money_in" ? "Money In" : "Money Out"}</strong></div>
+              <div><span>Amount</span><strong>{detail.row.currency ?? ""} {detail.row.amount ?? "—"}</strong></div>
+              <div><span>Reference</span><strong>{detail.row.reference || "—"}</strong></div>
+              <div><span>Account</span><strong>{detail.row.bankAccountRef || "—"}</strong></div>
+            </div>
+          </section>
 
-            <section>
-              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Matched standardised record</p>
-              <div className="reconciliation-card-grid">
-                <div><span>Record</span><strong>{detail.candidate.recordCode || "—"}</strong></div>
-                <div><span>Category</span><strong>{detail.candidate.category || "—"}</strong></div>
-                <div><span>Party</span><strong>{detail.candidate.party || "—"}</strong></div>
-                <div><span>Amount</span><strong>{detail.candidate.currency ?? ""} {detail.candidate.amount ?? "—"}</strong></div>
-                <div><span>Reference</span><strong>{detail.candidate.reference || "—"}</strong></div>
-                <div><span>Amount delta</span><strong>{detail.candidate.amountDelta ?? "—"}</strong></div>
-              </div>
+          <section style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <p className="hp-eyebrow" style={{ margin: 0 }}>Standardised record</p>
               {detail.candidate.recordId && (
-                <p style={{ marginTop: 12 }}>
-                  <Link className="btn small" href={`${base}/records`}>Open records list</Link>
-                </p>
+                <Link className="btn small" href={`${base}/records/${detail.candidate.recordId}`}>Open standardised record</Link>
               )}
-            </section>
+            </div>
+            {recordLoading && <LoadingState variant="panel" />}
+            {recordError && <ErrorState message={recordError} />}
+            {record && <RecordDetail record={record} />}
+          </section>
 
-            <section>
-              <p className="hp-eyebrow" style={{ marginBottom: 8 }}>Original document</p>
-              <div className="reconciliation-card-grid">
-                <div><span>Document</span><strong>{detail.candidate.documentCode || "—"}</strong></div>
-                <div><span>Date delta (days)</span><strong>{detail.candidate.dateDeltaDays ?? "—"}</strong></div>
-                <div><span>Match reason</span><strong>{detail.candidate.reasons.join(", ") || "Suggested match"}</strong></div>
-              </div>
+          <section>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <p className="hp-eyebrow" style={{ margin: 0 }}>Original document</p>
               {detail.candidate.documentId && (
-                <p style={{ marginTop: 12 }}>
-                  <Link className="btn small primary" href={`${base}/documents/${detail.candidate.documentId}`}>Open original document</Link>
-                </p>
+                <Link className="btn small primary" href={`${base}/documents/${detail.candidate.documentId}`}>Open original document</Link>
               )}
-            </section>
-          </div>
+            </div>
+            <div className="reconciliation-card-grid">
+              <div><span>Document</span><strong>{detail.candidate.documentCode || "—"}</strong></div>
+              <div><span>Date delta (days)</span><strong>{detail.candidate.dateDeltaDays ?? "—"}</strong></div>
+              <div><span>Match reason</span><strong>{detail.candidate.reasons.join(", ") || "Suggested match"}</strong></div>
+            </div>
+          </section>
 
           <div className="modal-actions" style={{ marginTop: 20 }}>
             <button className="btn" type="button" onClick={() => setDetail(null)}>Close</button>
