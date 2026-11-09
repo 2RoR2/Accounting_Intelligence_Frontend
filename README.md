@@ -37,12 +37,14 @@ All development seed accounts use the password `DemoPass!2026`.
 5. Open the accountant’s activation link and activate the account. Sign in as that accountant.
 6. Upload a PDF/image/XLSX. The backend creates a processing job; the upload screen polls `GET /api/processing/jobs/{job_id}` and displays the real backend status. The browser does not advance document statuses locally.
 7. Open the document. Save Total Amount as `848.00`. Save the reference `PO-2192` to confirm its low-confidence value. Enter a correction note and select Save & revalidate.
-8. Open Validation, then Create standardised record. Open Standardised Record to review the immutable snapshot. Export CSV from the records list.
+8. Open Validation, then Create standardised record. Open Standardised Record to review the immutable snapshot. Use the single Export action for the approved-record export and Export history to review previous exports.
 9. Switch to Local Admin to see company documents, records, account usage, and reports.
 10. Switch to SAIC to inspect monitoring, metadata, and performance. Enter Support View with a reason to access a read-only financial record; the event is audited.
 11. Switch to Sarah at XYZ. ABC documents and records are filtered out.
 
 Development data comes from the backend PostgreSQL seed in `Accounting_Intelligence_Backend/database/mock.data.sql`. Do not use live customer data in local development.
+
+Uploaded documents are stored by the backend, not by the browser. When extraction detects a reliable invoice, bill, receipt, credit-note, or debit-note identifier, the document list updates its visible filename while preserving the original extension. Files that are queued, failed, or missing a reliable identifier retain their upload name until processing succeeds.
 
 ## Architecture and integration
 
@@ -61,7 +63,7 @@ SAIC record APIs return metadata by default. Financial detail is retrieved throu
 
 Dashboard counts and processing data are loaded through backend services. Preferences are saved as workspace settings. The upload flow uses backend job polling with an absolute two-minute observation deadline; each request has its own 15-second timeout, transient failures use bounded retry, and polling never cancels the backend job.
 
-The queue worker is responsible for extraction status and persistence. `SUCCEEDED` must only be reported after extraction and required database writes commit. Qwen/Ollama extraction and full provider/worker/database integration remain environment-dependent and are not claimed as fully verified here.
+The queue worker is responsible for extraction status and persistence. `SUCCEEDED` must only be reported after extraction and required database writes commit. PDF extraction uses the configured Docling/parser runtime. Image extraction requires the backend image-OCR settings described in the backend README. Qwen/Ollama remains optional and environment-dependent.
 
 ## Validation
 
@@ -101,3 +103,18 @@ export default config;
 ```
 
 Do not add a legacy `tailwindcss` PostCSS plugin configuration; use the installed `@tailwindcss/postcss` package.
+
+## v3.1+ review and evaluation integration
+
+Publish together with the backend v3.1+ integration. The review screen uses the
+backend's AI Assist and validation-review endpoints, keeps source candidates apart
+from model suggestions, and saves accepted values through the existing correction
+API. Currency decisions retain human attribution. Report totals remain separated
+by currency and preserve decimal values; job success is not field accuracy.
+
+`public/evaluation/summary.json` is the historical 3 November 2026 development
+snapshot used by the Evaluation page. It is not recomputed by a frontend build or
+by new uploads. Its conditions, sample sizes, label limitations and unmeasured
+criteria must remain visible; it does not establish independent pilot acceptance
+or fresh measurements of the integrated branches. The accompanying backend PR
+contains the coordinated API, dependency and database compatibility notes.

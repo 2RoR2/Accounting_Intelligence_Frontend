@@ -11,8 +11,8 @@ import {
   ArrowUpRight,
   Bell,
   Building2,
-  Briefcase,
   ChartNoAxesCombined,
+  BookOpen,
   ChevronDown,
   CircleHelp,
   ClipboardCheck,
@@ -21,11 +21,13 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   ScanLine,
   Settings2,
   ShieldCheck,
+  Sun,
   Upload,
   Users,
   UserRound,
@@ -38,14 +40,15 @@ import { getExceptions } from "@/lib/api/document.service";
 import { getTenants, getCompanyRequests } from "@/lib/api/tenant.service";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { HelpCenter } from "@/features/common/help/help-center";
+import { getNotifications, markNotificationRead } from "@/lib/api/workflow.service";
 import { Modal } from "@/components/common/ui";
 import Image from "next/image";
-import saicLogo from "@/images/saic_logo.png";
+import accordAiLogo from "@/images/AccordAI_logo.png";
 
 export function Brand() {
   return (
-    <span className="brand saic-brand">
-      <Image src={saicLogo} alt="SAIC" width={132} height={40} priority />
+    <span className="brand accordAi-brand">
+      <Image src={accordAiLogo} alt="AccordAI" width={132} height={40} priority />
     </span>
   );
 }
@@ -68,11 +71,15 @@ const companyNav = [
   ["Documents", "documents", Files],
   ["Upload", "upload", Upload],
   ["Exceptions", "exceptions", ShieldCheck],
+  ["Validation Overview", "validation-overview", ShieldCheck],
+  ["Approvals", "approvals", ClipboardCheck],
   ["Standardised Records", "records", FileCheck2],
   ["Contacts", "contacts", Users],
+  ["Reconciliation", "reconciliation", ClipboardCheck],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
-  ["Summary", "reports", ChartNoAxesCombined],
+  ["Ledger", "ledger", BookOpen],
+  ["Company Performance", "reports", ChartNoAxesCombined],
   ["Audit Trail", "audit", Activity],
   ["Users", "users", Users],
   ["Validation Rules", "validation-rules", ClipboardCheck],
@@ -87,9 +94,13 @@ const accountantNav = [
   ["Exceptions", "exceptions", ShieldCheck],
   ["Standardised Records", "records", FileCheck2],
   ["Contacts", "contacts", Users],
+  ["Reconciliation", "reconciliation", ClipboardCheck],
   ["Money In", "money-in", ArrowDownToLine],
   ["Money Out", "money-out", ArrowUpFromLine],
+  ["Ledger", "ledger", BookOpen],
   ["Summary", "reports", ChartNoAxesCombined],
+  ["Evaluation", "evaluation", ChartNoAxesCombined],
+  ["Settings", "settings", Settings2],
   ["Profile", "profile", UserRound],
 ] as const;
 
@@ -109,14 +120,51 @@ export function AppShell({
   const [notifications, setNotifications] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [navScrolling, setNavScrolling] = useState(false);
+  const [themePreference, setThemePreference] = useState<"light" | "dark" | "system">("system");
+  const [darkMode, setDarkMode] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const rail = !pinned && !peek;
+  const navScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleNavScroll() {
+    setNavScrolling(true);
+    if (navScrollTimer.current) clearTimeout(navScrollTimer.current);
+    navScrollTimer.current = setTimeout(() => setNavScrolling(false), 650);
+  }
 
   useEffect(() => {
     if (window.localStorage.getItem("accia-sidebar-pinned") === "0") {
       setPinned(false);
     }
   }, []);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("accordai-theme");
+    const preference = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+    setThemePreference(preference);
+    setDarkMode(preference === "dark" || (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches));
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (themePreference !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const sync = () => setDarkMode(media.matches);
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [themePreference]);
+
+  const cycleTheme = () => {
+    const next = themePreference === "light" ? "dark" : themePreference === "dark" ? "system" : "light";
+    setThemePreference(next);
+    window.localStorage.setItem("accordai-theme", next);
+    setDarkMode(next === "dark" || (next === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches));
+  };
 
   const setSidebarPinned = (next: boolean) => {
     setPinned(next);
@@ -158,23 +206,35 @@ export function AppShell({
   }, [open]);
 
   useEffect(() => {
-    const onScroll = () => setShowBackToTop(window.scrollY > 320);
+    const onScroll = (event?: Event) => {
+      const target = event?.target as (HTMLElement | Document | Window | null);
+      const nestedScroll = target && "scrollTop" in target ? target.scrollTop : 0;
+      const pageScroll = Math.max(window.scrollY, document.documentElement.scrollTop || 0, document.body.scrollTop || 0);
+      setShowBackToTop(Math.max(pageScroll, nestedScroll) > 80);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("scroll", onScroll, true);
+    };
   }, []);
 
   const data = useResource(
     async () => {
       const isAccountant = user.role === "ACCOUNTANT";
-      const [audit, exceptions] = await Promise.all([
+      const canSeeExceptions = isAccountant || user.role === "LOCAL_ADMIN";
+      const [audit, exceptions, notifications] = await Promise.all([
         getAuditLogs(user),
-        isAccountant ? getExceptions(user) : Promise.resolve([]),
+        canSeeExceptions ? getExceptions(user) : Promise.resolve([]),
+        getNotifications().catch(() => []),
       ]);
       return {
         tenants: user.role === "SUPER_ADMIN" ? await getTenants(user) : [],
         audit,
         exceptions,
+        notifications,
         pending:
           user.role === "SUPER_ADMIN"
             ? (await getCompanyRequests(user)).filter(
@@ -200,23 +260,40 @@ export function AppShell({
     : isCompanyAdmin
       ? companyNav
       : accountantNav;
+  const navGroups = isAdmin
+  ? [
+      { label: "Overview", paths: ["dashboard"] },
+      { label: "Workspace", paths: nav.map((item) => item[1]).filter((path) => path !== "dashboard") },
+    ]
+  : [
+      { label: "Overview", paths: ["dashboard"] },
+      { label: "Documents", paths: ["documents", "upload", "exceptions", "validation-overview", "records", "approvals"] },
+      { label: "Banking", paths: ["reconciliation", "money-in", "money-out"] },
+      { label: "Accounting", paths: ["ledger"] },
+      { label: "Insights", paths: ["reports", "evaluation"] },
+      { label: "Workspace", paths: ["contacts", "users", "audit", "validation-rules", "settings", "profile"] },
+    ];
 
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
+  const workspaceName = isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name || "Demo Company").split("—")[0].trim();
+  const workspaceOffice = isAdmin ? "Super Admin" : ((user.tenantName || "").split("—")[1]?.trim() || "Sarawak Office");
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
   const currentPage = pathname.split("/")[2] ?? "";
 
   const openExceptions = (data.data?.exceptions ?? []).filter(
     (e) => e.status !== "RESOLVED",
   );
-  type Alert = { id: string; title: string; detail: string; href: string; time: string };
-  const alerts: Alert[] = isAccountant
-    ? openExceptions.slice(0, 6).map((e) => ({
+  type Alert = { id: string; title: string; detail: string; href: string; time: string; notificationId?: string; read?: boolean };
+  const apiNotifications = data.data?.notifications ?? [];
+  const workflowAlerts: Alert[] = [...apiNotifications.map((n) => ({ id: n.id, notificationId: n.id, read: n.read, title: n.title, detail: n.message, href: n.resource ? `/${prefix}/${n.resource}` : notificationHref, time: n.createdAt })), ...openExceptions.map((e) => ({
         id: e.id,
         title: e.severity || "Exception",
         detail: e.message || e.type || "Needs review",
         href: `/${prefix}/exceptions`,
         time: e.createdAt,
-      }))
+      }))].filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 6)
+  const alerts: Alert[] = (isAccountant || isCompanyAdmin || apiNotifications.length > 0)
+    ? workflowAlerts
     : (data.data?.audit.slice(0, 4) ?? []).map((entry) => ({
         id: entry.id,
         title: entry.action.replaceAll("_", " "),
@@ -224,11 +301,13 @@ export function AppShell({
         href: notificationHref,
         time: entry.timestamp,
       }));
-  const alertCount = isAccountant ? openExceptions.length : alerts.length;
+  const alertCount = isAccountant || isCompanyAdmin
+    ? apiNotifications.filter((notification) => !notification.read).length + openExceptions.length
+    : alerts.length;
 
   return (
     <div
-      className={`app-shell${pinned ? "" : " sidebar-unextended"}`}
+      className={`app-shell${pinned ? "" : " sidebar-unextended"}${darkMode ? " theme-dark" : ""}`}
       data-role={user.role.toLowerCase().replaceAll("_", "-")}
     >
       <a href="#main-content" className="skip-link">
@@ -267,59 +346,41 @@ export function AppShell({
           </button>
         </div>
         <button
+          type="button"
           className="mobile-close icon-btn"
           aria-label="Close navigation"
           onClick={() => setOpen(false)}
         >
           <X />
         </button>
-        <div className="workspace-label">
-          <span className="workspace-icon">
-            <Briefcase size={17} />
-          </span>
+        <button className="workspace-label" type="button" aria-label="Current workspace" title="Current workspace">
+          {!isAdmin && <span className="workspace-avatar" aria-hidden="true">{workspaceName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span>}
           <div>
             <strong>
-              {isAdmin
-                ? "SAIC Platform"
-                : (user.tenantName || tenant?.name || "Company workspace")}
+              {workspaceName}
             </strong>
             <span>
-              {isAdmin
-                ? "Super Admin"
-                : isCompanyAdmin
-                  ? "Company Admin"
-                  : "Accountant"}{user.tenantCode ? ` | ${user.tenantCode}` : ""}
+              {workspaceOffice}
             </span>
           </div>
-        </div>
-        <div className="nav-label">WORKSPACE</div>
-        <nav>
-          {nav.map(([label, path, Icon], i) => {
-            const active = currentPage === path;
-            return (
-              <Link
-                key={path}
-                href={`/${prefix}/${path}`}
-                aria-current={active ? "page" : undefined}
-                onClick={() => setOpen(false)}
-                className={`nav-item ${active ? "active" : ""} ${i === nav.length - 2 ? "nav-separator" : ""}`}
-                title={label}
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-                {path === "approvals" && !!data.data?.pending && (
-                  <span className="nav-count">{data.data.pending}</span>
-                )}
-              </Link>
-            );
-          })}
+        </button>
+        <nav className={navScrolling ? "is-scrolling" : ""} onScroll={handleNavScroll}>
+          {navGroups.map((group) => <div className="nav-group" key={group.label}>
+            <div className="nav-group-heading">{group.label}</div>
+            {nav.filter((item) => group.paths.includes(item[1])).map(([label, path, Icon]) => {
+              const active = currentPage === path;
+              const badge = path === "exceptions"
+                ? (openExceptions.length > 0 ? openExceptions.length : undefined)
+                : path === "approvals" && (data.data?.pending ?? 0) > 0
+                  ? data.data?.pending
+                  : undefined;
+              return <Link key={`${group.label}-${path}`} href={`/${prefix}/${path}`} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-item ${active ? "active" : ""}`} title={label}>
+                <Icon size={18} /><span>{label}</span>{badge !== undefined && <span className="nav-count">{badge}</span>}
+              </Link>;
+            })}
+          </div>)}
         </nav>
         <div className="sidebar-bottom">
-          <div className="system-health">
-            <span className="pulse-dot" />
-            <span>Systems operational</span>
-            <ArrowUpRight size={13} />
-          </div>
           <button
             type="button"
             className="nav-item"
@@ -336,7 +397,7 @@ export function AppShell({
             <span>Switch account</span>
           </Link>
           <div className="sidebar-version">
-            <span>SAIC · Accounting Intelligence</span>
+            <span>AccordAI · Accounting Intelligence</span>
             <span>v1.0</span>
           </div>
         </div>
@@ -371,7 +432,7 @@ export function AppShell({
               </button>
             )}
             <Link className="breadcrumb-home" href={`/${prefix}/dashboard`}>
-              {isAdmin ? "SAIC Platform" : (user.tenantName || tenant?.name)}
+              {isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name)}
             </Link>
             <span className="crumb-divider">/</span>
             <strong>
@@ -379,6 +440,10 @@ export function AppShell({
             </strong>
           </div>
           <div className="topbar-right">
+            <button type="button" className="theme-toggle btn small" aria-label={`Theme: ${themePreference}. Click to change`} title="Change theme" onClick={cycleTheme}>
+              {darkMode ? <Sun size={15} /> : <Moon size={15} />}
+              {themePreference === "system" ? "System" : darkMode ? "Light mode" : "Dark mode"}
+            </button>
             <button
               className="help-trigger btn small"
               type="button"
@@ -404,7 +469,7 @@ export function AppShell({
             >
               <Bell size={19} />
               {alertCount > 0 && (
-                <span className="notification-badge">{alertCount}</span>
+                <span className="notification-badge" aria-label={`${alertCount} unread notifications`}>{alertCount > 99 ? "99+" : alertCount}</span>
               )}
             </button>
             {notifications && (
@@ -430,7 +495,10 @@ export function AppShell({
                         key={item.id}
                         href={item.href}
                         className="notification-item"
-                        onClick={() => setNotifications(false)}
+                        onClick={() => {
+                          if (item.notificationId && !item.read) void markNotificationRead(item.notificationId);
+                          setNotifications(false);
+                        }}
                       >
                         <span className="notification-item-icon">
                           <ShieldCheck size={14} />
@@ -500,15 +568,6 @@ export function AppShell({
                   My profile
                 </Link>
                 <button
-                  type="button"
-                  onClick={() => {
-                    setProfile(false);
-                    setHelpOpen(true);
-                  }}
-                >
-                  <CircleHelp size={15} /> Help & tutorial
-                </button>
-                <button
                   onClick={async () => {
                     await logout();
                     router.push("/login");
@@ -523,7 +582,7 @@ export function AppShell({
         <main id="main-content" className="content" tabIndex={-1}>
           {children}
           <footer className="main-footer">
-            <span>© 2026 Accounting Intelligence · SAIC</span>
+            <span>© 2026 Accounting Intelligence · AccordAI</span>
             <button
               type="button"
               className="footer-help-link"
@@ -540,7 +599,7 @@ export function AppShell({
         )}
         {showBackToTop && (
           <button
-            className="back-to-top icon-btn"
+            className="back-to-top icon-btn is-available"
             aria-label="Back to top"
             title="Back to top"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}

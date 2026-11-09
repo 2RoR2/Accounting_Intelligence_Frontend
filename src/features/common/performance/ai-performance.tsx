@@ -17,11 +17,11 @@ export function AiPerformancePage({ user }: { user: User }) {
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
-  const total = data.docs.length || 1;
-  const extracted = data.docs.filter((d) =>
-    !["UPLOADED", "QUEUED", "PROCESSING", "FAILED"].includes(d.status),
-  ).length;
-  const accuracy = Math.round((extracted / total) * 100);
+  const metric = (label: string) => data.metrics.find((item) => item.label === label);
+  const processed = metric("Processed documents");
+  const success = metric("Processing success rate");
+  const average = metric("Avg. processing time");
+  const exceptions = metric("Open exception rate");
 
   return (
     <>
@@ -31,10 +31,10 @@ export function AiPerformancePage({ user }: { user: User }) {
         description="Overall extraction accuracy, processing speed, and exception handling against the success criteria."
       />
       <div className="stats-grid">
-        <StatCard label="Documents processed" value={data.docs.length} />
-        <StatCard label="Extraction coverage" value={`${accuracy}%`} detail="Target ≥ 95%" />
-        <StatCard label="Processing target" value="≤ 20s" detail="Per document" />
-        <StatCard label="Exception target" value="< 10%" detail="Routed for review" />
+        <StatCard label="Processed documents" value={processed?.value ?? "—"} detail="Completed queue jobs" />
+        <StatCard label="Processing success" value={success?.value ?? "—"} detail={success?.change || "Queue outcome"} />
+        <StatCard label="Average processing" value={average?.value ?? "—"} detail={average?.target || "End-to-end duration"} />
+        <StatCard label="Open exception rate" value={exceptions?.value ?? "—"} detail={exceptions?.change || "Current review workload"} />
       </div>
       <Panel title="Performance metrics">
         <DataTable

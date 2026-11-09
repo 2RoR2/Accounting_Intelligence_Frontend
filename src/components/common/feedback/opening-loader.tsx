@@ -5,7 +5,7 @@ import { AppLoader } from "./app-loader";
 
 // Keep the authored opening scene visible long enough to be perceived on fast
 // local and production loads. Content/skeleton loading remains separate.
-const OPENING_DURATION_MS = 1600;
+const OPENING_DURATION_MS = 1450;
 
 export function OpeningLoader({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);

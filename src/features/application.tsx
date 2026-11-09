@@ -14,14 +14,18 @@ import { LocalAdminRoutes } from "@/features/localadmin/route-content";
 import { SuperAdminRoutes } from "@/features/superadmin/route-content";
 import { AlertTriangle, LogIn } from "lucide-react";
 export function Application({ path }: { path: string[] }) {
+  const publicRoute = isPublicRoute(path);
   const {
     data: user,
     error,
     loading,
     refresh,
-  } = useResource(getCurrentUser, `${AUTH_IDENTITY_CONTRACT}:${path.join("/")}`);
+  } = useResource(
+    publicRoute ? () => Promise.resolve(null) : getCurrentUser,
+    `${AUTH_IDENTITY_CONTRACT}:${path.join("/")}`,
+  );
   const [area] = path;
-  if (isPublicRoute(path)) return <PublicPage page={area} />;
+  if (publicRoute) return <PublicPage page={area} />;
   if (loading) return <LoadingState />;
   if (error) return <main className="access-gate"><ErrorState message={error} retry={refresh} /></main>;
   if (!user)

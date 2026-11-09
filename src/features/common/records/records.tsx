@@ -5,7 +5,6 @@ import { ArrowRight, Download, ShieldCheck } from "lucide-react";
 import type { StandardisedRecord, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  downloadCsv,
   getRecordMetadata,
   getStandardisedRecords,
   openSupportView,
@@ -53,7 +52,7 @@ export function RecordDetail({
       </div>
       <Panel
         title={record.id}
-        subtitle={`Document ${record.documentId}${"createdAt" in record ? " | Processed " + formatDate(record.createdAt) : ""}`}
+        subtitle={"createdAt" in record ? `Processed ${formatDate(record.createdAt)}` : "Standardised fields only"}
       >
         <div className="record-fields">
           {Object.entries(record.extraction.fields).map(([key, f]) => (
@@ -110,12 +109,14 @@ export function RecordsPage({
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState("");
   const [exports, setExports] = useState<Array<{ id: string; resource: string; format: string; status: string; rowCount: number; createdAt: string }>>([]);
+  const [exportsLoaded, setExportsLoaded] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [metadataId, setMetadataId] = useState("");
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const records = data.records.filter(
     (r) =>
-      `${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
+      `${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
@@ -124,45 +125,21 @@ export function RecordsPage({
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
   );
-  const exportRows = () =>
-    downloadCsv("standardised-records.csv", [
-      [
-        "Record ID",
-        "Category",
-        "Invoice",
-        "Supplier",
-        "Invoice date",
-        "Subtotal",
-        "Tax",
-        "Discount",
-        "Total",
-        "Currency",
-        "Validation",
-      ],
-      ...records.map((r) => [
-        r.id,
-        r.category === "ACCOUNTS_RECEIVABLE"
-          ? "Accounts Receivable"
-          : "Accounts Payable",
-        ...[
-          "invoice",
-          "supplier",
-          "date",
-          "subtotal",
-          "tax",
-          "discount",
-          "total",
-          "currency",
-        ].map((k) => (r.extraction.fields[k]?.value ?? "")),
-        r.validation,
-      ]),
-    ]);
   const metadata = data.metadata.find((r) => r.id === metadataId);
   const createBackendExport = async () => {
-    const created = await createExport("records", {}, "csv") as { id: string };
-    window.open(downloadExport(created.id), "_blank", "noopener,noreferrer");
+    setExportError("");
+    try {
+      const created = await createExport("records", {}, "csv") as { id: string };
+      window.open(downloadExport(created.id), "_blank", "noopener,noreferrer");
+      const history = await getExports();
+      setExports(history); setExportsLoaded(true);
+    } catch (e) { setExportError(e instanceof Error ? e.message : "Unable to create the export."); }
   };
-  const loadExportHistory = async () => setExports(await getExports());
+  const loadExportHistory = async () => {
+    setExportError("");
+    try { setExports(await getExports()); setExportsLoaded(true); }
+    catch (e) { setExportError(e instanceof Error ? e.message : "Unable to load export history."); }
+  };
   return (
     <>
       <PageHeader
@@ -171,19 +148,21 @@ export function RecordsPage({
         description={
           admin
             ? "Tenant-level monitoring. Detailed accounting data is available only through Support View."
-            : "Consistent, validated accounting records, ready to export."
+            : "One standardised record for each extracted document. Open a record to review the standardised fields. The original document stays hidden until you choose View original document."
         }
         actions={
           !admin && (
-            <div className="page-header-actions">
-              <button className="btn" type="button" disabled={!records.length} onClick={exportRows}><Download size={16} /> Export CSV</button>
-              <button className="btn primary" type="button" disabled={!records.length} onClick={() => void createBackendExport()}><Download size={16} /> Create backend export</button>
+            <div className="page-header-actions" style={{ display: "flex", gap: 12 }}>
+              <button className="btn primary" type="button" disabled={!records.length} onClick={() => void createBackendExport()}><Download size={16} /> Export</button>
               <button className="btn" type="button" onClick={() => void loadExportHistory()}>Export history</button>
             </div>
           )
         }
       />
-      {exports.length > 0 && <Panel title="Export history"><DataTable rows={exports} rowKey={(row) => row.id} columns={[{ label: "Resource", render: (row) => row.resource }, { label: "Format", render: (row) => row.format.toUpperCase() }, { label: "Status", render: (row) => <Badge>{row.status}</Badge> }, { label: "Created", render: (row) => formatDate(row.createdAt) }, { label: "Action", render: (row) => <a className="btn small" href={downloadExport(row.id)} target="_blank" rel="noreferrer">Download</a> }]} /></Panel>}
+      {exportError && <p className="error-text" role="alert">{exportError}</p>}
+      {exportsLoaded && <Panel title="Export history" subtitle="Download a previous export or check when it was created.">
+        {exports.length ? <DataTable rows={exports} rowKey={(row) => row.id} columns={[{ label: "Resource", render: (row) => row.resource }, { label: "Format", render: (row) => row.format.toUpperCase() }, { label: "Rows", render: (row) => row.rowCount }, { label: "Status", render: (row) => <Badge>{row.status}</Badge> }, { label: "Created", render: (row) => formatDate(row.createdAt) }, { label: "Action", render: (row) => <a className="btn small" href={downloadExport(row.id)} target="_blank" rel="noreferrer">Download</a> }]} /> : <div className="empty-state"><strong>No exports yet</strong><p>Create an export to see it here.</p></div>}
+      </Panel>}
       {admin && !selectedTenant ? (
         <Panel title="Records by tenant">
           <DataTable
@@ -343,7 +322,7 @@ export function RecordsPage({
                 label: "Record / invoice",
                 render: (r) => (
                   <div>
-                    <strong>{r.id}</strong>
+                    <strong title={r.id}>{r.code ?? r.id}</strong>
                     <small>{(r.extraction.fields.invoice?.value ?? "")}</small>
                   </div>
                 ),
@@ -484,7 +463,7 @@ export function RecordsPage({
                 className="btn"
                 href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/documents/${detail.documentId}`}
               >
-                View source document
+                View original document
               </Link>
             )}
           </div>

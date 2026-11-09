@@ -28,7 +28,7 @@ export function RulesPage({ user }: { user: User }) {
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const rules = edited ?? data;
   return (
-    <>
+    <div className="professional-admin-page">
       <PageHeader
         eyebrow="COMPANY CONFIGURATION"
         title="Validation rules"
@@ -94,7 +94,7 @@ export function RulesPage({ user }: { user: User }) {
         </form>
       </Panel>
       <Toast message={message} />
-    </>
+    </div>
   );
 }
 export function SettingsPage({
@@ -115,7 +115,6 @@ export function SettingsPage({
   return (
     <>
       <PageHeader
-        eyebrow="WORKSPACE PREFERENCES"
         title={
           profile
             ? "My profile"
@@ -156,7 +155,7 @@ export function SettingsPage({
                     defaultDocumentView: String(form.get("defaultDocumentView")) as "all" | "exceptions" | "review",
                     emailAssignmentNotifications: form.get("emailAssignmentNotifications") === "on",
                     processingStatusNotifications: form.get("processingStatusNotifications") === "on",
-                    uploadMaxSizeMb: Number(form.get("uploadMaxSizeMb")),
+                    uploadMaxSizeMb: data.uploadMaxSizeMb,
                     allowCameraUploads: form.get("allowCameraUploads") === "on",
                   });
                   setMessage("Workspace preferences saved.");
@@ -186,7 +185,7 @@ export function SettingsPage({
               </Field>
               <Field label="Session timeout" hint="Automatically end inactive sessions after this period.">
                 <select name="sessionTimeoutMinutes" defaultValue={String(data.sessionTimeoutMinutes)}>
-                  <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option>
+                  <option value="480">8 hours</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option>
                 </select>
               </Field>
               <div className="settings-toggle-list">
@@ -194,9 +193,6 @@ export function SettingsPage({
                 <label><input name="processingStatusNotifications" type="checkbox" defaultChecked={data.processingStatusNotifications} /> <span><strong>Processing updates</strong><small>Show status changes as documents move through extraction.</small></span></label>
                 <label><input name="allowCameraUploads" type="checkbox" defaultChecked={data.allowCameraUploads} /> <span><strong>Camera uploads</strong><small>Allow document capture from supported devices.</small></span></label>
               </div>
-              <Field label="Maximum upload size (MB)">
-                <input name="uploadMaxSizeMb" type="number" min="1" max="100" defaultValue={data.uploadMaxSizeMb} />
-              </Field>
               <button className="btn primary">Save preferences</button>
             </form>
           </Panel>

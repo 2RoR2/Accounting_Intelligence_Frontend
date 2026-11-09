@@ -2,13 +2,13 @@
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getAuditLogs } from "@/lib/api/audit.service";
-import { Badge, DataTable, ErrorState, LoadingState, PageHeader, Panel } from "@/components/common/ui";
+import { DataTable, ErrorState, LoadingState, PageHeader, Panel } from "@/components/common/ui";
 import { formatDate } from "@/components/common/ui";
 
 export function AuditTrailPage({ user }: { user: User }) {
   const { data, error, loading, refresh } = useResource(() => getAuditLogs(user), user.id);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
   return (

@@ -36,10 +36,11 @@ export function UserManagement({
   tenantId?: string;
 }) {
   const admin = user.role === "SUPER_ADMIN";
+  const canManage = user.role === "LOCAL_ADMIN";
   const { data, error, loading, refresh } = useResource(
     async () => ({
       users: await getTenantUsers(user, tenantId),
-      tenants: await getTenants(user),
+      tenants: user.role === "ACCOUNTANT" ? [] : await getTenants(user),
     }),
     `${user.id}:${tenantId}`,
   );
@@ -93,11 +94,11 @@ export function UserManagement({
             ),
       modal === "invite"
         ? `Invitation sent to ${f.get("email")}.`
-        : "Account limit request submitted to SAIC.",
+        : "Account limit request submitted to AccordAI.",
     );
   }
   return (
-    <>
+    <div className="professional-admin-page">
       <PageHeader
         title="User management"
         description={
@@ -106,7 +107,7 @@ export function UserManagement({
             : "Manage your company’s accountants and reserved seats."
         }
         actions={
-          !admin && (
+            canManage && (
             <>
               <button
                 className="btn"
@@ -212,7 +213,7 @@ export function UserManagement({
                   <button className="text-link" onClick={() => setView(u)}>
                     View
                   </button>
-                  {!admin && u.role === "ACCOUNTANT" && (
+                  {canManage && u.role === "ACCOUNTANT" && (
                     <>
                       <button className="text-link" onClick={() => { setEdit(u); setFailure(""); }}>
                         <Pencil size={13} /> Edit
@@ -431,6 +432,6 @@ export function UserManagement({
         </Modal>
       )}
       <Toast message={toast} />
-    </>
+    </div>
   );
 }

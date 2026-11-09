@@ -22,7 +22,24 @@ function apiUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+// These endpoints establish or end a session, or respond to one that is not
+// yet active; a 401 from them must surface instead of triggering a refresh.
+const NO_REFRESH = /^\/api\/auth\/(refresh|login|verify-mfa|resend-mfa|logout|forgot-password|verify-reset-code|reset-status|reset-password|activate|recover-authenticator)\b/;
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Refresh tokens rotate on use, so concurrent 401s must share one refresh request. */
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= fetch(apiUrl("/api/auth/refresh"), {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json", "X-Requested-With": "AccountingIntelligence" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  }).then(response => response.ok).catch(() => false).finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   headers.set("X-Requested-With", "AccountingIntelligence");
@@ -44,12 +61,21 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     // send 200 headers while the database-backed JSON response is still
     // blocked, which previously left the UI in a permanent loading state.
     const body = await response.json().catch(() => null);
+    if (response.status === 401 && allowRefresh && !NO_REFRESH.test(path) && await refreshSession()) {
+      return await api<T>(path, init, false);
+    }
     if (!response.ok) {
       const detail = body && typeof body.detail === "string"
         ? body.detail
         : body?.detail?.message
           ? `${body.detail.message}${body.detail.existingDocumentCode ? ` Existing document: ${body.detail.existingDocumentCode}.` : ""}`
-          : `Request failed (${response.status})`;
+          : typeof body?.message === "string"
+            ? body.message
+            : typeof body?.error === "string"
+              ? body.error
+              : response.status >= 500
+                ? `The backend could not complete this request (${response.status}). Check the API and database service logs.`
+                : `Request failed (${response.status})`;
       const details = body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail) ? body.detail as Record<string, unknown> : undefined;
       throw new ApiError(detail, response.status, details);
     }

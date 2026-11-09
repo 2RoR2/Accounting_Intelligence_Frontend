@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2, UploadCloud } from "lucide-react";
+import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -16,6 +17,12 @@ import {
   getCashSummary,
   getMoneyTransactionDetail,
   getMoneyTransactions,
+  getCodingAccounts,
+  getCodingCostCentres,
+  codeBankTransaction,
+  clearBankTransactionCoding,
+  searchMatchRecords,
+  createManualMatchCandidate,
   ignoreBankTransaction,
   previewBankImport,
   type BankImportPreview,
@@ -40,45 +47,8 @@ const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolea
   { key: "reference", label: "Reference", required: false },
   { key: "debit", label: "Debit (Money Out)", required: true },
   { key: "credit", label: "Credit (Money In)", required: true },
-  { key: "currency", label: "Currency", required: true },
+  { key: "currency", label: "Currency", required: false },
 ];
-
-function csvHeaders(text: string): string[] {
-  const firstLine = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
-  const headers: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let i = 0; i < firstLine.length; i += 1) {
-    const char = firstLine[i];
-    if (char === '"' && quoted && firstLine[i + 1] === '"') {
-      value += '"';
-      i += 1;
-    } else if (char === '"') quoted = !quoted;
-    else if (char === "," && !quoted) {
-      headers.push(value.trim());
-      value = "";
-    } else value += char;
-  }
-  headers.push(value.trim());
-  if (quoted || headers.some((header) => !header) || new Set(headers).size !== headers.length) {
-    throw new Error("The CSV needs one header row with unique, non-empty column names.");
-  }
-  return headers;
-}
-
-function guessColumn(headers: string[], key: ImportColumn): string {
-  const normalized = (header: string) => header.toLowerCase().replace(/[^a-z]/g, "");
-  const matches: Record<ImportColumn, string[]> = {
-    posted_date: ["date", "transactiondate", "posteddate", "bookingdate"],
-    value_date: ["valuedate"],
-    description: ["description", "details", "narrative", "transactiondetails"],
-    reference: ["reference", "ref", "transactionreference"],
-    debit: ["debit", "withdrawal", "moneyout"],
-    credit: ["credit", "deposit", "moneyin"],
-    currency: ["currency", "ccy"],
-  };
-  return headers.find((header) => matches[key].includes(normalized(header))) ?? "";
-}
 
 function addDecimalValues(values: Array<string | null | undefined>): string {
   const cents = values.reduce((total, value) => {
@@ -108,8 +78,7 @@ export function MoneyFlowPage({
   direction: MoneyDirection;
 }) {
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [month, setMonth] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
@@ -119,16 +88,22 @@ export function MoneyFlowPage({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
+  const [codingAccounts, setCodingAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [costCentres, setCostCentres] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [selectedCostCentreId, setSelectedCostCentreId] = useState("");
+  const [matchSearch, setMatchSearch] = useState("");
+  const [matchResults, setMatchResults] = useState<Array<{ recordId: string; recordCode: string; party: string | null; reference: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string }>>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importHeaders] = useState<string[]>([]);
   const [importMapping, setImportMapping] = useState<Record<ImportColumn, string>>({
     posted_date: "", value_date: "", description: "", reference: "", debit: "", credit: "", currency: "",
   });
   const [accountRef, setAccountRef] = useState("");
   const [dateFormat, setDateFormat] = useState<"" | "iso" | "dmy" | "mdy">("");
+  const [defaultCurrency, setDefaultCurrency] = useState("MYR");
   const [importPreview, setImportPreview] = useState<BankImportPreview | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -157,12 +132,69 @@ export function MoneyFlowPage({
     try {
       const d = await getMoneyTransactionDetail(user, id);
       setDetail(d ?? null);
+      setSelectedAccountId(d?.accountId ?? "");
+      setSelectedCostCentreId(d?.costCentreId ?? "");
       setSelectedCandidateId(d?.candidateId ?? d?.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
+      setMatchSearch(""); setMatchResults([]);
+      if (!codingAccounts.length) {
+        const [accounts, centres] = await Promise.all([getCodingAccounts(), getCodingCostCentres()]);
+        setCodingAccounts(accounts);
+        setCostCentres(centres);
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to load the bank row.");
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const onCode = async () => {
+    if (!detail || !selectedAccountId) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      await codeBankTransaction(user, detail.id, { accountId: selectedAccountId, costCentreId: selectedCostCentreId || undefined });
+      const updated = await getMoneyTransactionDetail(user, detail.id);
+      setDetail(updated ?? detail);
+      setNotice("Transaction coded and saved.");
+      reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to save the transaction code.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onClearCode = async () => {
+    if (!detail) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      await clearBankTransactionCoding(user, detail.id);
+      const updated = await getMoneyTransactionDetail(user, detail.id);
+      setDetail(updated ?? detail);
+      setSelectedAccountId("");
+      setSelectedCostCentreId("");
+      setNotice("Coding cleared.");
+      reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to clear the coding.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSearchMatches = async () => {
+    if (!detail) return;
+    try { setMatchResults(await searchMatchRecords(detail.id, matchSearch)); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "Unable to search approved records."); }
+  };
+  const onSelectManualMatch = async (recordId: string) => {
+    if (!detail) return;
+    setBusy(true); setActionError("");
+    try { await createManualMatchCandidate(detail.id, recordId); const updated = await getMoneyTransactionDetail(user, detail.id); setDetail(updated ?? detail); setSelectedCandidateId(updated?.candidateId ?? ""); setNotice("Approved record selected. Confirm the match to save it."); reload(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "Unable to select the approved record."); }
+    finally { setBusy(false); }
   };
 
   const onDecide = async (decision: "confirm" | "reject") => {
@@ -204,33 +236,13 @@ export function MoneyFlowPage({
     }
   };
 
-  const onImport = async (file: File | undefined) => {
-    if (!file) return;
-    setActionError("");
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setActionError("Bank statement import currently supports CSV files only.");
-      return;
-    }
-    try {
-      const headers = csvHeaders(await file.text());
-      setImportFile(file);
-      setImportHeaders(headers);
-      setImportMapping(Object.fromEntries(IMPORT_COLUMNS.map(({ key }) => [key, guessColumn(headers, key)])) as Record<ImportColumn, string>);
-      setImportPreview(null);
-      setAccountRef("");
-      setDateFormat("");
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to read the CSV header.");
-    }
-  };
-
   const prepareImport = async () => {
     if (!importFile || !dateFormat || !accountRef.trim()) return;
     setBusy(true);
     setActionError("");
     try {
       const mapping = Object.fromEntries(Object.entries(importMapping).filter(([, header]) => header)) as Record<string, string>;
-      const preview = await previewBankImport(user, importFile, accountRef.trim(), mapping, dateFormat);
+      const preview = await previewBankImport(user, importFile, accountRef.trim(), mapping, dateFormat, defaultCurrency);
       setImportPreview(preview);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to preview the bank statement.");
@@ -249,7 +261,7 @@ export function MoneyFlowPage({
         setNotice(`Imported ${result.rowCount} bank rows. ${result.candidatesProposed} exact match candidates need review.`);
       } else {
         await discardBankImportPreview(user, importPreview.importId);
-        setNotice("Bank import preview discarded; source rows remain retained as ignored evidence.");
+        setNotice("Bank import preview discarded. No rows were imported, and the discarded import stays on record.");
       }
       setImportFile(null);
       setImportPreview(null);
@@ -279,50 +291,28 @@ export function MoneyFlowPage({
       .toLowerCase();
     if (q && !searchable.includes(q)) return false;
     if (statusFilter && r.matchStatus !== statusFilter) return false;
-    if (dateFrom && r.postedDate < dateFrom) return false;
-    if (dateTo && r.postedDate > dateTo) return false;
+    if (month && !r.postedDate.startsWith(month)) return false;
     return true;
   });
   const matched = filtered.filter((r) => r.matchStatus === "matched").length;
   const pageTotals = Array.from(new Set(filtered.map((row) => row.currency ?? ""))).map((currency) => ({
-    currency: currency || null,
+    currency: currency || "MYR",
     amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
   }));
 
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
-      ? "Bank statement credits. Import a statement, then review each row against a standardised record."
-      : "Bank statement debits. Import a statement, then review each row against a standardised record.";
+      ? "Bank statement credits from Reconciliation. Compare each row with the linked standardised record or original document."
+      : "Bank statement debits from Reconciliation. Compare each row with the linked standardised record or original document.";
 
   return (
     <>
       <PageHeader
         title={title}
         description={description}
-        actions={
-          <>
-            <input
-              ref={fileRef}
-              hidden
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                void onImport(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              className="btn primary"
-              type="button"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              <UploadCloud size={16} /> Import bank statement
-            </button>
-          </>
-        }
+        actions={null}
       />
 
       {notice && (
@@ -344,28 +334,28 @@ export function MoneyFlowPage({
 
       {actionError && <p role="alert" className="error-text">{actionError}</p>}
 
-      <Panel className="cash-summary-panel">
-        <div style={{ padding: 20, background: "linear-gradient(135deg, #2a3a4a 0%, #3d5166 100%)", color: "#f6f1e8", borderRadius: 12 }}>
-          <div style={{ fontSize: 13, letterSpacing: 0.4, opacity: 0.8 }}>CASH SUMMARY BY CURRENCY</div>
-          <div style={{ fontSize: 13, opacity: 0.85, margin: "4px 0 14px" }}>Cash movement only; this is not a profit and loss statement.</div>
+      <Panel className={`cash-summary-panel cash-summary-${direction}`}>
+        <div className="cash-summary-inner">
+          <div className="cash-summary-kicker">CASH SUMMARY BY CURRENCY</div>
+          <div className="cash-summary-description">Cash movement only; this is not a profit and loss statement.</div>
           {summary?.currencies.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             {summary.currencies.map((item) => {
               const currency = item.currency;
-              const label = currency ?? "Currency unavailable";
-              const net = currency ? addDecimalValues([item.moneyIn, `-${item.moneyOut}`]) : null;
-              return <div key={label} style={{ borderTop: "1px solid rgba(255,255,255,.25)", paddingTop: 10 }}>
-                <strong>{label}</strong>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 6 }}><span>Money In</span><strong>{money(item.moneyIn, currency)}</strong></div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><span>Money Out</span><strong>{money(item.moneyOut, currency)}</strong></div>
-                {net !== null && <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><span>Net movement</span><strong>{money(net, currency)}</strong></div>}
+              const label = currency ?? "MYR";
+              const net = addDecimalValues([item.moneyIn, `-${item.moneyOut}`]);
+              return <div className="cash-summary-currency" key={label}>
+                <strong className="cash-summary-currency-label">{label}</strong>
+                <div><span>Money In</span><strong>{money(item.moneyIn, currency)}</strong></div>
+                <div><span>Money Out</span><strong>{money(item.moneyOut, currency)}</strong></div>
+                <div className="cash-summary-net"><span>Net movement</span><strong>{money(net, currency ?? "MYR")}</strong></div>
               </div>;
             })}
-          </div> : <p style={{ margin: 0 }}>No imported bank transactions yet.</p>}
+          </div> : <p className="cash-summary-empty">No imported bank transactions yet.</p>}
         </div>
       </Panel>
 
       <div
-        className="stats-row"
+        className={`stats-row money-flow-stats money-flow-stats-${direction}`}
         style={{
           margin: "16px 0",
           display: "grid",
@@ -411,27 +401,14 @@ export function MoneyFlowPage({
             </div>
             <div>
               <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-                Date from
+                Month
               </label>
               <input
-                aria-label="Date from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                style={{ minWidth: 150 }}
-              />
-            </div>
-            <div style={{ fontSize: 13, color: "var(--muted)", paddingBottom: 8 }}>until</div>
-            <div>
-              <label style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-                Date to
-              </label>
-              <input
-                aria-label="Date to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                style={{ minWidth: 150 }}
+                aria-label="Month"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                style={{ minWidth: 160 }}
               />
             </div>
             <div ref={statusRef} style={{ position: "relative" }}>
@@ -497,14 +474,13 @@ export function MoneyFlowPage({
                 </div>
               )}
             </div>
-            {(search || dateFrom || dateTo || statusFilter) && (
+            {(search || month || statusFilter) && (
               <button
                 className="btn small"
                 type="button"
                 onClick={() => {
                   setSearch("");
-                  setDateFrom("");
-                  setDateTo("");
+                  setMonth("");
                   setStatusFilter("");
                 }}
                 style={{ marginBottom: 2 }}
@@ -514,7 +490,7 @@ export function MoneyFlowPage({
             )}
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 12px" }}>
-            Date filter uses the bank row Date column. Showing {filtered.length} of {rows.length} rows.
+            Month filter uses the bank row Date column. Showing {filtered.length} of {rows.length} rows.
           </div>
         </div>
         <DataTable
@@ -537,8 +513,20 @@ export function MoneyFlowPage({
               render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
             },
             {
+              label: "Accounting",
+              render: (r) => <Badge>{r.codingDecision ? "Coded" : "Uncoded"}</Badge>,
+            },
+            {
               label: "Related record",
-              render: (r) => r.relatedRecordCode || "—",
+              render: (r) => r.relatedRecordId
+                ? <Link href={`${base}/records/${r.relatedRecordId}`}>{r.relatedRecordCode || "Record"}</Link>
+                : r.relatedRecordCode || "—",
+            },
+            {
+              label: "Original document",
+              render: (r) => r.relatedDocumentId
+                ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
+                : "—",
             },
             {
               label: "Action",
@@ -574,6 +562,9 @@ export function MoneyFlowPage({
                   <option value="">Choose date format</option><option value="iso">YYYY-MM-DD</option><option value="dmy">DD/MM/YYYY</option><option value="mdy">MM/DD/YYYY</option>
                 </select>
               </label>
+              <label style={{ display: "block", margin: "12px 0" }}>Default currency (used when the CSV has no currency column)
+                <input value={defaultCurrency} onChange={(event) => setDefaultCurrency(event.target.value.toUpperCase())} maxLength={3} placeholder="MYR" style={{ display: "block", width: "100px", marginTop: 4 }} />
+              </label>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
                 {IMPORT_COLUMNS.map(({ key, label, required }) => <label key={key}>{label}{required ? " *" : " (optional)"}
                   <select value={importMapping[key]} onChange={(event) => setImportMapping((current) => ({ ...current, [key]: event.target.value }))} style={{ display: "block", width: "100%", marginTop: 4 }}>
@@ -588,7 +579,7 @@ export function MoneyFlowPage({
               </div>
             </> : <>
               <p>{importPreview.rowCount} new rows; {importPreview.duplicateRowsSkipped} duplicates skipped; {importPreview.needsReviewCount} rows need review. Confirming imports the rows and proposes only exact candidate matches.</p>
-              {importPreview.sampleRows.length > 0 && <div style={{ overflowX: "auto" }}><table><thead><tr><th>Row</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Currency</th><th>Import state</th></tr></thead><tbody>
+              {importPreview.sampleRows.length > 0 && <div className="bank-import-preview-scroll"><table className="bank-import-preview-table"><thead><tr><th>Row</th><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Currency</th><th>Import state</th></tr></thead><tbody>
                 {importPreview.sampleRows.map((row) => <tr key={row.sourceRow}><td>{row.sourceRow}</td><td>{row.postedDate ?? "—"}</td><td>{row.description || "—"}</td><td>{row.debit ?? "—"}</td><td>{row.credit ?? "—"}</td><td>{row.currency ?? "—"}</td><td>{row.status === "needs_review" ? `Needs review: ${row.reviewReasons.join(", ")}` : row.direction === "money_in" ? "Money In" : "Money Out"}</td></tr>)}
               </tbody></table></div>}
               <div className="modal-actions" style={{ marginTop: 18 }}>
@@ -646,6 +637,26 @@ export function MoneyFlowPage({
               </div>
             </div>
 
+            <section className="transaction-review-section">
+              <div className="transaction-review-section-heading"><h3>Code transaction</h3><span>{detail.codingDecision ? "Coding confirmed" : "Ledger posting remains separate"}</span></div>
+              <p style={{ marginTop: 0, color: "var(--muted)" }}>Save the account classification for this bank row. This records the decision; it does not post a ledger journal.</p>
+              <label style={{ display: "block", fontWeight: 600 }}>Chart of Accounts code
+                <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
+                  <option value="">Choose an account</option>
+                  {codingAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "block", fontWeight: 600, marginTop: 10 }}>Cost centre (optional)
+                <select value={selectedCostCentreId} onChange={(event) => setSelectedCostCentreId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
+                  <option value="">No cost centre</option>
+                  {costCentres.map((centre) => <option key={centre.id} value={centre.id}>{centre.code} · {centre.name}</option>)}
+                </select>
+              </label>
+              <button className="btn primary" type="button" disabled={busy || !selectedAccountId} onClick={() => void onCode()} style={{ marginTop: 12 }}>Save code</button>
+              {detail.codingDecision && <button className="btn" type="button" disabled={busy} onClick={() => void onClearCode()} style={{ marginTop: 12, marginLeft: 8 }}>Clear coding</button>}
+              <p style={{ color: "var(--muted)", marginBottom: 0 }}>Status: <strong>{detail.codingDecision ? "Coded" : "Uncoded"}</strong></p>
+            </section>
+
             {(detail.candidates?.length ?? 0) > 0 && <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontWeight: 600 }}>Reconciliation candidate
                 <select value={selectedCandidateId} onChange={(event) => setSelectedCandidateId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
@@ -666,6 +677,13 @@ export function MoneyFlowPage({
                 </div> : <p>No proposed candidate is available. This row needs manual review.</p>;
               })()}
             </div>}
+
+            <section className="transaction-review-section">
+              <div className="transaction-review-section-heading"><h3>Match existing</h3><span>Approved records only</span></div>
+              <p style={{ marginTop: 0, color: "var(--muted)" }}>Search approved standardised records by invoice/reference or counterparty. Remaining amount is shown when prior allocations exist.</p>
+              <div className="transaction-match-search"><input value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
+              {matchResults.map((record) => <div key={record.recordId} className="detail-list" style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 8 }}><div><span>Record</span><strong>{record.recordCode}</strong></div><div><span>Party</span><strong>{record.party || "—"}</strong></div><div><span>Total / remaining</span><strong>{record.currency || ""} {record.totalAmount || "—"} / {record.remainingAmount}</strong></div><button className="btn small" type="button" disabled={busy || Number(record.remainingAmount) <= 0} onClick={() => void onSelectManualMatch(record.recordId)}>Select record</button></div>)}
+            </section>
 
             <label style={{ display: "block", marginTop: 14 }}>Decision note{selectedCandidateId ? " (required when rejecting)" : ""}
               <textarea value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} maxLength={2000} rows={3} style={{ display: "block", width: "100%", marginTop: 4 }} placeholder="Explain the review decision" />

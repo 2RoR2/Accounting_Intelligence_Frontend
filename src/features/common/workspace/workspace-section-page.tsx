@@ -68,7 +68,7 @@ export function WorkspaceSectionPage({ user, section }: { user: User; section: s
     if (notificationView) void getNotifications().then(setNotificationsData).catch(() => setNotificationsData([]));
     if (settingsView) void getAuthSessions().then(setSessionsData).catch(() => setSessionsData([]));
   }, [notificationView, settingsView]);
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const exceptionView = ["exceptions", "all-exceptions", "blocking-errors", "warnings", "resolved-exceptions"].includes(view);
   const documentView = !exceptionView;

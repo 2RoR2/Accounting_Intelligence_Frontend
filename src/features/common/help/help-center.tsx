@@ -100,7 +100,7 @@ export function HelpCenter({
             <h2>How can we help?</h2>
             <p>
               Follow the guided tutorial for Accounting Intelligence, or request
-              a helpline callback from the SAIC support team.
+              a helpline callback from the AccordAI support team.
             </p>
           </div>
         </div>
@@ -161,7 +161,7 @@ export function HelpCenter({
           <CheckCircle2 size={36} />
           <h2>Helpline request received</h2>
           <p>
-            A SAIC support specialist will review your request. Your submission
+            A AccordAI support specialist will review your request. Your submission
             has been recorded and our team will follow up using your preferred
             contact method.
           </p>

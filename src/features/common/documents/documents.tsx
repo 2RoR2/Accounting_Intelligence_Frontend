@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   UploadCloud,
   Camera,
-  CheckCircle2,
   Trash2,
 } from "lucide-react";
 import type { DocumentKind, RecordCategory, User } from "@/types";
@@ -34,7 +33,6 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
-import { WorkflowControls } from "@/features/common/workflow/workflow-controls";
 import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
@@ -68,7 +66,7 @@ export function DocumentList({ user }: { user: User }) {
     return typeByTab[selectedTab] ? data.filter((document) => document.type === typeByTab[selectedTab]) : data;
   }, [data, selectedTab]);
   const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Purchase Bills", "purchase-bills"], ["Receipts", "receipts"], ["Credit Notes", "credit-notes"], ["Debit Notes", "debit-notes"]];
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   return (
     <>
@@ -191,6 +189,7 @@ export function UploadPage({ user }: { user: User }) {
   const [stage, setStage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const [camera, setCamera] = useState(() => searchParams.get("source") === "camera");
   const [batch, setBatch] = useState<{ id: string; name: string; status: string } | null>(null);
   const [completedDocumentId, setCompletedDocumentId] = useState<string | null>(null);
@@ -226,10 +225,12 @@ export function UploadPage({ user }: { user: User }) {
       let processingContinues = false;
       for (const file of files) {
         setStage(`Uploading ${file.name}`);
+        setSending(true);
         const doc = await uploadDocument(user, file, "real", category, kind) as Awaited<ReturnType<typeof uploadDocument>> & { jobId?: string };
+        setSending(false);
         documentIds.push(doc.id);
-        setProgress(15);
-        if (!doc.queueJobId) throw new Error("The file was stored but dispatch failed. Open Documents to retry processing; do not upload it again.");
+        setProgress(25);
+        setCompletedDocumentId(doc.id);
         if (!doc.jobId) throw new Error(`The backend did not return a processing job for ${file.name}.`);
         let terminal = false;
         let consecutivePollErrors = 0;
@@ -240,8 +241,10 @@ export function UploadPage({ user }: { user: User }) {
             consecutivePollErrors = 0;
             setStage(`${file.name} · ${job.status.toLowerCase()}`);
             const jobStatus = job.status.toUpperCase();
-            setProgress(jobStatus === "QUEUED" ? 25 : jobStatus === "PROCESSING" ? 60 : ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus) ? 100 : 15);
+            const waiting = ["PENDING", "DISPATCHED", "QUEUED"].includes(jobStatus);
+            setProgress(waiting ? 25 : jobStatus === "PROCESSING" ? 60 : ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus) ? 100 : 25);
             terminal = ["SUCCEEDED", "FAILED", "CANCELLED"].includes(jobStatus);
+            if (waiting) { processingContinues = true; break; }
             if (["FAILED", "CANCELLED"].includes(jobStatus)) {
               throw new Error(`PROCESSING_TERMINAL_FAILURE:${job.lastError || `${file.name} processing failed.`}`);
             }
@@ -278,22 +281,25 @@ export function UploadPage({ user }: { user: User }) {
       setProgress(0);
       setStage("");
     } finally {
+      setSending(false);
       setBusy(false);
     }
   }
   return (
     <>
+      <div className="upload-reference-page">
       <PageHeader
-        title="Upload a document"
-        description="Bring invoices, bills, receipts, credit notes, and debit notes into one consistent workflow."
+        title="Upload documents"
+        description="Add your files. We’ll extract the details for your review."
       />
+      <div className="upload-workflow-steps" aria-label="Upload workflow"><div className="is-active"><b>1</b><strong>Select files</strong></div><i /><div><b>2</b><strong>Confirm details</strong></div><i /><div><b>3</b><strong>Upload & process</strong></div></div>
       <div className="upload-layout">
         <Panel
-          title="Upload accounting document"
-          subtitle="Choose your files to start processing"
+          title="Add your documents"
+          subtitle="Select invoices, bills, or receipts"
         >
           <div className="panel-body">
-            {error && <ErrorState message={error} />}
+            {error && <ErrorState message={error} dismissible onClose={() => setError("")} />}
             <div className="upload-sources">
               <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
                 <UploadCloud size={16} /> Upload from device
@@ -315,6 +321,8 @@ export function UploadPage({ user }: { user: User }) {
             <button
               type="button"
               className={`drop-zone ${dragging ? "dragging" : ""}`}
+              tabIndex={0}
+              aria-label="Upload area. Press Ctrl+V to paste a file or image."
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -360,9 +368,9 @@ export function UploadPage({ user }: { user: User }) {
             />
             {progress > 0 && <div className="upload-progress" role="status" aria-label={`Processing ${progress}%`}>
               <div className="upload-progress-title"><strong>Upload file</strong><span>{stage || "Select file type to start processing"}</span></div>
-              <div className="upload-progress-file"><FileText size={28} /><div><strong>{files[0]?.name || "Accounting document"}</strong><small>{files[0] ? `${(files[0].size / 1024).toFixed(1)} KB` : "Document"} · {busy ? "Uploading" : "Uploaded"}</small></div><button type="button" className="upload-progress-delete" aria-label="Remove uploaded file" disabled={busy} onClick={() => setFiles([])}><Trash2 size={17} /></button></div>
+              <div className="upload-progress-file"><FileText size={28} /><div><strong>{files[0]?.name || "Accounting document"}</strong><small>{files[0] ? `${(files[0].size / 1024).toFixed(1)} KB` : "Document"} · {sending ? "Uploading" : "Uploaded"}</small></div><button type="button" className="upload-progress-delete" aria-label="Remove uploaded file" disabled={busy} onClick={() => setFiles([])}><Trash2 size={17} /></button></div>
               <div className="upload-progress-row"><div className="upload-progress-track"><span style={{ width: `${progress}%` }} /></div><span>{progress}%</span></div>
-              <div className="upload-progress-type"><label htmlFor="upload-progress-kind">File type <b>*</b></label><select id="upload-progress-kind" value={kind} disabled={busy} onChange={(e) => setKind(e.target.value as DocumentKind)}><option value="INVOICE">Invoice</option><option value="BILL">Bill</option><option value="RECEIPT">Receipt</option><option value="CREDIT_NOTE">Credit note</option><option value="DEBIT_NOTE">Debit note</option></select></div>
+              <div className="upload-progress-type"><label htmlFor="upload-progress-kind">File type <b>*</b></label><select id="upload-progress-kind" value={kind} disabled={busy} onChange={(e) => setKind(e.target.value as DocumentKind)}><option value="INVOICE">Invoice</option><option value="BILL">Bill</option><option value="RECEIPT">Receipt</option></select></div>
               {completedDocumentId && <Link className="btn small" href={`${base}/documents/${completedDocumentId}`}>View extracted output</Link>}
             </div>}
             {!progress && files.length > 0 && <div className="upload-queue-header"><strong>Ready to upload</strong><span>{files.length} file{files.length === 1 ? "" : "s"}</span></div>}
@@ -396,8 +404,6 @@ export function UploadPage({ user }: { user: User }) {
                 <option value="INVOICE">Invoice</option>
                 <option value="BILL">Bill</option>
                 <option value="RECEIPT">Receipt</option>
-                <option value="CREDIT_NOTE">Credit note</option>
-                <option value="DEBIT_NOTE">Debit note</option>
               </select>
             </Field>
             </div>}
@@ -424,7 +430,7 @@ export function UploadPage({ user }: { user: User }) {
             </button>}
           </div>
         </Panel>
-        <Panel title="From upload to clarity">
+        <Panel title="What happens next">
           <div className="panel-body upload-guide">
             {[
               ["01", "Upload", "Add your invoice, bill, or receipt."],
@@ -440,12 +446,10 @@ export function UploadPage({ user }: { user: User }) {
                 </div>
               </div>
             ))}
-            <div className="info-box">
-              <CheckCircle2 size={18} />
-              Original documents are retained privately by the backend. Review the actual source alongside extracted fields.
-            </div>
           </div>
         </Panel>
+      </div>
+      <div className="upload-reference-note"><strong>For clearer results</strong><span>Keep all document edges visible.</span><span>Use sharp, well-lit images.</span><span>Upload complete documents such as full invoices or receipts.</span></div>
       </div>
     </>
   );

@@ -4,6 +4,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { getStandardisedRecords, downloadCsv } from "@/lib/api/record.service";
 import { getPerformanceMetrics } from "@/lib/api/processing.service";
+import { currencyTotals, decimalDisplay, escapeMarkup, isPlainNumber } from "@/lib/api/document-contract";
 import type { User } from "@/types";
 import {
   ErrorState,
@@ -36,10 +37,6 @@ function asNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function fmt(n: number) {
-  return n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function met(ok: boolean) {
   return ok ? "Met" : "Not met";
 }
@@ -51,10 +48,7 @@ function downloadExcel(filename: string, rows: SummaryRow[]) {
         `<Row>${row
           .map(
             (value) =>
-              `<Cell><Data ss:Type="${/^-?\\d+(\\.\\d+)?$/.test(value) ? "Number" : "String"}">${value
-                .replaceAll("&", "&")
-                .replaceAll("<", "<")
-                .replaceAll(">", ">")}</Data></Cell>`,
+              `<Cell><Data ss:Type="${isPlainNumber(value) ? "Number" : "String"}">${escapeMarkup(value)}</Data></Cell>`,
           )
           .join("")}</Row>`,
     )
@@ -77,13 +71,13 @@ function downloadExcel(filename: string, rows: SummaryRow[]) {
 
 function downloadPdf(title: string, rows: SummaryRow[]) {
   const body = rows
-    .map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`)
+    .map(([label, value]) => `<tr><td>${escapeMarkup(label)}</td><td>${escapeMarkup(value)}</td></tr>`)
     .join("");
   const html = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${title}</title>
+  <title>${escapeMarkup(title)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #2a3a4a; padding: 28px; }
     h1 { margin: 0 0 6px; font-size: 22px; }
@@ -95,7 +89,7 @@ function downloadPdf(title: string, rows: SummaryRow[]) {
   </style>
 </head>
 <body>
-  <h1>${title}</h1>
+  <h1>${escapeMarkup(title)}</h1>
   <p>Accounting Intelligence · Processing Summary · ${new Date().toLocaleString("en-MY")}</p>
   <table>
     <thead><tr><th>Item</th><th>Value</th></tr></thead>
@@ -127,23 +121,38 @@ export function AccountingReportsPage({ user }: { user: User }) {
     if (!data) return null;
     const total = data.docs.length;
     const completed = data.docs.filter((d) =>
-      ["COMPLETED", "VALIDATED", "STANDARDISED"].includes(d.status),
+      ["COMPLETED", "STANDARDISED"].includes(d.status),
     ).length;
-    const open = data.exceptions.filter((e) => e.status !== "RESOLVED").length;
+    const approved = data.docs.filter((d) => d.status === "VALIDATED").length;
+    const openExceptions = data.exceptions.filter((e) => e.status !== "RESOLVED");
+    const open = openExceptions.length;
     const failed = data.docs.filter((d) => d.status === "FAILED").length;
-    const exceptionRate = total ? Math.round((open / total) * 100) : 0;
+    // One document can raise several findings, so the rate counts documents, not findings.
+    const documentsWithExceptions = new Set(openExceptions.map((e) => e.documentId)).size;
+    const exceptionRate = total ? Math.round((documentsWithExceptions / total) * 100) : 0;
     const completionRate = total ? Math.round((completed / total) * 100) : 0;
-    const avgSeconds = total
-      ? Math.round(
-          data.docs.reduce((sum, doc) => sum + asNumber((doc as { seconds?: number }).seconds), 0) /
-            total,
-        )
+    // Documents with no recorded time report 0; they are unmeasured, not instant.
+    const timed = data.docs
+      .map((doc) => asNumber((doc as { seconds?: number }).seconds))
+      .filter((seconds) => seconds > 0);
+    const avgSeconds = timed.length
+      ? Math.round(timed.reduce((sum, seconds) => sum + seconds, 0) / timed.length)
       : 0;
 
     const ar = data.records.filter((r) => r.category === "ACCOUNTS_RECEIVABLE");
     const ap = data.records.filter((r) => r.category === "ACCOUNTS_PAYABLE");
-    const sum = (rows: typeof data.records) =>
-      rows.reduce((acc, r) => acc + asNumber(r.extraction.fields.total?.value), 0);
+    const totals = (rows: typeof data.records) =>
+      currencyTotals(rows.map((r) => ({ currency: r.extraction.fields.currency?.value, total: r.extraction.fields.total?.value })));
+    const groups = [["Accounts Receivable", totals(ar)], ["Accounts Payable", totals(ap)]] as const;
+    // Currencies are never added together, on screen or in an export.
+    const totalRows: SummaryRow[] = groups.flatMap(([label, rows]): SummaryRow[] =>
+      rows.length
+        ? rows.map((row): SummaryRow => [
+            `${label} (${row.records} ${row.records === 1 ? "record" : "records"})`,
+            decimalDisplay(row.total, row.currency ?? "No currency"),
+          ])
+        : [[label, "No records"]],
+    );
 
     const byStatus: SummaryRow[] = [
       ["Uploaded / queued", String(data.docs.filter((d) => ["UPLOADED", "QUEUED"].includes(d.status)).length)],
@@ -156,30 +165,31 @@ export function AccountingReportsPage({ user }: { user: User }) {
           ).length,
         ),
       ],
+      ["Approved, not yet standardised", String(approved)],
       ["Standardised", String(completed)],
       ["Failed", String(failed)],
     ];
 
     const criteria: SummaryRow[] = [
       ["Field extraction accuracy target", `≥ ${SUCCESS.accuracy}%`],
-      ["Exception rate", `${exceptionRate}% (target < ${SUCCESS.exceptionRate}%)`],
-      ["Exception rate status", met(exceptionRate < SUCCESS.exceptionRate)],
+      ["Exception rate (documents with open exceptions)", `${exceptionRate}% (target < ${SUCCESS.exceptionRate}%)`],
+      ["Exception rate status", total ? met(exceptionRate < SUCCESS.exceptionRate) : "Not measured"],
       ["Average processing time", avgSeconds ? `${avgSeconds}s (target ≤ ${SUCCESS.seconds}s)` : "Not available"],
-      ["Processing time status", met(avgSeconds > 0 && avgSeconds <= SUCCESS.seconds)],
+      ["Processing time status", avgSeconds ? met(avgSeconds <= SUCCESS.seconds) : "Not measured"],
       ["Manual effort reduction target", `≥ ${SUCCESS.effortReduction}%`],
     ];
 
     const rows: SummaryRow[] = [
       ["Documents", String(total)],
       ["Standardised", `${completed} (${completionRate}%)`],
-      ["Open exceptions", `${open} (${exceptionRate}%)`],
+      ["Open exceptions", String(open)],
+      ["Documents with open exceptions", `${documentsWithExceptions} of ${total} (${exceptionRate}%)`],
       ["Failed", String(failed)],
       ...byStatus,
-      ["Accounts Receivable", fmt(sum(ar))],
-      ["Accounts Payable", fmt(sum(ap))],
+      ...totalRows,
       ["Standardised records", String(data.records.length)],
       ...criteria,
-      ...data.metrics.map((m) => [m.label, `${m.value} (target ${m.target})`] as SummaryRow),
+      ...data.metrics.map((m): SummaryRow => [m.label, m.target ? `${m.value} (target ${m.target})` : m.value]),
     ];
 
     return {
@@ -187,11 +197,11 @@ export function AccountingReportsPage({ user }: { user: User }) {
       completed,
       open,
       failed,
+      documentsWithExceptions,
       exceptionRate,
       completionRate,
       avgSeconds,
-      arTotal: sum(ar),
-      apTotal: sum(ap),
+      totalRows,
       recordCount: data.records.length,
       byStatus,
       criteria,
@@ -228,9 +238,10 @@ export function AccountingReportsPage({ user }: { user: User }) {
       />
 
       <div className="stats-grid pipeline-health-grid">
-        <StatCard variant="solid" label="Documents" value={summary.total} icon={<Files size={17} />} detail="All uploads" />
+        <StatCard variant="solid" tone="invoice" label="Documents" value={summary.total} icon={<Files size={17} />} detail="All uploads" />
         <StatCard
           variant="solid"
+          tone="processing"
           label="Standardised"
           value={summary.completed}
           icon={<FileCheck2 size={17} />}
@@ -238,12 +249,13 @@ export function AccountingReportsPage({ user }: { user: User }) {
         />
         <StatCard
           variant="solid"
+          tone="exception"
           label="Open exceptions"
           value={summary.open}
           icon={<CircleAlert size={17} />}
-          detail={`${summary.exceptionRate}% exception rate`}
+          detail={`${summary.documentsWithExceptions} of ${summary.total} documents (${summary.exceptionRate}%)`}
         />
-        <StatCard variant="solid" label="Failed" value={summary.failed} icon={<Timer size={17} />} detail="Need retry" />
+        <StatCard variant="solid" tone="failed" label="Failed" value={summary.failed} icon={<Timer size={17} />} detail="Need retry" />
       </div>
 
       <div className="dashboard-middle">
@@ -258,16 +270,14 @@ export function AccountingReportsPage({ user }: { user: User }) {
           </div>
         </Panel>
 
-        <Panel title="Standardised totals" subtitle="Amounts from completed records only">
+        <Panel title="Standardised totals" subtitle="Completed records only, by currency. Currencies are never added together.">
           <div className="statement">
-            <div className="statement-row">
-              <span>Accounts Receivable</span>
-              <strong>{fmt(summary.arTotal)}</strong>
-            </div>
-            <div className="statement-row">
-              <span>Accounts Payable</span>
-              <strong>{fmt(summary.apTotal)}</strong>
-            </div>
+            {summary.totalRows.map(([label, value]) => (
+              <div className="statement-row" key={label + value}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
             <div className="statement-row strong">
               <span>Records</span>
               <strong>{summary.recordCount}</strong>
@@ -279,7 +289,7 @@ export function AccountingReportsPage({ user }: { user: User }) {
         </Panel>
       </div>
 
-      <Panel title="Success criteria" subtitle="Targets from the project brief — current workspace figures">
+      <Panel title="Success criteria" subtitle="Targets from the project brief, with current workspace figures. These are not pilot measurements.">
         <div className="statement">
           {summary.criteria.map(([label, value]) => (
             <div className="statement-row" key={label}>

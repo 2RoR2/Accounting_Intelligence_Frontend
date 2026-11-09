@@ -1,3 +1,4 @@
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -9,6 +10,11 @@ import { ProfilePage } from "@/features/common/settings/profile-page";
 import { UserManagement } from "@/features/common/users/user-management";
 import { ContactsPage } from "@/features/common/contacts/contacts";
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
+import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
+import { ApprovalQueuePage } from "@/features/common/documents/approval-queue";
+import { LedgerPage } from "@/features/common/ledger/ledger-page";
+import { ValidationOverviewPage } from "@/features/common/validation/validation-overview";
+
 import type { User } from "@/types";
 
 export function LocalAdminRoutes({ path, user }: { path: string[]; user: User }) {
@@ -22,9 +28,14 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "records": return <RecordsPage user={user} />;
     case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
     case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;
+    case "reconciliation": return <ReconciliationPage user={user} />;
     case "users": return <UserManagement user={user} />;
+    case "validation-overview": return <ValidationOverviewPage user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
     case "reports": return <PerformancePage user={user} />;
+    case "evaluation": return <EvaluationPage />;
+    case "approvals": return <ApprovalQueuePage user={user} />;
+    case "ledger": return <LedgerPage />;
     case "audit": return <AuditPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <SettingsPage user={user} />;

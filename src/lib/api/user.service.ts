@@ -35,7 +35,7 @@ export async function updateAccountantCredentials(user: User, userId: string, na
   }); */
 }
 export async function getTenantUsers(user: User, tenantId?: string) {
-  requireRole(user, ["SUPER_ADMIN", "LOCAL_ADMIN"]);
+  requireRole(user, ["SUPER_ADMIN", "LOCAL_ADMIN", "ACCOUNTANT"]);
   if (tenantId) assertTenant(user, tenantId);
   return get<User[]>(`/api/users${tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : ""}`);
 }

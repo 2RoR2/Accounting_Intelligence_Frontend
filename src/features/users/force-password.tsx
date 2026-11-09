@@ -13,7 +13,7 @@ import {
 import { ErrorState, Field } from "@/components/common/ui";
 import { roleHome } from "@/lib/permissions";
 import Image from "next/image";
-import saicLogo from "@/images/saic_logo.png";
+import accordAiLogo from "@/images/AccordAI_logo.png";
 
 const REQUIREMENTS = [
   "At least 8 characters",
@@ -55,7 +55,7 @@ export function ForcePasswordChange({ user }: { user: User }) {
     <div className="home-wash auth-wash">
       <header className="hp-header">
         <Link href="/" className="hp-brand">
-          <Image src={saicLogo} alt="SAIC" width={150} height={46} priority />
+          <Image src={accordAiLogo} alt="AccordAI" width={150} height={46} priority />
         </Link>
         <nav>
           <button type="button" className="hp-login" onClick={() => void leave()}>

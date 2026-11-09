@@ -1,3 +1,4 @@
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -9,6 +10,10 @@ import { AccountingReportsPage } from "@/features/common/reports/accounting-repo
 import { SettingsPage } from "@/features/common/settings/settings";
 import { WorkspaceSectionPage } from "@/features/common/workspace/workspace-section-page";
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
+import { LedgerPage } from "@/features/common/ledger/ledger-page";
+import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
+import { UserManagement } from "@/features/common/users/user-management";
+import { HelpCenter } from "@/features/common/help/help-center";
 import type { User } from "@/types";
 
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
@@ -17,6 +22,11 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   if (page === "money-in" || page === "money-out") {
     return <MoneyFlowPage user={user} direction={page === "money-in" ? "money_in" : "money_out"} />;
   }
+  if (page === "ledger") return <LedgerPage />;
+  if (page === "reconciliation") return <ReconciliationPage user={user} />;
+  if (page === "users") return <UserManagement user={user} />;
+  if (page === "settings") return <SettingsPage user={user} />;
+  if (page === "help") return <HelpCenter />;
   if (id === "view-settings") return <SettingsPage user={user} />;
   if (id === "view-customers" || id === "view-suppliers" || id === "view-contact-matching") return <ContactsPage user={user} />;
   if (id?.startsWith("view-")) {
@@ -30,6 +40,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} />;
     case "reports": return <AccountingReportsPage user={user} />;
+    case "evaluation": return <EvaluationPage />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
   }

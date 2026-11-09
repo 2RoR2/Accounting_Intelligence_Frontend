@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import type { Extraction, SourceEvidence } from "@/types";
 import { imageEvidenceBox } from "@/lib/document-viewer";
 
@@ -40,11 +41,13 @@ function ImageViewer({ source, name, evidence }: { source: string; name: string;
   });
   function reset() { setZoom(1); viewport.current?.scrollTo({ left: 0, top: 0 }); }
   return <>
+    <div className="image-viewer-stage">
     <div className="image-viewer-controls" role="group" aria-label="Image zoom controls">
-      <button type="button" onClick={() => setZoom(value => Math.max(0.25, value / 1.25))} disabled={!fit || failed || zoom <= 0.25} aria-label="Zoom out">− <span>Zoom out</span></button>
+      <button type="button" className="viewer-icon-button" onClick={() => setZoom(value => Math.max(0.25, value / 1.25))} disabled={!fit || failed || zoom <= 0.25} aria-label="Zoom out" title="Zoom out"><ZoomOut size={18} aria-hidden="true" /></button>
       <output aria-live="polite">{fit ? `${Math.round(scale * 100)}%${zoom === 1 ? " · Fit" : ""}` : "Loading image…"}</output>
-      <button type="button" onClick={() => setZoom(value => Math.min(16, value * 1.25))} disabled={!fit || failed || zoom >= 16} aria-label="Zoom in">+ <span>Zoom in</span></button>
-      <button type="button" onClick={reset} disabled={!fit || failed}>Fit to page</button>
+      <button type="button" className="viewer-icon-button" onClick={() => setZoom(value => Math.min(16, value * 1.25))} disabled={!fit || failed || zoom >= 16} aria-label="Zoom in" title="Zoom in"><ZoomIn size={18} aria-hidden="true" /></button>
+      <button type="button" className="viewer-icon-button" onClick={reset} disabled={!fit || failed} aria-label="Fit to page" title="Fit to page"><Maximize2 size={18} aria-hidden="true" /></button>
+      <button type="button" className="viewer-icon-button" onClick={reset} disabled={!fit || failed} aria-label="Reset view" title="Reset view"><RotateCcw size={17} aria-hidden="true" /></button>
     </div>
     {!!evidence.length && <p className="image-evidence-note">{boxes.length ? "Source region outlined below. Zoom in to inspect the text." : "Source highlight not available: coordinates cannot be accurately mapped to this image."}</p>}
     <div className="image-viewer-viewport" ref={viewport} tabIndex={0} role="region" aria-label="Original image; scroll to inspect when zoomed">
@@ -56,6 +59,7 @@ function ImageViewer({ source, name, evidence }: { source: string; name: string;
           {boxes.map(({ style, item }, index) => <span key={index} className="image-evidence-box" style={style} role="img" aria-label={`Source ${item.bbox_scope === "source_block" ? "block" : "region"} on page ${item.page}: ${item.text ?? "Text not provided"}`} />)}
         </div>}
     </div>
+    </div>
   </>;
 }
 
@@ -66,6 +70,7 @@ export function DocumentViewer({ name, extraction, highlightedField, selectedSou
   const source = "/api/documents/" + encodeURIComponent(extraction.documentId) + "/file";
   const url = source + (page ? "#page=" + page : "#view=FitH");
   const image = /\.(png|jpe?g)$/i.test(name);
+  const structured = /\.json$/i.test(name);
   return <div className="doc-viewer">
     <div className="doc-viewer-toolbar"><strong>Original document: {name}</strong><a href={image ? source : url} target="_blank" rel="noreferrer">Open original source</a></div>
     <section className="selected-source-evidence" aria-label="Source evidence" aria-live="polite">
@@ -73,6 +78,48 @@ export function DocumentViewer({ name, extraction, highlightedField, selectedSou
       {selected && !evidence.length && <p>Source evidence not available.</p>}
       <SourceEvidenceList evidence={evidence} documentId={extraction.documentId} />
     </section>
-    {image ? <ImageViewer key={extraction.documentId} source={source} name={name} evidence={evidence} /> : <iframe title="Original document" className="document-pdf-frame" src={url} />}
+    {structured ? <StructuredSource payload={extraction.raw?.payload} source={source} /> : image ? <ImageViewer key={extraction.documentId} source={source} name={name} evidence={evidence} /> : <iframe title="Original document" className="document-pdf-frame" src={url} />}
   </div>;
+}
+
+function StructuredSource({ payload, source }: { payload: unknown; source: string }) {
+  const [data, setData] = useState<unknown>(payload);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (payload) { setData(payload); return; }
+    const controller = new AbortController();
+    fetch(source, { credentials: "include", signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error("The original structured document could not be loaded.");
+      setData(await response.json());
+    }).catch(e => { if (e.name !== "AbortError") setError(e.message); });
+    return () => controller.abort();
+  }, [payload, source]);
+  function value(path: string): string {
+    let node: unknown = data;
+    for (const part of path.split(".")) {
+      if (Array.isArray(node)) node = node[0];
+      if (!node || typeof node !== "object") return "Not provided";
+      node = (node as Record<string, unknown>)[part];
+    }
+    if (Array.isArray(node)) node = node[0];
+    if (node && typeof node === "object") node = (node as Record<string, unknown>)._;
+    return typeof node === "string" || typeof node === "number" ? String(node) : "Not provided";
+  }
+  const fields = [
+    ["Document number", "Invoice.ID"], ["Issue date", "Invoice.IssueDate"],
+    ["Document type code", "Invoice.InvoiceTypeCode"], ["Currency", "Invoice.DocumentCurrencyCode"],
+    ["Supplier", "Invoice.AccountingSupplierParty.Party.PartyLegalEntity.RegistrationName"],
+    ["Customer", "Invoice.AccountingCustomerParty.Party.PartyLegalEntity.RegistrationName"],
+    ["Related invoice", "Invoice.BillingReference.InvoiceDocumentReference.ID"],
+    ["Payable amount", "Invoice.LegalMonetaryTotal.PayableAmount"],
+  ];
+  return <section className="structured-source" tabIndex={0} aria-label="Original structured document">
+    <h3>Structured e-invoice source</h3>
+    <p>Values below come from the original JSON document. Review source placeholders before using them.</p>
+    {error && <p role="alert">{error}</p>}
+    {!data && !error && <p role="status">Loading original document…</p>}
+    {!!data && <><dl>{fields.map(([label, path]) => <div key={path}><dt>{label}</dt><dd>{value(path)}</dd></div>)}</dl>
+      <details><summary>View complete original JSON</summary><pre>{JSON.stringify(data, null, 2)}</pre></details></>}
+    <a href={source} target="_blank" rel="noreferrer">Open original JSON</a>
+  </section>;
 }

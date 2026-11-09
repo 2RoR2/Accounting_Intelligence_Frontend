@@ -57,6 +57,11 @@ export interface BankMoneyTransaction {
   createdAt: string | null;
   candidateId?: string | null;
   expectedRevision?: number | null;
+  candidates?: BankReconciliationCandidate[];
+  accountId?: string | null;
+  costCentreId?: string | null;
+  codingDecision?: string | null;
+  codingReason?: string | null;
 }
 
 export interface BankMoneyTransactionDetail extends BankMoneyTransaction {

@@ -1,21 +1,27 @@
 "use client";
 import { Badge } from "@/components/common/ui";
-import { decimalDisplay, fieldLabel, sourceKind, MONEY_KEYS } from "@/lib/api/document-contract";
+import { decimalDisplay, documentReference, fieldLabel, sourceKind } from "@/lib/api/document-contract";
 import type { Document, Extraction } from "@/types";
 export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extraction: Extraction }) {
   const kind = sourceKind(extraction, doc.type);
   const title = kind === "UNKNOWN" ? "Unknown / Needs Review" : kind[0] + kind.slice(1).toLowerCase() + " details";
-  const value = (key: string) => extraction.fields[key]?.value;
+  const value = (key: string) => key === "reference" ? documentReference(extraction.fields) : extraction.fields[key]?.value;
   const keys = kind === "BILL" ? ["supplier", "reference", "account_number", "billing_period", "date", "due", "currency"]
     : kind === "RECEIPT" ? ["supplier", "reference", "date", "transaction_time", "payment_method", "currency"]
     : ["supplier", "customer", "invoice", "date", "due", "currency"];
-  const amountKeys = ["subtotal", "tax", "discount", "total", "amount_due", "amount_paid", "allowances", "charges", "prepaid", "rounding"].filter(key => key in extraction.fields || kind === "INVOICE");
+  // Receipt rows kept apart: what is printed before tax, with tax, after rounding, and the cash that changed hands. Cash is never sales.
+  const receiptKeys = kind === "RECEIPT" ? ["total_excluding_tax", "total_including_tax", "tendered_amount", "change_given"].filter(key => extraction.fields[key]?.value != null) : [];
+  const amountKeys = ["subtotal", "tax", "discount", "total", "amount_due", "amount_paid", "allowances", "charges", "prepaid", "rounding"].filter(key => key in extraction.fields || kind === "INVOICE").concat(receiptKeys);
   const sources = [...(extraction.classification?.candidates ?? []), ...(extraction.classification?.unsupported_headings ?? [])];
   return <section className="invoice-review-page" aria-label={title}>
     <div className="invoice-review-heading"><div><span className="invoice-status">{doc.status}</span><h2>{title}</h2>
-      <p>Source classification: {extraction.classification?.value ?? "Not provided"} | {extraction.classification?.status ?? "Not provided"}</p>
-      <p>Classification reason: {extraction.classification?.reason ?? "Not provided"}</p>
-      <p>Stored kind: {doc.kind ?? doc.type} | Intake identifier: {doc.code ?? doc.id} | Accounting category (intake): {doc.category ?? "Not provided"}</p>
+      <div className="invoice-classification" aria-label="Document classification">
+        <div><span>Source classification</span><strong>{extraction.classification?.value ?? "Not provided"}</strong><small>{extraction.classification?.status ?? "Not provided"}</small></div>
+        <div><span>Classification reason</span><strong>{extraction.classification?.reason ?? "Not provided"}</strong></div>
+        <div><span>Stored kind</span><strong>{doc.kind ?? doc.type}</strong></div>
+        <div><span>Intake identifier</span><strong>{doc.code ?? doc.id}</strong></div>
+        <div><span>Accounting category</span><strong>{doc.category ?? "Not provided"}</strong></div>
+      </div>
     </div><Badge>Human review required</Badge></div>
     <details className="panel-body"><summary>Classification evidence</summary>
       {!sources.length && <p>No supported source heading evidence available. Inspect the original document.</p>}

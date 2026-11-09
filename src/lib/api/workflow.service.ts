@@ -150,7 +150,7 @@ export const getSavedFilters = () => get<Array<{ id: string; name: string; resou
 export const createSavedFilter = (name: string, resource: "documents" | "exceptions" | "records", definition: Record<string, unknown>, isShared = false) => api("/api/saved-filters", { method: "POST", body: JSON.stringify({ name, resource, definition, isShared }) });
 export const deleteSavedFilter = (filterId: string) => api<{ deleted: boolean; id: string }>(`/api/saved-filters/${filterId}`, { method: "DELETE" });
 export const createReviewReminder = (documentId: string, assignedTo: string, remindAt: string) => api("/api/review-reminders", { method: "POST", body: JSON.stringify({ documentId, assignedTo, remindAt }) });
-export const getNotifications = () => get<Array<{ id: string; type: string; title: string; message: string; read: boolean; createdAt: string }>>("/api/notifications");
+export const getNotifications = () => get<Array<{ id: string; type: string; title: string; message: string; resource?: string | null; read: boolean; createdAt: string }>>("/api/notifications");
 export const markNotificationRead = (notificationId: string) => api<{ id: string; read: boolean; readAt: string }>(`/api/notifications/${notificationId}/read`, { method: "PATCH" });
 export const getAuthSessions = () => get<Array<{ id: string; expiresAt: string; current: boolean }>>("/api/auth/sessions");
 export const requestBackup = (backupType: "database" | "documents" | "full") => api("/api/backups", { method: "POST", body: JSON.stringify({ backupType }) });

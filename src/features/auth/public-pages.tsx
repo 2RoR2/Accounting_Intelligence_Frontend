@@ -4,8 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import saicLogo from "@/images/saic_logo.png";
-import welcomeBackground from "@/images/welcome_bg.png";
+import accordAiLogo from "@/images/AccordAI_logo.png";
+import welcomeBackground from "@/images/successful-access_bg/welcome_bg.png";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import {
   X,
   Eye,
   EyeOff,
+  CircleHelp,
 } from "lucide-react";
 import { LandingPage } from "@/features/auth/landing-page";
 import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
@@ -52,6 +53,7 @@ export function PublicPage({ page }: { page: string }) {
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [activation, setActivation] = useState(params.get("user") ?? "");
   const [otpStep, setOtpStep] = useState(false);
   const [mfaStep, setMfaStep] = useState(false);
@@ -65,6 +67,7 @@ export function PublicPage({ page }: { page: string }) {
   const [showTotpSecret, setShowTotpSecret] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordShake, setPasswordShake] = useState(false);
   const [recoveryReason, setRecoveryReason] = useState("");
   const [recoveryRequested, setRecoveryRequested] = useState(false);
   const [lostAuthenticator, setLostAuthenticator] = useState(false);
@@ -164,7 +167,7 @@ export function PublicPage({ page }: { page: string }) {
           notes: String(f.get("notes")),
         });
         setSuccess(
-          "Company access request submitted. Your request is awaiting SAIC approval.",
+          "Company access request submitted. Your request is awaiting AccordAI approval.",
         );
       } else if (page === "activate") {
         await activateAccount(
@@ -256,28 +259,16 @@ export function PublicPage({ page }: { page: string }) {
   }
   if (page === "help")
     return (
-      <div className="home-wash auth-wash help-wash">
-        <header className="hp-header">
-          <Link href="/" className="hp-brand">
-            <Image src={saicLogo} alt="SAIC" width={150} height={46} priority />
-          </Link>
-          <nav>
-            <Link href="/request-access" className="hp-register">
-              Register company
-            </Link>
-            <Link href="/login" className="hp-login">
-              Log in
-            </Link>
-          </nav>
-        </header>
+      <div className="home-wash auth-wash help-wash auth-no-nav">
         <main className="help-page-main">
+          <Link href="/" className="auth-back-link"><ArrowLeft size={16} aria-hidden="true" />Back to home</Link>
           <div className="help-page-copy">
             <p className="hp-eyebrow">Support</p>
             <h1>
               Tutorial and <span>company helpline.</span>
             </h1>
             <p className="hp-lead">
-              Learn the workflow, or ask SAIC for help. The same guide opens inside the workspace.
+              Learn the workflow, or ask AccordAI for help. The same guide opens inside the workspace.
             </p>
           </div>
           <div className="help-page-panel">
@@ -290,21 +281,21 @@ export function PublicPage({ page }: { page: string }) {
   if (!page) return <LandingPage />;
   const accessPage = page === "login" || page === "forgot-password";
   return (
-    <div className={`home-wash auth-wash${page === "welcome" ? " welcome-wash" : ""}`}>
-      <header className="hp-header">
+    <div className={`home-wash auth-wash${page === "welcome" ? " welcome-wash" : ""}${page === "login" || page === "request-access" || page === "forgot-password" || page === "help" ? " auth-no-nav" : ""}`}>
+      {page !== "login" && page !== "request-access" && page !== "forgot-password" && page !== "help" && <header className="hp-header">
         <Link href="/" className="hp-brand">
-          <Image src={saicLogo} alt="SAIC" width={150} height={46} priority />
+          <Image src={accordAiLogo} alt="AccordAI" width={150} height={46} priority />
         </Link>
-        <nav>
-          <Link href="/help">Help</Link>
+        {page !== "login" && page !== "request-access" && page !== "forgot-password" && page !== "help" && <nav>
+          <Link href="/help" className="hp-help-link" aria-label="Help and support" title="Help and support"><CircleHelp size={18} strokeWidth={2} /><span>Help</span></Link>
           <Link href="/request-access" className="hp-register">
             Register company
           </Link>
           <Link href="/login" className="hp-login">
             Log in
           </Link>
-        </nav>
-      </header>
+        </nav>}
+      </header>}
       <main
         className={
           page === "request-access"
@@ -318,12 +309,18 @@ export function PublicPage({ page }: { page: string }) {
               : "auth-stage"
         }
       >
+        {page !== "welcome" && (
+          <Link href="/" className="auth-back-link">
+            <ArrowLeft size={16} aria-hidden="true" />
+            Back to home
+          </Link>
+        )}
         {page === "welcome" && (
           <aside
             className="welcome-brand-panel"
             style={{ backgroundImage: `url(${welcomeBackground.src})` }}
           >
-            <Image src={saicLogo} alt="SAIC Accounting Intelligence" width={180} height={55} priority />
+            <Image src={accordAiLogo} alt="AccordAI Accounting Intelligence" width={180} height={55} priority />
             <div className="welcome-brand-copy">
               <h1>Smarter<br />Accounting<br />Starts Here</h1>
               <p>Automate document processing, improve accuracy and simplify your accounting workflow.</p>
@@ -338,7 +335,7 @@ export function PublicPage({ page }: { page: string }) {
               <span>trusted records.</span>
             </h1>
             <p className="hp-lead">
-              Request a company workspace. SAIC reviews it before anyone can sign in.
+              Request a company workspace. AccordAI reviews it before anyone can sign in.
             </p>
             <p className="register-how">What the workspace is for</p>
             <ul className="register-points">
@@ -356,7 +353,7 @@ export function PublicPage({ page }: { page: string }) {
               </li>
             </ul>
             <p className="register-note">
-              No live ledger, tax filing, or payment. This request only opens a company workspace.
+              No payment execution, tax filing, or external ERP posting. This request only opens a company workspace.
             </p>
           </section>
         )}
@@ -367,7 +364,7 @@ export function PublicPage({ page }: { page: string }) {
               {mfaStep
                 ? "Privileged account security"
                 : page === "login"
-                ? "SAIC secure · company email opens the workspace"
+                ? "AccordAI secure · company email opens the workspace"
                 : otpStep
                   ? "Waiting for the code from the company email"
                   : "Reset stays inside this workspace"}
@@ -414,9 +411,6 @@ export function PublicPage({ page }: { page: string }) {
         >
           {!accessPage && page !== "request-access" && page !== "welcome" && (
             <>
-              <span className="auth-icon">
-                <LockKeyhole size={20} />
-              </span>
               <p className="hp-eyebrow">
                 {page === "request-access"
                   ? "Company registration"
@@ -429,7 +423,7 @@ export function PublicPage({ page }: { page: string }) {
                 {page === "welcome"
                   ? "Your identity has been verified successfully."
                   : page === "request-access"
-                    ? "Submit your company details to register for company access. SAIC will review your request."
+                    ? "Submit your company details to register for company access. AccordAI will review your request."
                     : page === "reset-password"
                       ? "Choose a strong password to keep your workspace secure."
                       : "Secure access starts with your company email."}
@@ -440,14 +434,11 @@ export function PublicPage({ page }: { page: string }) {
             <>
               <p className="hp-eyebrow">Company details</p>
               <h2>Register your company</h2>
-              <p>Complete the form. SAIC reviews the request before the workspace opens.</p>
+              <p>Complete the form. AccordAI reviews the request before the workspace opens.</p>
             </>
           )}
           {accessPage && !success && !otpStep && !mfaStep && (
             <>
-              <span className="auth-icon">
-                <LockKeyhole size={20} />
-              </span>
               <p className="hp-eyebrow">
                 {page === "login" ? "Workspace sign in" : "Account access"}
               </p>
@@ -572,7 +563,7 @@ export function PublicPage({ page }: { page: string }) {
               <p className="welcome-lead">Your identity has been verified and you’ve successfully signed in to your workspace.</p>
               <div className="welcome-details">
                 {welcomeUser.tenantCode && <div><Building2 size={22} /><span>Company code</span><strong>{welcomeUser.tenantCode}</strong></div>}
-                <div><Building2 size={22} /><span>Company</span><strong>{welcomeUser.tenantName || (welcomeUser.role === "SUPER_ADMIN" ? "SAIC Platform" : "Company workspace")}</strong></div>
+                <div><Building2 size={22} /><span>Company</span><strong>{welcomeUser.tenantName || (welcomeUser.role === "SUPER_ADMIN" ? "AccordAI Platform" : "Company workspace")}</strong></div>
                 <div><UserRound size={22} /><span>Role</span><strong>{welcomeUser.role.replaceAll("_", " ")}</strong></div>
                 <div><CalendarDays size={22} /><span>Last sign in</span><strong>{welcomeUser.lastLogin ? new Date(welcomeUser.lastLogin).toLocaleString("en-MY", { dateStyle: "medium", timeStyle: "short" }) : "Just now"}</strong></div>
               </div>
@@ -643,7 +634,7 @@ export function PublicPage({ page }: { page: string }) {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                       />
-                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)}>
+                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onPointerDown={(event) => event.preventDefault()} onClick={() => setShowPassword((visible) => !visible)}>
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
@@ -744,9 +735,15 @@ export function PublicPage({ page }: { page: string }) {
                         type={showPassword ? "text" : "password"}
                         autoComplete="new-password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => {
+                          const nextPassword = e.target.value;
+                          setPassword(nextPassword);
+                          if (passwordChecks(nextPassword).some((valid) => !valid)) {
+                            setPasswordShake((current) => !current);
+                          }
+                        }}
                       />
-                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)}>
+                      <button type="button" className="password-visibility" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onPointerDown={(event) => event.preventDefault()} onClick={() => setShowPassword((visible) => !visible)}>
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
@@ -758,8 +755,10 @@ export function PublicPage({ page }: { page: string }) {
                         name="confirm"
                         type={showConfirmPassword ? "text" : "password"}
                         autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                       />
-                      <button type="button" className="password-visibility" aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"} onClick={() => setShowConfirmPassword((visible) => !visible)}>
+                      <button type="button" className="password-visibility" aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"} aria-pressed={showConfirmPassword} onPointerDown={(event) => event.preventDefault()} onClick={() => setShowConfirmPassword((visible) => !visible)}>
                         {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
@@ -776,10 +775,10 @@ export function PublicPage({ page }: { page: string }) {
                       "Special character",
                     ].map((text, i) => (
                       <span
-                        className={passwordChecks(password)[i] ? "passed" : ""}
+                        className={`password-rule ${passwordChecks(password)[i] ? "passed" : `invalid ${passwordShake ? "shake" : ""}`}`}
                         key={text}
                       >
-                        <Check size={13} />
+                        {passwordChecks(password)[i] ? <Check size={13} /> : <X size={13} />}
                         {text}
                       </span>
                     ))}
@@ -829,9 +828,21 @@ export function PublicPage({ page }: { page: string }) {
           )}
           {page === "request-access" && <div className="secure-note">
             <ShieldCheck size={15} />
-            <span>Company registration is reviewed by SAIC before workspace activation.</span>
+            <span>Company registration is reviewed by AccordAI before workspace activation.</span>
           </div>}
         </div>
+        {(page === "login" || page === "request-access" || page === "forgot-password") && (
+          <aside className="auth-preview-panel" aria-label="AccordAI workflow preview">
+            <p className="auth-preview-kicker">AccordAI · Accounting intelligence</p>
+            <h2>From documents to dependable records.</h2>
+            <p className="auth-preview-copy">Review invoices, bills, and receipts in one clear workflow.</p>
+            <div className="auth-preview-dashboard">
+              <div className="auth-preview-stat"><span>Processed documents</span><strong>24,860</strong><small>This month</small></div>
+              <div className="auth-preview-chart"><span>Review accuracy</span><strong>96.4%</strong><div className="auth-preview-bars"><i /><i /><i /><i /><i /></div></div>
+              <div className="auth-preview-table"><span>Recent records</span><b>Invoice · Validated</b><b>Bill · Reviewed</b><b>Receipt · Ready</b></div>
+            </div>
+          </aside>
+        )}
       </main>
     </div>
   );

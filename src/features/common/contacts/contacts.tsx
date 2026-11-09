@@ -76,7 +76,7 @@ export function ContactsPage({ user }: { user: User }) {
       ) : (
         <div className="contacts-layout">
           <Panel title="Customers & suppliers" subtitle={`${filtered.length} shown`}>
-            <div className="contacts-search">
+            <div className="search contacts-search">
               <Search size={16} />
               <input
                 value={query}

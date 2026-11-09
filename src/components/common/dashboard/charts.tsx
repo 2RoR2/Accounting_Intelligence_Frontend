@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, ChevronDown } from "lucide-react";
 import { Panel } from "@/components/common/ui";
 import type { KPI } from "@/types";
@@ -11,34 +12,19 @@ export function PerformanceCards({ metrics }: { metrics: KPI[] }) {
     <div className="kpi-grid">
       {metrics.map((m) => (
         <div className="kpi-card" key={m.label}>
-          <div className="kpi-label">
-            {m.label}
-            <span className="kpi-check">
-              <Check size={12} />
-            </span>
-          </div>
+          <div className="kpi-label">{m.label}</div>
           <div className="kpi-value">
             {m.value}
             <span>{m.change}</span>
           </div>
-          <div className="kpi-target">
-            <span>Target {m.target}</span>
-            <strong>
-              <Check size={12} /> Target met
-            </strong>
-          </div>
-          <div className="kpi-bar">
-            <span
-              style={{
-                width:
-                  m.label === "Exception rate"
-                    ? "76%"
-                    : m.label === "Avg. processing time"
-                      ? "44%"
-                      : m.value,
-              }}
-            />
-          </div>
+          {m.target && (
+            <div className="kpi-target">
+              <span>Target {m.target}</span>
+              <strong>
+                {m.met ? <><Check size={12} /> Target met</> : "Target not met"}
+              </strong>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -49,6 +35,7 @@ export function TrendChart({
 }: {
   kind?: "processed" | "accuracy" | "exceptions";
 }) {
+  const router = useRouter();
   const [period, setPeriod] = useState("week");
   const { data, error, loading, refresh } = useResource(
     () => getTrends(period),
@@ -58,12 +45,12 @@ export function TrendChart({
     kind === "processed"
       ? "Document processing"
       : kind === "accuracy"
-        ? "Extraction accuracy"
+        ? "Job success rate"
         : "Exception trend";
   if (loading)
     return (
       <Panel title={title}>
-        <LoadingState />
+        <LoadingState variant="chart" />
       </Panel>
     );
   if (error || !data)
@@ -72,15 +59,26 @@ export function TrendChart({
         <ErrorState message={error} retry={refresh} />
       </Panel>
     );
+  if (!data.length)
+    return (
+      <Panel title={title} subtitle="Processing trend">
+        <div className="chart-empty-state">
+          <strong>No trend data yet</strong>
+          <span>Upload documents to start building this view.</span>
+        </div>
+      </Panel>
+    );
   const vals = data.map((point) => point[kind]);
+  const peak = Math.max(0, ...vals);
   const maximum =
-    kind === "processed"
-      ? Math.max(50, Math.ceil(Math.max(...vals) / 50) * 50)
-      : kind === "accuracy"
-        ? 100
-        : 20;
-  const minimum = kind === "accuracy" ? 80 : 0;
-  const plotLeft = 58;
+    kind === "accuracy"
+      ? 100
+      : kind === "processed"
+        ? Math.max(50, Math.ceil(peak / 50) * 50)
+        : Math.max(5, Math.ceil(peak / 5) * 5);
+  const minimum = 0;
+  const unit = kind === "accuracy" ? "%" : "";
+  const plotLeft = 78;
   const plotRight = 548;
   const plotTop = 30;
   const plotBottom = 170;
@@ -112,22 +110,14 @@ export function TrendChart({
         </div>
       }
     >
+      <span className="chart-style-badge">LUPI BASICS · HAIRLINE LINE</span>
       <div className="chart-key">
         <span className="chart-dot" />{" "}
         {kind === "processed"
           ? "Documents processed"
           : kind === "accuracy"
-            ? "Accuracy (%)"
-            : "Exceptions (%)"}
-        <span className="muted">
-          {period === "day"
-            ? "17 Sep 2026"
-            : period === "week"
-              ? "11–17 Sep 2026"
-              : period === "month"
-                ? "1–17 Sep 2026"
-                : "Jan–Sep 2026"}
-        </span>
+            ? "Job success (%)"
+            : "Exceptions"}
       </div>
       <div className="trend-chart">
         <svg
@@ -137,8 +127,8 @@ export function TrendChart({
         >
           <defs>
             <linearGradient id={`fill-${kind}`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#022fa2" stopOpacity="0.16" />
-              <stop offset="100%" stopColor="#022fa2" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--color-0)" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="var(--color-0)" stopOpacity="0" />
             </linearGradient>
           </defs>
           {[30, 76.67, 123.33, 170].map((y, i) => (
@@ -148,12 +138,12 @@ export function TrendChart({
                 x2={plotRight}
                 y1={y}
                 y2={y}
-                stroke="#edf0f0"
+                stroke="var(--chart-grid)"
                 strokeDasharray="4 4"
               />
-              <text x="5" y={y + 4} fill="#95a09e" fontSize="10">
+              <text x="8" y={y + 4} fill="var(--chart-muted)" fontSize="10">
                 {Math.round(maximum - i * ((maximum - minimum) / 3))}
-                {kind !== "processed" ? "%" : ""}
+                {unit}
               </text>
             </g>
           ))}
@@ -164,7 +154,7 @@ export function TrendChart({
           <polyline
             points={points}
             fill="none"
-            stroke="#022fa2"
+            stroke="var(--color-0)"
             strokeWidth="2.5"
             strokeLinejoin="round"
           />
@@ -175,10 +165,15 @@ export function TrendChart({
               cy={yFor(v)}
               r="3.5"
               fill="white"
-              stroke="#022fa2"
+              stroke="var(--color-0)"
               strokeWidth="2"
+              tabIndex={0}
+              role="button"
+              aria-label={`Open ${data[i].day}: ${v}${unit ? unit : kind === "processed" ? " documents" : ""}`}
+              onClick={() => router.push(kind === "exceptions" ? "/workspace/exceptions" : kind === "accuracy" ? "/workspace/records" : "/workspace/documents")}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push(kind === "exceptions" ? "/workspace/exceptions" : kind === "accuracy" ? "/workspace/records" : "/workspace/documents"); }}
             >
-              <title>{`${data[i].day}: ${v}${kind === "processed" ? " documents" : "%"}`}</title>
+              <title>{`${data[i].day}: ${v}${unit ? unit : kind === "processed" ? " documents" : ""}`}</title>
             </circle>
           ))}
           {data.map(({ day: label }, i) => (
@@ -187,7 +182,7 @@ export function TrendChart({
               x={xFor(i)}
               y="204"
               textAnchor="middle"
-              fill="#899591"
+              fill="var(--chart-muted)"
               fontSize="10"
             >
               {label}
@@ -195,6 +190,7 @@ export function TrendChart({
           ))}
         </svg>
       </div>
+      <div className="chart-source">LIVE WORKSPACE DATA · {period.toUpperCase()}</div>
     </Panel>
   );
 }
