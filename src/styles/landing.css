@@ -860,6 +860,7 @@
 
 /* Authenticated welcome confirmation */
 .welcome-split {
+  align-items: stretch;
   display: grid;
   grid-template-columns: minmax(320px, .82fr) minmax(0, 1.18fr);
   min-height: calc(100vh - 90px);
@@ -867,7 +868,10 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif;
 }
 .welcome-wash .hp-header { display: none; }
-.welcome-wash .welcome-split { min-height: 100vh; }
+.welcome-wash .welcome-split {
+  min-height: 100vh;
+  height: 100vh;         
+}
 
 .welcome-brand-panel {
   position: relative;
@@ -875,10 +879,15 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  width: 100%;
+  min-height: 100vh;
+  height: 100%;
+  margin: 0;
   padding: 48px clamp(28px, 5vw, 64px) 56px;
-  background-position: center bottom;
+  background-position: center center;
   background-repeat: no-repeat;
   background-size: cover;
+  background-attachment: local;
   border-right: 1px solid color-mix(in srgb, var(--color-2) 55%, white);
   color: var(--color-0);
 }
@@ -1167,10 +1176,6 @@
 .welcome-split .auth-card,
 .welcome-confirmation {
   overflow: visible !important;
-}
-.welcome-split {
-  align-items: center;
-  min-height: 100vh;
 }
 .welcome-split .auth-card {
   align-self: center;
