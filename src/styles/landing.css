@@ -867,7 +867,6 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", sans-serif;
 }
 .welcome-wash .hp-header { display: none; }
-.welcome-wash .welcome-split { min-height: 100vh; }
 
 .welcome-brand-panel {
   position: relative;
@@ -875,10 +874,15 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  width: 100%;
+  min-height: 100vh;
+  height: 100%;
+  margin: 0;
   padding: 48px clamp(28px, 5vw, 64px) 56px;
-  background-position: center bottom;
+  background-position: center center;
   background-repeat: no-repeat;
   background-size: cover;
+  background-attachment: local;
   border-right: 1px solid color-mix(in srgb, var(--color-2) 55%, white);
   color: var(--color-0);
 }
@@ -1173,7 +1177,7 @@
   overflow: visible !important;
 }
 .welcome-split {
-  align-items: center;
+  align-items: stretch;
   min-height: 100vh;
 }
 .welcome-split .auth-card {
