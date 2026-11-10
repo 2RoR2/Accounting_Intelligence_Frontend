@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -654,22 +655,7 @@ export function MoneyFlowPage({
             </div>
 
             {detail.anomaly && (
-              <section className="transaction-review-section transaction-anomaly-section">
-                <div className="transaction-review-section-heading">
-                  <h3>{detail.anomaly.isAnomaly ? "Needs review" : "Anomaly check"}</h3>
-                  <Badge>{detail.anomaly.label}</Badge>
-                </div>
-                <p>{detail.anomaly.reason}</p>
-                <details>
-                  <summary>{detail.anomaly.isAnomaly ? "Why was this flagged?" : "Show comparison details"}</summary>
-                  <div className="detail-list" style={{ marginTop: 12 }}>
-                    <div><span>Compared with</span><strong>{detail.anomaly.baselineCount} prior {detail.direction === "money_in" ? "Money In" : "Money Out"} transactions</strong></div>
-                    <div><span>Typical amount</span><strong>{money(detail.anomaly.baselineMedian, detail.anomaly.currency)}</strong></div>
-                    <div><span>Review threshold</span><strong>{money(detail.anomaly.upperBound, detail.anomaly.currency)}</strong></div>
-                    {detail.anomaly.anomalyScore && <div><span>Amount / threshold</span><strong>{detail.anomaly.anomalyScore}×</strong></div>}
-                  </div>
-                </details>
-              </section>
+              <BankAnomalyChart anomaly={detail.anomaly} direction={detail.direction} />
             )}
 
             <section className="transaction-review-section">
