@@ -1,13 +1,17 @@
 import type { BankMoneyTransaction, MoneyDirection } from "@/types/money";
 
-const WIDTH = 960;
-const HEIGHT = 290;
-const PAD = { top: 22, right: 24, bottom: 48, left: 64 };
+const WIDTH = 1400;
+const HEIGHT = 240;
+const PAD = { top: 20, right: 28, bottom: 42, left: 82 };
 
 function amount(value: string | null): number | null {
   if (value === null || value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function axisTick(value: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function money(value: number, currency: string): string {
@@ -59,11 +63,11 @@ function CurrencyChart({
         <span>{items.length} transactions · {flagged} flagged · {insufficient} with insufficient history</span>
       </div>
       {items.length ? (
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`${directionLabel} transaction amounts and review thresholds over time for ${currency}`} style={{ width: "100%", height: "auto", display: "block" }}>
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`${directionLabel} transaction amounts and review thresholds over time for ${currency}; vertical axis uses compact amount labels`} style={{ width: "100%", height: "auto", display: "block" }}>
           {yTicks.map((tick, index) => (
             <g key={index}>
               <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} stroke="#dce6f2" strokeWidth="1" />
-              <text x={PAD.left - 10} y={y(tick) + 4} textAnchor="end" fill="#657993" fontSize="12">{money(tick, currency)}</text>
+              <text x={PAD.left - 10} y={y(tick) + 4} textAnchor="end" fill="#657993" fontSize="12">{axisTick(tick)}</text>
             </g>
           ))}
           {items.map(({ row, value, threshold }, index) => {

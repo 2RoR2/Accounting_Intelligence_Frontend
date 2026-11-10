@@ -364,7 +364,7 @@ export function MoneyFlowPage({
                 <div className="cash-summary-net"><span>Net movement</span><strong>{money(net, currency ?? "MYR")}</strong></div>
               </div>;
             })}
-          </div> : <p className="cash-summary-empty">No imported bank transactions yet.</p>}
+          </div> : <p className="cash-summary-empty">{rows.length ? "Cash summary is unavailable for the bank rows shown." : "No imported bank transactions yet."}</p>}
         </div>
       </Panel>
 
