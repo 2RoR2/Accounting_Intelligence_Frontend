@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
+import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -366,6 +367,8 @@ export function MoneyFlowPage({
           </div> : <p className="cash-summary-empty">No imported bank transactions yet.</p>}
         </div>
       </Panel>
+
+      {rows && <BankAnomalyOverview rows={rows} direction={direction} />}
 
       <div
         className={`stats-row money-flow-stats money-flow-stats-${direction}`}

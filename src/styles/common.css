@@ -10143,3 +10143,31 @@ select option { background:#fff; color:#183452; font-weight:500; }
   .validation-overview-page .widget-metric-grid { grid-template-columns: 1fr; }
 }
 
+
+
+/* Money In/Out transaction anomaly overview */
+.app-shell .bank-anomaly-overview{margin:16px 0;padding:20px 22px;border:1px solid #d5e5f5;border-radius:18px;background:#fff;box-shadow:0 10px 26px rgba(42,103,165,.08);color:#17385f}
+.bank-anomaly-overview-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.bank-anomaly-overview-heading h2{margin:2px 0 4px;font-size:20px;color:#17385f}
+.bank-anomaly-overview-heading p{margin:0;color:#66809c;font-size:13px;line-height:1.5}
+.bank-anomaly-overview-kicker{font-size:11px!important;font-weight:800;letter-spacing:.12em;color:#2c669d!important}
+.bank-anomaly-overview-count{display:grid;justify-items:center;min-width:112px;padding:10px 16px;border:1px solid #f0c3c8;border-radius:14px;background:#fff5f6;color:#b53643}
+.bank-anomaly-overview-count strong{font-size:26px;line-height:1}
+.bank-anomaly-overview-count span{margin-top:5px;font-size:11px;font-weight:700}
+.bank-anomaly-overview-scope{margin:14px 0;padding:10px 12px;border-radius:10px;background:#f0f5fb;color:#526b87;font-size:12px;line-height:1.5}
+.bank-anomaly-overview-currency{margin-top:14px;padding:14px 14px 8px;border:1px solid #e1eaf4;border-radius:14px;background:#fbfdff}
+.bank-anomaly-overview-subhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;color:#17385f}
+.bank-anomaly-overview-subhead span{color:#66809c;font-size:12px}
+.bank-anomaly-overview-legend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:4px 4px 8px;color:#526b87;font-size:12px}
+.bank-anomaly-overview-legend span{display:inline-flex;align-items:center;gap:7px}
+.bank-anomaly-legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%}
+.bank-anomaly-legend-normal{background:#2672c9}.bank-anomaly-legend-flagged{background:#c63d4d}.bank-anomaly-legend-insufficient{background:#91a2b8}
+.bank-anomaly-legend-diamond{display:inline-block;width:9px;height:9px;background:#d28a13;transform:rotate(45deg)}
+.bank-anomaly-overview-empty{padding:12px;color:#66809c;font-size:13px}
+.app-shell.theme-dark .bank-anomaly-overview{border-color:rgba(157,202,255,.32);background:#12345f;color:#e7f2ff}
+.app-shell.theme-dark .bank-anomaly-overview-heading h2,.app-shell.theme-dark .bank-anomaly-overview-subhead{color:#e7f2ff}
+.app-shell.theme-dark .bank-anomaly-overview-heading p,.app-shell.theme-dark .bank-anomaly-overview-legend,.app-shell.theme-dark .bank-anomaly-overview-empty{color:#b9d2ec}
+.app-shell.theme-dark .bank-anomaly-overview-scope{background:#173f6e;color:#cce3ff}
+.app-shell.theme-dark .bank-anomaly-overview-currency{border-color:rgba(157,202,255,.25);background:#102f58}
+.app-shell.theme-dark .bank-anomaly-overview-subhead span{color:#b9d2ec}
+@media(max-width:640px){.app-shell .bank-anomaly-overview{padding:15px 12px}.bank-anomaly-overview-heading{align-items:flex-start}.bank-anomaly-overview-heading h2{font-size:17px}.bank-anomaly-overview-count{min-width:85px;padding:8px 10px}.bank-anomaly-overview-subhead{align-items:flex-start;flex-direction:column;gap:3px}}
