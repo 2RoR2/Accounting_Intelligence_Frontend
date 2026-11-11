@@ -7,7 +7,7 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   company: new Set([
   "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
-  "records", "users", "validation-overview", "validation-rules", "reports", "audit",
+  "records", "users", "validation-overview", "validation-rules", "reports", "audit", "evaluation",
   "settings", "profile", "money-in", "money-out", "ledger"
 ]),
   workspace: new Set(["dashboard", "evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
@@ -17,6 +17,6 @@ export const isPublicRoute = (path: string[]) => path.length === 1 && PUBLIC_ROU
 export function isAllowedWorkspaceRoute(path: string[], role: Role) {
   const [area, page, id] = path;
   const validPage = WORKSPACE_PAGES[area]?.has(page) === true;
-  const validDetail = !id || id.startsWith("view-") || DETAIL_PAGES.has(page);
+  const validDetail = !id || id.startsWith("view-") || DETAIL_PAGES.has(page) || (page === "evaluation" && id === "effort-study");
   return path.length <= 3 && area === WORKSPACE_AREA[role] && validPage && validDetail;
 }

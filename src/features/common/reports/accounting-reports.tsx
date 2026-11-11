@@ -6,6 +6,7 @@ import { getStandardisedRecords, downloadCsv } from "@/lib/api/record.service";
 import { getPerformanceMetrics } from "@/lib/api/processing.service";
 import { currencyTotals, decimalDisplay, escapeMarkup, isPlainNumber } from "@/lib/api/document-contract";
 import type { User } from "@/types";
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import {
   ErrorState,
   LoadingState,
@@ -25,20 +26,9 @@ import {
 
 type SummaryRow = [string, string];
 
-const SUCCESS = {
-  accuracy: 95,
-  exceptionRate: 10,
-  seconds: 20,
-  effortReduction: 70,
-};
-
 function asNumber(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : 0;
-}
-
-function met(ok: boolean) {
-  return ok ? "Met" : "Not met";
 }
 
 function downloadExcel(filename: string, rows: SummaryRow[]) {
@@ -170,13 +160,10 @@ export function AccountingReportsPage({ user }: { user: User }) {
       ["Failed", String(failed)],
     ];
 
+    // Workspace backlog figures only. SAIC success criteria are judged by the measured benchmark below, never by these.
     const criteria: SummaryRow[] = [
-      ["Field extraction accuracy target", `≥ ${SUCCESS.accuracy}%`],
-      ["Exception rate (documents with open exceptions)", `${exceptionRate}% (target < ${SUCCESS.exceptionRate}%)`],
-      ["Exception rate status", total ? met(exceptionRate < SUCCESS.exceptionRate) : "Not measured"],
-      ["Average processing time", avgSeconds ? `${avgSeconds}s (target ≤ ${SUCCESS.seconds}s)` : "Not available"],
-      ["Processing time status", avgSeconds ? met(avgSeconds <= SUCCESS.seconds) : "Not measured"],
-      ["Manual effort reduction target", `≥ ${SUCCESS.effortReduction}%`],
+      ["Documents with open exceptions (workspace backlog, not SC4)", `${exceptionRate}%`],
+      ["Average processing time (workspace uploads)", avgSeconds ? `${avgSeconds}s` : "Not available"],
     ];
 
     const rows: SummaryRow[] = [
@@ -289,7 +276,7 @@ export function AccountingReportsPage({ user }: { user: User }) {
         </Panel>
       </div>
 
-      <Panel title="Success criteria" subtitle="Targets from the project brief, with current workspace figures. These are not pilot measurements.">
+      <Panel title="Workspace backlog" subtitle="Live figures from this workspace. They are not the SAIC success-criteria measurements below.">
         <div className="statement">
           {summary.criteria.map(([label, value]) => (
             <div className="statement-row" key={label}>
@@ -299,6 +286,8 @@ export function AccountingReportsPage({ user }: { user: User }) {
           ))}
         </div>
       </Panel>
+
+      <EvaluationPage embedded />
     </div>
   );
 }

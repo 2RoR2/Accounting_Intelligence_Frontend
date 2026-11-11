@@ -15,5 +15,5 @@ export async function getPerformanceMetrics(user: User): Promise<KPI[]> {
 }
 
 export async function getTrends(period = "week") {
-  return get<Array<{ day: string; processed: number; accuracy: number; exceptions: number }>>(`/api/processing/trends?period=${encodeURIComponent(period)}`);
+  return get<Array<{ day: string; processed: number; succeeded?: number; failed?: number; accuracy: number; exceptions: number }>>(`/api/processing/trends?period=${encodeURIComponent(period)}`);
 }

@@ -1,10 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, RotateCcw, XCircle, ExternalLink, FileText } from "lucide-react";
 import type { Extraction, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { getDocuments, getExtraction } from "@/lib/api/document.service";
+import { getDocuments, getExtraction, getValidationReport } from "@/lib/api/document.service";
+import { canDecideReview } from "@/lib/permissions/document-review";
+import { decimalDisplay } from "@/lib/api/document-contract";
 import { decideDocumentReview, getDocumentReviews } from "@/lib/api/workflow.service";
 import {
   Badge,
@@ -16,7 +18,6 @@ import {
   SearchInput,
   Toast,
   formatDate,
-  money,
 } from "@/components/common/ui";
 
 type Change = { label: string; from: string; to: string };
@@ -30,13 +31,18 @@ export function ApprovalQueuePage({ user }: { user: User }) {
   const { data, error, loading, refresh } = useResource(async () => {
     const docs = await getDocuments(user, { status: "IN_REVIEW" });
     return Promise.all(docs.map(async (doc) => {
-      const [extraction, reviews] = await Promise.all([
+      const [extraction, reviews, validation] = await Promise.all([
         getExtraction(user, doc.id).catch(() => null),
         getDocumentReviews(doc.id).catch(() => null),
+        getValidationReport(user, doc.id).catch(() => null),
       ]);
-      return { doc, extraction, reviews };
+      return { doc, extraction, reviews, validation };
     }));
   }, `approval-queue:${user.id}`);
+  useEffect(() => {
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
   async function decide(documentId: string, decision: "approved" | "rejected" | "returned", revision: number) {
     setBusyId(documentId);
@@ -83,11 +89,12 @@ export function ApprovalQueuePage({ user }: { user: User }) {
           <div className="panel-body"><p>No documents are waiting for approval.</p></div>
         ) : (
           <div className="approval-list">
-            {rows.map(({ doc, extraction, reviews }) => {
+            {rows.map(({ doc, extraction, reviews, validation }) => {
               const changes = changeList(extraction);
               const submitted = reviews?.submissions?.[0];
               const revision = doc.contentRevision ?? extraction?.contentRevision ?? 1;
               const busy = busyId === doc.id;
+              const canApprove = canDecideReview(user, doc, reviews) && validation?.validationStatus === "PASS" && validation.coverageComplete !== false;
               return (
                 <article className="approval-card" key={doc.id}>
                   <header>
@@ -100,7 +107,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                   <dl>
                     <div><dt>File</dt><dd>{doc.name}</dd></div>
                     <div><dt>Party</dt><dd>{doc.supplier || doc.customer || "—"}</dd></div>
-                    <div><dt>Amount</dt><dd>{doc.totalAmount != null ? money(doc.totalAmount) : "—"}</dd></div>
+                    <div><dt>Amount</dt><dd>{decimalDisplay(doc.totalAmount ?? extraction?.fields.total?.value, extraction?.fields.currency?.value)}</dd></div>
                     <div><dt>Submitted</dt><dd>{submitted ? `${formatDate(submitted.createdAt)}${submitted.note ? ` · ${submitted.note}` : ""}` : formatDate(doc.createdAt)}</dd></div>
                   </dl>
                   <div className="approval-changes">
@@ -109,8 +116,8 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                       <p>No field or line edits were recorded. The accountant submitted the extracted values as they were.</p>
                     ) : (
                       <ul>
-                        {changes.map((change) => (
-                          <li key={`${change.label}-${change.to}`}>
+                        {changes.map((change, index) => (
+                          <li key={`${index}-${change.label}`}>
                             <strong>{change.label}</strong>
                             <span>{change.from || "empty"}</span>
                             <em>→</em>
@@ -121,7 +128,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                     )}
                   </div>
                   <div className="row-actions">
-                    <button type="button" className="btn primary small" disabled={busy || !revision} onClick={() => decide(doc.id, "approved", revision)}><CheckCircle2 size={14} /> Approve</button>
+                    <button type="button" className="btn primary small" disabled={busy || !revision || !canApprove} onClick={() => decide(doc.id, "approved", revision)}><CheckCircle2 size={14} /> Approve</button>
                     <button type="button" className="btn small" disabled={busy} onClick={() => decide(doc.id, "returned", revision)}><RotateCcw size={14} /> Return</button>
                     <button type="button" className="btn small danger" disabled={busy} onClick={() => decide(doc.id, "rejected", revision)}><XCircle size={14} /> Reject</button>
                     <Link className="btn small" href={`/company/documents/${doc.id}`}><ExternalLink size={14} /> Open file</Link>

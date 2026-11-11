@@ -10171,3 +10171,35 @@ select option { background:#fff; color:#183452; font-weight:500; }
 .app-shell.theme-dark .bank-anomaly-overview-currency{border-color:rgba(157,202,255,.25);background:#102f58}
 .app-shell.theme-dark .bank-anomaly-overview-subhead span{color:#b9d2ec}
 @media(max-width:640px){.app-shell .bank-anomaly-overview{padding:15px 12px}.bank-anomaly-overview-heading{align-items:flex-start}.bank-anomaly-overview-heading h2{font-size:17px}.bank-anomaly-overview-count{min-width:85px;padding:8px 10px}.bank-anomaly-overview-subhead{align-items:flex-start;flex-direction:column;gap:3px}}
+
+
+/* SAIC scorecard on the evaluation page: status comes from measured results only. */
+.saic-scorecard { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 8px 0 18px; }
+.saic-card { padding: 16px 18px; border-radius: 16px; border: 1px solid var(--ui-border); border-top-width: 4px; background: var(--ui-surface); color: var(--ui-text); }
+.saic-card h3 { margin: 6px 0 4px; font-size: 1rem; }
+.saic-card-status { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.saic-card-target { margin: 0; font-size: .8rem; opacity: .75; }
+.saic-card-result { margin: 8px 0 0; font-size: .88rem; line-height: 1.4; }
+.saic-card.is-met { border-top-color: #2e9e6a; } .saic-card.is-met .saic-card-status { color: #2e9e6a; }
+.saic-card.is-not-met { border-top-color: #d9822b; } .saic-card.is-not-met .saic-card-status { color: #c06c18; }
+.saic-card.is-not-measured { border-top-color: #9aa8b8; } .saic-card.is-not-measured .saic-card-status { color: #6b7f96; }
+
+/* SC2 manual effort study */
+.effort-start { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.effort-start input { padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 140px; }
+.effort-start small { flex-basis: 100%; opacity: .75; }
+.effort-message { margin: 10px 0; }
+.effort-task { margin: 12px 0 18px; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); overflow: hidden; }
+.effort-task-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--ui-border); font-size: .9rem; }
+.effort-timer { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.effort-task-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0; }
+.effort-source { max-height: 72vh; overflow: auto; background: #2f3b4a; display: flex; justify-content: center; padding: 12px; }
+.effort-source img { max-width: 100%; height: auto; background: #fff; }
+.effort-fields { display: grid; gap: 10px; padding: 16px; align-content: start; }
+.effort-fields > p { margin: 0 0 4px; font-size: .86rem; opacity: .8; }
+.effort-field { display: grid; gap: 4px; font-size: .84rem; }
+.effort-field input, .effort-field textarea { padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: 10px; font: inherit; }
+@media (max-width: 900px) { .effort-task-body { grid-template-columns: 1fr; } .effort-source { max-height: 50vh; } }
+
+/* Summary: measured SAIC evaluation section */
+.summary-section-title { margin: 28px 0 12px; font-size: 1.15rem; font-weight: 700; color: var(--ui-text); }

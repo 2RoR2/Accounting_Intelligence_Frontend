@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import type { Extraction, SourceEvidence } from "@/types";
 import { imageEvidenceBox } from "@/lib/document-viewer";
@@ -9,6 +9,7 @@ export function SourceEvidenceList({ evidence, documentId }: { evidence: SourceE
   return <>{evidence.map((item, index) => <div className="source-evidence-item" key={index}>
     <a href={source + (item.page ? "#page=" + item.page : "")} target="_blank" rel="noreferrer">Source page {item.page ?? "not provided"}</a>
     <blockquote>{item.text ?? "Source text not provided"}</blockquote>
+    {item.method === "HUMAN" && item.source_note && <p>Reviewer source note: {item.source_note}</p>}
     <details><summary>Source reference and coordinates</summary>
       <p>{item.source_ref ?? "Reference not provided"}</p>
       <p>{item.bbox ? "Box: " + [item.bbox.l, item.bbox.t, item.bbox.r, item.bbox.b].join(", ") + " " + (item.coordinate_units ?? "Units not provided") + " | Origin: " + (item.bbox.coord_origin ?? "Not provided") : "Source coordinates not available."}</p>

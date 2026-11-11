@@ -1,7 +1,7 @@
 export interface ExtractionWarning { code: string; message: string; reviewed?: boolean; }
 export type EvidenceStatus = "source_backed" | "ambiguous_candidate" | "missing" | "conflicting" | "human_corrected" | "model_source_verified" | "model_suggested" | "unsupported";
 export interface OcrEngineScore { min: number; max: number; scope: "text_recognition_only"; }
-export interface SourceEvidence { page?: number; source_ref?: string; text?: string; bbox?: { l: number; t: number; r: number; b: number; coord_origin?: string } | null; page_size?: { width: number; height: number } | null; coordinate_units?: string; text_span?: [number, number]; bbox_scope?: string; }
+export interface SourceEvidence { page?: number; source_ref?: string; text?: string; bbox?: { l: number; t: number; r: number; b: number; coord_origin?: string } | null; page_size?: { width: number; height: number } | null; coordinate_units?: string; text_span?: [number, number]; bbox_scope?: string; source_note?: string; method?: string; }
 export type AiAssistOutcome = "PARSER_PRESERVED" | "SOURCE_VERIFIED_CANDIDATE" | "UNVERIFIED_MODEL_SUGGESTION" | "PARSER_MODEL_CONFLICT" | "NO_RECOVERY" | "MODEL_FAILURE";
 export interface AiAssistResultField { field: string; stored_key: string; outcome: AiAssistOutcome; candidate?: string | null; parser_value?: string | null; current_value?: string | null; source_check?: string; evidence?: SourceEvidence[]; request_reason?: string; explanation: string; }
 export interface AiAssistResult { status: string; attempt_id?: string; model?: string; model_digest?: string | null; page?: number; seconds?: number; message?: string; fields: AiAssistResultField[]; requestedBy?: string; requestedAt?: string; }

@@ -837,9 +837,9 @@ export function PublicPage({ page }: { page: string }) {
             <h2>From documents to dependable records.</h2>
             <p className="auth-preview-copy">Review invoices, bills, and receipts in one clear workflow.</p>
             <div className="auth-preview-dashboard">
-              <div className="auth-preview-stat"><span>Processed documents</span><strong>24,860</strong><small>This month</small></div>
-              <div className="auth-preview-chart"><span>Review accuracy</span><strong>96.4%</strong><div className="auth-preview-bars"><i /><i /><i /><i /><i /></div></div>
-              <div className="auth-preview-table"><span>Recent records</span><b>Invoice · Validated</b><b>Bill · Reviewed</b><b>Receipt · Ready</b></div>
+              <div className="auth-preview-stat"><span>Source documents</span><strong>PDF · JPG · PNG</strong><small>Original source retained for review</small></div>
+              <div className="auth-preview-chart"><span>Evidence-led review</span><strong>Human approval</strong><p>Check extracted values against the source.</p></div>
+              <div className="auth-preview-table"><span>Document workflow</span><b>Extract and validate</b><b>Correct and submit</b><b>Independent approval</b></div>
             </div>
           </aside>
         )}

@@ -63,7 +63,8 @@ export function DocumentList({ user }: { user: User }) {
       "credit-notes": "CREDIT_NOTE",
       "debit-notes": "DEBIT_NOTE",
     };
-    return typeByTab[selectedTab] ? data.filter((document) => document.type === typeByTab[selectedTab]) : data;
+    const sourceDocuments = data.filter((document) => !/\.json$/i.test(document.name));
+    return typeByTab[selectedTab] ? sourceDocuments.filter((document) => document.type === typeByTab[selectedTab]) : sourceDocuments;
   }, [data, selectedTab]);
   const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Purchase Bills", "purchase-bills"], ["Receipts", "receipts"], ["Credit Notes", "credit-notes"], ["Debit Notes", "debit-notes"]];
   if (loading) return <LoadingState variant="table" />;

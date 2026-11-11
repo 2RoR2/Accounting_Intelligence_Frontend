@@ -99,7 +99,6 @@ const accountantNav = [
   ["Money Out", "money-out", ArrowUpFromLine],
   ["Ledger", "ledger", BookOpen],
   ["Summary", "reports", ChartNoAxesCombined],
-  ["Evaluation", "evaluation", ChartNoAxesCombined],
   ["Settings", "settings", Settings2],
   ["Profile", "profile", UserRound],
 ] as const;

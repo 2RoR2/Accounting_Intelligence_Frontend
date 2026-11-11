@@ -21,7 +21,7 @@ export async function getRecordMetadata(user: User, tenantId?: string) {
 export async function getStandardisedRecord(user: User, recordId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   const record = await get<RecordResponse>(`/api/records/${encodeURIComponent(recordId)}`);
-  return mapRecord(record);
+  return record && !Array.isArray(record) && record.id ? mapRecord(record) : undefined;
 }
 export async function openSupportView(
   user: User,

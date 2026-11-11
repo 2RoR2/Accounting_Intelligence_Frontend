@@ -1,4 +1,5 @@
 import { EvaluationPage } from "@/features/common/reports/evaluation-page";
+import { EffortStudyPage } from "@/features/common/reports/effort-study";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -33,7 +34,7 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "validation-overview": return <ValidationOverviewPage user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
     case "reports": return <PerformancePage user={user} />;
-    case "evaluation": return <EvaluationPage />;
+    case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "approvals": return <ApprovalQueuePage user={user} />;
     case "ledger": return <LedgerPage />;
     case "audit": return <AuditPage user={user} />;

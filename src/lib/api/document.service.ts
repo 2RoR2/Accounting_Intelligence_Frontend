@@ -150,6 +150,10 @@ export async function updateExtractedLineItem(user: User, documentId: string, li
   if (!["description", "quantity", "unit_price", "amount"].includes(key)) throw new Error("Unsupported line-item field.");
   return correctLineItem(documentId, lineId, key as LineFieldKey, value, expectedContentRevision);
 }
+export type MissingLineInput = { description: string; quantity: string | null; unitPrice: string | null; amount: string; sourcePage: number; sourceNote: string; expectedContentRevision: number };
+export async function addExtractedLineItem(documentId: string, input: MissingLineInput) {
+  return api<{ id: string; contentRevision: number }>(`/api/documents/${documentId}/line-items`, { method: "POST", body: JSON.stringify(input) });
+}
 export async function revalidateDocument(user: User, documentId: string, note = "") {
   void note;
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
@@ -169,9 +173,9 @@ export async function retryDocumentProcessing(user: User, documentId: string) {
   if (!result || result.id !== documentId || !result.jobId || !result.status || !result.jobStatus || (!scheduled && result.dispatchAccepted !== true) || (result.queueJobId != null && typeof result.queueJobId !== "string")) throw new Error("Retry was not confirmed by a supported protocol. Refresh the document before trying again.");
   return result;
 }
-export async function getExceptions(user: User) {
+export async function getExceptions(user: User, documentId?: string) {
   void user;
-  return get<Exception[]>("/api/exceptions");
+  return get<Exception[]>(documentId ? `/api/exceptions?documentId=${encodeURIComponent(documentId)}` : "/api/exceptions");
 }
 export async function resolveException(
   user: User,

@@ -4,10 +4,12 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleX, FileCheck2, RefreshCw } from "lucide-react";
 import type { CurrencyReview, EvidenceStatus, ExtractedField, SourceEvidence, User } from "@/types";
 import { AiAssistPanel } from "./ai-assist-panel";
+import { MissingLineForm } from "./missing-line-form";
 import { CURRENCY_SUPPORT, sourceCheckReason, aiAssistOutcomeLabel, alternativeCandidates, candidateText, dateReadings, dollarCurrencyChoices, fieldGroup, processingSteps, validationRank, type FieldGroup, type ProcessingTrace } from "@/lib/api/document-contract";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   acceptValidationReview,
+  addExtractedLineItem,
   retryDocumentProcessing,
   getDocument,
   getExceptions,
@@ -218,10 +220,14 @@ export function DocumentReview({
           return fallback;
         }
       };
+      // This document's rows only. The tenant-wide lists took about a second each and the audit
+      // list stops at the newest 500 entries, which dropped an older document's history.
+      const recordsRequest = getStandardisedRecords(user);
       const [exceptions, records, audit, comments, workflow, reviews] = await Promise.all([
-        optional(getExceptions(user).then((items) => items.filter((e) => e.documentId === documentId)), []),
-        optional(getStandardisedRecords(user), []),
-        optional(getAuditLogs(user), []),
+        optional(getExceptions(user, documentId).then((items) => items.filter((e) => e.documentId === documentId)), []),
+        optional(recordsRequest, []),
+        optional(recordsRequest.catch(() => []).then((items) =>
+          getAuditLogs(user, [documentId, doc.name, items.find((r) => r.documentId === documentId)?.id ?? ""])), []),
         optional(getDocumentComments(documentId), []),
         optional(getDocumentKindWorkflow(documentId), { kind: "", fields: {}, overdue: false, duplicates: [], relatedNotes: [] }),
         optional(getDocumentReviews(documentId), null),
@@ -460,8 +466,10 @@ export function DocumentReview({
                     <details><summary>Line item source evidence</summary>{extraction.lineItems.map((line, i) => <div key={line.id ?? i}><strong>Line {i + 1}</strong>{Object.entries(line.evidence ?? {}).map(([key, evidence]) => <div key={key}><p>{key}</p><SourceEvidenceList evidence={evidence} documentId={documentId} /></div>)}</div>)}</details>
                   </div>
                 )}
+                {!readonly && canRevalidate && <MissingLineForm revision={data.doc.contentRevision ?? 1} disabled={busy || unsaved.length !== 0}
+                  onSave={input => run(() => addExtractedLineItem(documentId, input), "Printed item saved and revalidated.", true)} />}
                 {(
-                  <details className="shoebox-actions review-action-drawer">
+                  <details open className="shoebox-actions review-action-drawer">
                     <summary><span>Review actions</span><small>{unsaved.length ? `${unsaved.length} unsaved change${unsaved.length === 1 ? "" : "s"}` : "Save or submit this review"}</small></summary>
                     <Field label="Review note · Optional">
                         <textarea disabled={readonly}
@@ -482,6 +490,8 @@ export function DocumentReview({
                       </div>
                     </div>
                     {user.role === "ACCOUNTANT" && canRevalidate && blockingFindings > 0 && <div className="review-blocking-notice" role="status"><strong>{blockingFindings} {blockingFindings === 1 ? "issue blocks" : "issues block"} submission</strong><span>Review the validation findings to continue.</span><button type="button" className="text-link" onClick={viewIssues}>View issues</button></div>}
+                    {user.role === "LOCAL_ADMIN" && canRevalidate && <p role="status">An Accountant must submit this document for approval. A different Local Admin can then approve it.</p>}
+                    {data.doc.status === "IN_REVIEW" && <p role="status">Submitted for independent Local Admin approval. Corrections require a new submission.</p>}
                     {canDecideReview(user, data.doc, data.reviews) && data.validationReport?.validationStatus === "PASS" && data.validationReport.coverageComplete !== false && (
                       <button className="btn primary" disabled={busy} onClick={() => run(() => decideDocumentReview(documentId, "approved", note || "Approved", data.doc.contentRevision ?? 1), "Document approved.")}>
                         Approve document
@@ -517,6 +527,7 @@ export function DocumentReview({
                     {v.rule === "EX-008" && (v.field === "customer" || receivable) && !readonly && user.role === "LOCAL_ADMIN" && extraction.fields.customer?.value && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createCustomer(extraction.fields.customer!.value!)); await revalidateDocument(user, documentId); }, "Customer added and document revalidated.")}>Add {extraction.fields.customer.value} as a customer</button></p>}
                     {reviewableFinding(v) && !readonly && canRevalidate && extraction.contentRevision && <ValidationReviewForm rule={v.rule} busy={busy} onSubmit={note => run(() => acceptValidationReview(user, documentId, v.rule, note, extraction.contentRevision!), "Review recorded and document revalidated.")} />}
                     {v.rule === "EX-008" && v.field !== "customer" && !receivable && !readonly && user.role === "LOCAL_ADMIN" && newSupplier && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createSupplier(newSupplier)); await revalidateDocument(user, documentId); }, "Supplier added and document revalidated.")}>Add {newSupplier} as a supplier</button></p>}
+                    {v.rule === "EX-008" && !readonly && user.role !== "LOCAL_ADMIN" && <p className="validation-hint">Only a local admin can add this name to the {v.field === "customer" || receivable ? "customer" : "supplier"} list. Ask them to add it from this document; it is then revalidated. Approval also needs a local admin.</p>}
                     {v.duplicate_of && <p><Link href={`${base}/documents/${encodeURIComponent(v.duplicate_of)}`}>Related document: {v.duplicate_of}</Link></p>}
                     {v.vendor_candidate && <p>Vendor suggestion: {v.vendor_candidate.vendor_name ?? "Not provided"}<br />Similarity: {v.vendor_candidate.similarity ?? "Not provided"} (name matching, not extraction confidence)<br />Method: {v.vendor_candidate.score_method ?? "Not provided"}</p>}
                   </div> },

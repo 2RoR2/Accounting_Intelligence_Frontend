@@ -6,7 +6,17 @@ export function useResource<T>(loader: () => Promise<T>, key: string) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const displayedKey = useRef(key);
+  // A failed background refresh keeps what is already on screen instead of replacing the
+  // page with an error; only a first load (or a new key) with nothing to show reports it.
+  const loaded = useRef(false);
+  const scope = useRef({ key, request: 0 });
+  if (scope.current.key !== key) scope.current = { key, request: 0 };
   const refresh = useCallback(async () => {
+    const currentScope = scope.current;
+    const request = ++currentScope.request;
+    const isCurrent = () => scope.current === currentScope && request === currentScope.request;
+    const load = ref.current;
     let timeoutId: number | undefined;
     try {
       setError("");
@@ -16,25 +26,33 @@ export function useResource<T>(loader: () => Promise<T>, key: string) {
           15000,
         );
       });
-      setData(await Promise.race([ref.current(), timeout]));
+      const result = await Promise.race([load(), timeout]);
+      if (isCurrent()) {
+        setData(result);
+        loaded.current = true;
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to load data.");
+      if (isCurrent() && !loaded.current) setError(e instanceof Error ? e.message : "Unable to load data.");
     } finally {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, []);
   useEffect(() => {
+    displayedKey.current = key;
     setLoading(true);
     setData(undefined);
+    loaded.current = false;
     void refresh();
     const handler = () => void refresh();
     window.addEventListener("ai:changed", handler);
     window.addEventListener("storage", handler);
     return () => {
+      scope.current.request++;
       window.removeEventListener("ai:changed", handler);
       window.removeEventListener("storage", handler);
     };
   }, [key, refresh]);
-  return { data, error, loading, refresh, setData };
+  const sameKey = displayedKey.current === key;
+  return { data: sameKey ? data : undefined, error: sameKey ? error : "", loading: !sameKey || loading, refresh, setData };
 }

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Building2,
   Users,
@@ -43,6 +43,9 @@ export function Dashboard({ user }: { user: User }) {
   const accountant = !admin && !local;
   const base = admin ? "/admin" : local ? "/company" : "/workspace";
 
+  // The last exception list the API actually returned. A slow or failed request must not
+  // be shown as "0 open exceptions" while the sidebar still counts them.
+  const lastExceptions = useRef<Awaited<ReturnType<typeof getExceptions>> | null>(null);
   const { data, error, loading, refresh } = useResource(
     async () => {
       const optional = async <T,>(request: Promise<T>, fallback: T) => {
@@ -60,27 +63,30 @@ export function Dashboard({ user }: { user: User }) {
         admin ? optional(getTenants(user), []) : Promise.resolve([]),
         admin || local ? optional(getTenantUsers(user), []) : Promise.resolve([]),
         admin ? optional(getCompanyRequests(user), []) : Promise.resolve([]),
-        optional(getExceptions(user), []),
+        optional<Awaited<ReturnType<typeof getExceptions>> | null>(getExceptions(user), null),
         optional(getPerformanceMetrics(user), []),
         optional(getAuditLogs(user), []),
       ]);
-      return { tenants, users, requests, docs, exceptions, metrics, audit };
+      if (exceptions) lastExceptions.current = exceptions;
+      return { tenants, users, requests, docs, exceptions: lastExceptions.current, metrics, audit };
     },
     user.id,
   );
 
   useEffect(() => {
     if (admin) return;
+    // Seven requests of about a second each: refreshing every 3 s queued them behind each other
+    // and pushed the exception count past its timeout. Skip refreshes while the tab is hidden.
     const timer = window.setInterval(() => {
-      void refresh();
-    }, 3000);
+      if (document.visibilityState === "visible") void refresh();
+    }, 15000);
     return () => window.clearInterval(timer);
   }, [admin, refresh]);
 
   if (loading) return <LoadingState variant="dashboard" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
-  const open = data.exceptions.filter((e) => e.status !== "RESOLVED").length;
+  const open = data.exceptions ? data.exceptions.filter((e) => e.status !== "RESOLVED").length : null;
   const firstName = user.name?.split(" ")[0] || "there";
 
   if (local || accountant) {
@@ -166,7 +172,7 @@ export function Dashboard({ user }: { user: User }) {
             { label: "Company", render: (t) => <Link className="company-cell" href={`/admin/tenants/${t.id}`}><span className="company-avatar">{t.name.slice(0, 2)}</span><span><strong>{t.name}</strong></span></Link> },
             { label: "Users / limit", render: (t) => <span>{activeUsers.filter((u) => u.tenantId === t.id).length} <span className="muted">/ {t.accountLimit}</span></span> },
             { label: "Documents", render: (t) => data.docs.filter((d) => d.tenantId === t.id).length },
-            { label: "Exceptions", render: (t) => <span className="exception-count">{data.exceptions.filter((e) => e.tenantId === t.id && e.status !== "RESOLVED").length}</span> },
+            { label: "Exceptions", render: (t) => <span className="exception-count">{(data.exceptions ?? []).filter((e) => e.tenantId === t.id && e.status !== "RESOLVED").length}</span> },
             { label: "Status", render: (t) => <Badge>{t.status}</Badge> },
             { label: "", render: (t) => <Link className="icon-btn" aria-label={`View ${t.name}`} href={`/admin/tenants/${t.id}`}><ArrowRight size={16} /></Link> },
           ]}

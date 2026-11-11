@@ -1,4 +1,4 @@
-import { EvaluationPage } from "@/features/common/reports/evaluation-page";
+import { EffortStudyPage } from "@/features/common/reports/effort-study";
 import { Dashboard } from "@/features/common/dashboard/dashboard";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
@@ -15,6 +15,14 @@ import { ReconciliationPage } from "@/features/common/money/reconciliation-page"
 import { UserManagement } from "@/features/common/users/user-management";
 import { HelpCenter } from "@/features/common/help/help-center";
 import type { User } from "@/types";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+function RedirectTo({ href }: { href: string }) {
+  const router = useRouter();
+  useEffect(() => { router.replace(href); }, [href, router]);
+  return <p className="empty-state">This page has moved to <a href={href}>Summary</a>.</p>;
+}
 
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
@@ -40,7 +48,8 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} initialRecordId={id} />;
     case "reports": return <AccountingReportsPage user={user} />;
-    case "evaluation": return <EvaluationPage />;
+    // Evaluation now lives inside Summary; old links land there. The effort study keeps its own URL.
+    case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <RedirectTo href="/workspace/reports" />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
   }
