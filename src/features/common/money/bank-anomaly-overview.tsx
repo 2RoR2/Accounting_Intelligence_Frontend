@@ -23,7 +23,8 @@ function money(value: number, currency: string): string {
   }).format(value);
 }
 
-function shortDate(value: string): string {
+function shortDate(value: string | null): string {
+  if (!value) return "Unknown date";
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime())
     ? value
@@ -42,7 +43,11 @@ function CurrencyChart({
   const items = rows
     .map((row) => ({ row, value: amount(row.amount), threshold: row.anomaly?.upperBound == null ? null : amount(row.anomaly.upperBound) }))
     .filter((item): item is { row: BankMoneyTransaction; value: number; threshold: number | null } => item.value !== null)
-    .sort((a, b) => a.row.postedDate.localeCompare(b.row.postedDate) || a.row.id.localeCompare(b.row.id))
+    .sort((a, b) => {
+      const dateA = a.row.postedDate ?? "";
+      const dateB = b.row.postedDate ?? "";
+      return dateA.localeCompare(dateB) || a.row.id.localeCompare(b.row.id);
+    })
     .slice(-30);
 
   const flagged = items.filter(({ row }) => row.anomaly?.isAnomaly).length;
