@@ -1,0 +1,24 @@
+node_modules/
+.next/
+.next-*/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.env*.local
+.npm-cache/
+.npm-ca.pem
+node_modules.partial/
+node_modules.incomplete*/
+*.log
+
+# Private runtime configuration and local artifacts
+.env
+.env.*
+venv/
+venv-*/
+backups/
+*.dump
+*.backup
+*.bak
+*.pem
+*.key
