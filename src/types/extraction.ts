@@ -15,6 +15,8 @@ export interface ExtractedField {
   state?: string; resolution?: string; evidence?: SourceEvidence[]; candidates?: unknown[];
   method?: string; modelName?: string | null; modelVersion?: string | null;
   evidenceStatus?: EvidenceStatus; ocrEngineScore?: OcrEngineScore | null;
+  /** What the reviewer should do with this field (backend reliability.review_signal). Never a confidence number. */
+  reviewSignal?: "verified" | "check" | "suggestion" | "missing" | null;
   correctedBy?: string | null; correctedAt?: string | null;
 }
 export interface LineCorrection { line_item_id: string; field_key: string; old_value: string | null; new_value: string | null; corrected_by: string; corrected_at: string; }

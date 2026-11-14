@@ -15,13 +15,19 @@ import { ReconciliationPage } from "@/features/common/money/reconciliation-page"
 import { ApprovalQueuePage } from "@/features/common/documents/approval-queue";
 import { LedgerPage } from "@/features/common/ledger/ledger-page";
 import { ValidationOverviewPage } from "@/features/common/validation/validation-overview";
+import { AccountingReportsPage } from "@/features/common/reports/accounting-reports";
+import { SystemPage } from "@/features/localadmin/system-page";
 
 import type { User } from "@/types";
 
 export function LocalAdminRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
   switch (page) {
+    // "Today" shows the existing dashboard until B3 rebuilds it; /company/dashboard redirects here.
+    case "today":
     case "dashboard": return <Dashboard user={user} />;
+    case "system": return <SystemPage user={user} />;
+    case "performance": return <PerformancePage user={user} />;
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;
@@ -33,7 +39,8 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "users": return <UserManagement user={user} />;
     case "validation-overview": return <ValidationOverviewPage user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
-    case "reports": return <PerformancePage user={user} />;
+    // Reports are accounting reports; processing performance moved to /company/performance (linked from System).
+    case "reports": return <AccountingReportsPage user={user} />;
     case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "approvals": return <ApprovalQueuePage user={user} />;
     case "ledger": return <LedgerPage />;

@@ -20,9 +20,11 @@ import {
   PageHeader,
   Panel,
   SearchInput,
+  StatusBadge,
   Toast,
   formatDate,
 } from "@/components/common/ui";
+import { ruleSentence, ruleTitle, statusLabel } from "@/lib/glossary";
 export function ExceptionsPage({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const { data, error, loading, refresh } = useResource(
@@ -48,8 +50,8 @@ export function ExceptionsPage({ user }: { user: User }) {
   return (
     <>
       <PageHeader
-        title="Exceptions"
-        description="A focused queue for documents that need a human decision."
+        title="Needs fixing"
+        description="Documents with a problem to fix before they can be approved. Each line says what to do."
       />
       <Panel>
         <div className="filter-bar">
@@ -63,9 +65,10 @@ export function ExceptionsPage({ user }: { user: User }) {
             value={status}
             onChange={setStatus}
             options={["OPEN", "ASSIGNED", "IN_REVIEW", "RESOLVED"]}
+            format={statusLabel}
           />
           <Filter
-            label="Severities"
+            label="Priorities"
             value={severity}
             onChange={setSeverity}
             options={["LOW", "MEDIUM", "HIGH"]}
@@ -73,10 +76,11 @@ export function ExceptionsPage({ user }: { user: User }) {
           {user.role === "LOCAL_ADMIN" && (
             <>
               <Filter
-                label="Types"
+                label="Problems"
                 value={type}
                 onChange={setType}
                 options={Array.from(new Set(data.exceptions.map((e) => e.type)))}
+                format={(code) => ruleTitle(code)}
               />
               <select
                 aria-label="Assigned user"
@@ -125,10 +129,10 @@ export function ExceptionsPage({ user }: { user: User }) {
               ),
             },
             {
-              label: "Exception type",
+              label: "What to do",
               render: (e) => (
                 <div>
-                  {e.type.replaceAll("_", " ")}
+                  <strong>{ruleSentence(e.type)}</strong>
                   <small>{e.message}</small>
                 </div>
               ),
@@ -141,7 +145,7 @@ export function ExceptionsPage({ user }: { user: User }) {
                 e.assignedTo,
             },
             { label: "Created", render: (e) => formatDate(e.createdAt) },
-            { label: "Status", render: (e) => <Badge>{e.status}</Badge> },
+            { label: "Status", render: (e) => <StatusBadge status={e.status} /> },
             {
               label: "Action",
               render: (e) => (
@@ -171,7 +175,7 @@ export function ExceptionsPage({ user }: { user: User }) {
         />
       </Panel>
       {assign && (
-        <Modal title="Assign exception" onClose={() => setAssign("")}>
+        <Modal title="Assign to a colleague" onClose={() => setAssign("")}>
           <div className="panel-body">
             {failure && <ErrorState message={failure} />}
             <Field label="Assign to">
@@ -194,7 +198,7 @@ export function ExceptionsPage({ user }: { user: User }) {
                 try {
                   await assignException(user, assign, target);
                   setAssign("");
-                  setToast("Exception assigned.");
+                  setToast("Assigned.");
                 } catch (e) {
                   setFailure((e as Error).message);
                 }

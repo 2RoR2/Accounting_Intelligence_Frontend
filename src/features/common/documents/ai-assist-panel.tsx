@@ -55,27 +55,28 @@ export function AiAssistPanel({ user, documentId, contentRevision, readonly, lab
   if (!state) return null;
   return <section className="ai-assist" aria-label="AI Assist">
     <div className="ai-assist-head">
-      <strong><Sparkles size={15} aria-hidden="true" /> AI Assist (Qwen)</strong>
+      <strong><Sparkles size={15} aria-hidden="true" /> Second reading</strong>
       {!readonly && state.available && <div className="ai-assist-controls">
         <select aria-label="Field to examine" value={choice} disabled={running} onChange={e => setChoice(e.target.value)}>
           <option value="">Unresolved fields</option>
           {state.supportedFields.map(item => <option key={item.field} value={item.field}>Second opinion: {labelFor(item.storedKey)}</option>)}
         </select>
-        <button type="button" className="btn small" disabled={running || !!saving} onClick={examine}>{running ? "Examining…" : "Examine with AI"}</button>
+        <button type="button" className="btn small" disabled={running || !!saving} onClick={examine}>{running ? "Reading…" : "Read again with AI"}</button>
       </div>}
     </div>
-    {!state.available && <p>AI Assist is off on this installation. Continue reviewing manually.</p>}
-    {running && <p role="status">The local model is reading this page. Nothing leaves this machine.</p>}
+    {!state.available && <p>The second reading is not switched on. Continue reviewing as usual.</p>}
+    {running && <p role="status">Reading this page again. Nothing changes until you accept a value.</p>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {latest && !running && <>
       {latest.message && <p role="status">{latest.message}</p>}
-      {latest.model && <small>{modelIdentity(latest)}. Suggestions only; no value changes until you accept it.</small>}
+      <small>Suggestions only; no value changes until you accept it.</small>
+      {latest.model && <details className="ai-assist-details"><summary>Details</summary><small>{modelIdentity(latest)}</small></details>}
       <ul className="ai-assist-results">{latest.fields.map(row => {
         const outcome = decided(row.field);
         return <li key={row.field} data-outcome={row.outcome}>
           <div><strong>{labelFor(row.stored_key)}</strong> <span className="ai-assist-outcome">{aiAssistOutcomeLabel(row.outcome)}</span></div>
-          {row.candidate != null && <p>Model read: <b>{row.candidate}</b>{row.current_value ?? row.parser_value ? ` (current value: ${row.current_value ?? row.parser_value})` : ""}</p>}
+          {row.candidate != null && <p>Second reading: <b>{row.candidate}</b>{row.current_value ?? row.parser_value ? ` (current value: ${row.current_value ?? row.parser_value})` : ""}</p>}
           <p>{row.explanation}</p>
           <small>Asked because: {row.request_reason}</small>
           {!!row.evidence?.length && <button type="button" className="text-link" onClick={() => onShowSource(labelFor(row.stored_key), row.evidence!)}>View source</button>}

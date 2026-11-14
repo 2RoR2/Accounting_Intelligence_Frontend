@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { getCustomers, getSuppliers } from "@/lib/api/workflow.service";
 import { getDocuments } from "@/lib/api/document.service";
 import type { Document, User } from "@/types";
-import { Badge, ErrorState, Panel } from "@/components/common/ui";
+import { Badge, ErrorState, Panel, StatusBadge } from "@/components/common/ui";
 
 type Contact = {
   id: string;
@@ -140,7 +140,7 @@ export function ContactsPage({ user }: { user: User }) {
                         </td>
                         <td>{doc.type}</td>
                         <td>
-                          <Badge>{doc.status}</Badge>
+                          <StatusBadge status={doc.status} />
                         </td>
                         <td>{new Date(doc.createdAt).toLocaleDateString("en-MY")}</td>
                         <td>

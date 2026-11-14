@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
-import { Badge, DataTable, ErrorState, LoadingState, PageHeader, Panel } from "@/components/common/ui";
+import { Badge, DataTable, ErrorState, LoadingState, PageHeader, Panel, StatusBadge } from "@/components/common/ui";
 
 const PASSED = new Set(["VALIDATED", "STANDARDISED", "COMPLETED"]);
 const NEEDS_REVIEW = new Set(["EXCEPTION", "IN_REVIEW", "FAILED"]);
@@ -74,7 +74,7 @@ export function ValidationOverviewPage({ user }: { user: User }) {
           columns={[
             { label: "Document", render: (d) => d.name },
             { label: "Type", render: (d) => d.type },
-            { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
+            { label: "Status", render: (d) => <StatusBadge status={d.status} /> },
             { label: "Open exceptions", render: (d) => d.openForDoc },
             {
               label: "Validation",

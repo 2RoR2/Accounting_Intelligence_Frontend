@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Download, ShieldCheck } from "lucide-react";
 import type { StandardisedRecord, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -26,6 +27,7 @@ import {
   Panel,
   SearchInput,
   formatDate,
+  StatusBadge,
 } from "@/components/common/ui";
 
 export function RecordDetail({
@@ -103,7 +105,12 @@ export function RecordsPage({
   const [selectedTenant, setSelectedTenant] = useState(tenantId ?? "");
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("");
-  const [category, setCategory] = useState("");
+  // Purchases and Sales in the menu open this list already filtered (?category=ACCOUNTS_PAYABLE|ACCOUNTS_RECEIVABLE).
+  const requestedCategory = useSearchParams().get("category");
+  const [category, setCategory] = useState(requestedCategory === "ACCOUNTS_PAYABLE" || requestedCategory === "ACCOUNTS_RECEIVABLE" ? requestedCategory : "");
+  useEffect(() => {
+    if (requestedCategory === "ACCOUNTS_PAYABLE" || requestedCategory === "ACCOUNTS_RECEIVABLE") setCategory(requestedCategory);
+  }, [requestedCategory]);
   const [date, setDate] = useState("");
   const [validation, setValidation] = useState("");
   const [status, setStatus] = useState("");
@@ -167,11 +174,11 @@ export function RecordsPage({
     <>
       <PageHeader
         eyebrow={admin ? "PLATFORM MONITORING" : undefined}
-        title="Standardised records"
+        title={admin ? "Standardised records" : "Approved records"}
         description={
           admin
             ? "Tenant-level monitoring. Detailed accounting data is available only through Support View."
-            : "One standardised record for each extracted document. Open a record to review the standardised fields. The original document stays hidden until you choose View original document."
+            : "One record for each approved document. Open a record to see its details; the original document opens only when you choose View original document."
         }
         actions={
           !admin && (
@@ -380,7 +387,7 @@ export function RecordsPage({
                 label: "Validation",
                 render: (r) => <Badge>{r.validation}</Badge>,
               },
-              { label: "Status", render: (r) => <Badge>{r.status}</Badge> },
+              { label: "Status", render: (r) => <StatusBadge status={r.status} /> },
               {
                 label: "Action",
                 render: (r) => (

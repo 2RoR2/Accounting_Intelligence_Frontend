@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -32,7 +32,10 @@ import {
   Users,
   UserRound,
   X,
+  type LucideIcon,
 } from "lucide-react";
+import { activeNavItem, jobNavigation, navHref, type NavIcon, type NavSection } from "./navigation";
+import { ruleSentence } from "@/lib/glossary";
 import type { User } from "@/types";
 import { logout } from "@/lib/api/auth.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
@@ -66,42 +69,19 @@ const adminNav = [
   ["Profile", "profile", UserRound],
 ] as const;
 
-const companyNav = [
-  ["Dashboard", "dashboard", LayoutDashboard],
-  ["Documents", "documents", Files],
-  ["Upload", "upload", Upload],
-  ["Exceptions", "exceptions", ShieldCheck],
-  ["Validation Overview", "validation-overview", ShieldCheck],
-  ["Approvals", "approvals", ClipboardCheck],
-  ["Standardised Records", "records", FileCheck2],
-  ["Contacts", "contacts", Users],
-  ["Reconciliation", "reconciliation", ClipboardCheck],
-  ["Money In", "money-in", ArrowDownToLine],
-  ["Money Out", "money-out", ArrowUpFromLine],
-  ["Ledger", "ledger", BookOpen],
-  ["Company Performance", "reports", ChartNoAxesCombined],
-  ["Audit Trail", "audit", Activity],
-  ["Users", "users", Users],
-  ["Validation Rules", "validation-rules", ClipboardCheck],
-  ["Settings", "settings", Settings2],
-  ["Profile", "profile", UserRound],
-] as const;
-
-const accountantNav = [
-  ["Dashboard", "dashboard", LayoutDashboard],
-  ["Documents", "documents", Files],
-  ["Upload", "upload", Upload],
-  ["Exceptions", "exceptions", ShieldCheck],
-  ["Standardised Records", "records", FileCheck2],
-  ["Contacts", "contacts", Users],
-  ["Reconciliation", "reconciliation", ClipboardCheck],
-  ["Money In", "money-in", ArrowDownToLine],
-  ["Money Out", "money-out", ArrowUpFromLine],
-  ["Ledger", "ledger", BookOpen],
-  ["Summary", "reports", ChartNoAxesCombined],
-  ["Settings", "settings", Settings2],
-  ["Profile", "profile", UserRound],
-] as const;
+// Accountant and local-admin menu by accounting job; the entries live in ./navigation.
+const NAV_ICONS: Record<NavIcon, LucideIcon> = {
+  today: LayoutDashboard, upload: Upload, review: Files, fix: ShieldCheck, approve: ClipboardCheck,
+  bill: ArrowUpFromLine, receipt: FileCheck2, invoice: ArrowDownToLine, records: FileCheck2,
+  "money-in": ArrowDownToLine, "money-out": ArrowUpFromLine, reconcile: ClipboardCheck, contacts: Users,
+  accounts: BookOpen, reports: ChartNoAxesCombined, settings: Settings2, users: Users, rules: ClipboardCheck,
+  audit: Activity, system: ScanLine, profile: UserRound,
+};
+// Pages reachable from inside other pages, not from the menu: their breadcrumb title.
+const PAGE_TITLES: Record<string, string> = {
+  records: "Approved records", "validation-overview": "Checks overview", evaluation: "Reading accuracy",
+  performance: "Processing performance", help: "Help",
+};
 
 export function AppShell({
   user,
@@ -111,6 +91,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -254,30 +235,22 @@ export function AppShell({
       ? "company"
       : "workspace";
 
-  const nav = isAdmin
-    ? adminNav
-    : isCompanyAdmin
-      ? companyNav
-      : accountantNav;
-  const navGroups = isAdmin
-  ? [
-      { label: "Overview", paths: ["dashboard"] },
-      { label: "Workspace", paths: nav.map((item) => item[1]).filter((path) => path !== "dashboard") },
-    ]
-  : [
-      { label: "Overview", paths: ["dashboard"] },
-      { label: "Documents", paths: ["documents", "upload", "exceptions", "validation-overview", "records", "approvals"] },
-      { label: "Banking", paths: ["reconciliation", "money-in", "money-out"] },
-      { label: "Accounting", paths: ["ledger"] },
-      { label: "Insights", paths: ["reports", "evaluation"] },
-      { label: "Workspace", paths: ["contacts", "users", "audit", "validation-rules", "settings", "profile"] },
-    ];
+  // Super admin keeps the platform menu; accountants and local admins get the menu by accounting job.
+  const sections: NavSection[] = isAdmin
+    ? [
+        { label: "Overview", items: [{ label: "Dashboard", page: "dashboard", icon: "today" }] },
+        { label: "Workspace", items: adminNav.filter((item) => item[1] !== "dashboard").map(([label, page]) => ({ label, page, icon: "today" as const })) },
+      ]
+    : jobNavigation(isCompanyAdmin ? "LOCAL_ADMIN" : "ACCOUNTANT");
+  const adminIcon = (page: string) => adminNav.find((item) => item[1] === page)?.[2] ?? LayoutDashboard;
+  const homeHref = `/${prefix}/${isAdmin ? "dashboard" : "today"}`;
 
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
   const workspaceName = isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name || "Demo Company").split("—")[0].trim();
   const workspaceOffice = isAdmin ? "Super Admin" : ((user.tenantName || "").split("—")[1]?.trim() || "Sarawak Office");
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
   const currentPage = pathname.split("/")[2] ?? "";
+  const activeItem = activeNavItem(sections, currentPage, searchParams?.toString() ?? "");
 
   const openExceptions = (data.data?.exceptions ?? []).filter(
     (e) => e.status !== "RESOLVED",
@@ -286,8 +259,8 @@ export function AppShell({
   const apiNotifications = data.data?.notifications ?? [];
   const workflowAlerts: Alert[] = [...apiNotifications.map((n) => ({ id: n.id, notificationId: n.id, read: n.read, title: n.title, detail: n.message, href: n.resource ? `/${prefix}/${n.resource}` : notificationHref, time: n.createdAt })), ...openExceptions.map((e) => ({
         id: e.id,
-        title: e.severity || "Exception",
-        detail: e.message || e.type || "Needs review",
+        title: isAdmin ? (e.severity || "Exception") : "Needs fixing",
+        detail: isAdmin ? (e.message || e.type || "Needs review") : ruleSentence(e.type),
         href: `/${prefix}/exceptions`,
         time: e.createdAt,
       }))].filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 6)
@@ -364,17 +337,19 @@ export function AppShell({
           </div>
         </button>
         <nav className={navScrolling ? "is-scrolling" : ""} onScroll={handleNavScroll}>
-          {navGroups.map((group) => <div className="nav-group" key={group.label}>
-            <div className="nav-group-heading">{group.label}</div>
-            {nav.filter((item) => group.paths.includes(item[1])).map(([label, path, Icon]) => {
-              const active = currentPage === path;
-              const badge = path === "exceptions"
+          {sections.map((section) => <div className="nav-group" key={section.label}>
+            {/* A job with one page is a plain link; a job with several pages gets a heading. */}
+            {section.items.length > 1 && <div className="nav-group-heading">{section.label}</div>}
+            {section.items.map((item) => {
+              const Icon = isAdmin ? adminIcon(item.page) : NAV_ICONS[item.icon];
+              const active = activeItem === item;
+              const count = item.count === "exceptions" || (isAdmin && item.page === "exceptions")
                 ? (openExceptions.length > 0 ? openExceptions.length : undefined)
-                : path === "approvals" && (data.data?.pending ?? 0) > 0
+                : (item.count === "approvals" || (isAdmin && item.page === "approvals")) && (data.data?.pending ?? 0) > 0
                   ? data.data?.pending
                   : undefined;
-              return <Link key={`${group.label}-${path}`} href={`/${prefix}/${path}`} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-item ${active ? "active" : ""}`} title={label}>
-                <Icon size={18} /><span>{label}</span>{badge !== undefined && <span className="nav-count">{badge}</span>}
+              return <Link key={`${section.label}-${item.label}`} href={navHref(prefix, item)} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-item ${active ? "active" : ""}`} title={item.label}>
+                <Icon size={18} /><span>{item.label}</span>{count !== undefined && <span className="nav-count">{count}</span>}
               </Link>;
             })}
           </div>)}
@@ -423,19 +398,19 @@ export function AppShell({
                   if (window.history.length > 1) {
                     router.back();
                   } else {
-                    router.push(`/${prefix}/dashboard`);
+                    router.push(homeHref);
                   }
                 }}
               >
                 <ArrowLeft size={17} />
               </button>
             )}
-            <Link className="breadcrumb-home" href={`/${prefix}/dashboard`}>
+            <Link className="breadcrumb-home" href={homeHref}>
               {isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name)}
             </Link>
             <span className="crumb-divider">/</span>
             <strong>
-              {nav.find((n) => n[1] === currentPage)?.[0] ?? "Overview"}
+              {activeItem?.label ?? PAGE_TITLES[currentPage] ?? (isAdmin ? "Overview" : "Today")}
             </strong>
           </div>
           <div className="topbar-right">

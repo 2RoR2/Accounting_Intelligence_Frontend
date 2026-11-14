@@ -32,9 +32,11 @@ import {
   LoadingState,
   PageHeader,
   Panel,
+  StatusBadge,
   Toast,
   formatDate,
 } from "@/components/common/ui";
+import { evidenceLabel, extractionStateLabel, reviewSignalLabel, ruleCode, ruleSentence } from "@/lib/glossary";
 import { ApiError } from "@/lib/api/client";
 import { canEditDocument, canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay as money, fieldLabel, reviewableFinding, sourceKind, standardisationAvailable, validationState, validationSummary } from "@/lib/api/document-contract";
@@ -56,16 +58,11 @@ import {
 } from "@/lib/api/workflow.service";
 
 
-const EVIDENCE_STATUS: Record<EvidenceStatus, string> = {
-  source_backed: "Source evidence found",
-  ambiguous_candidate: "Source candidate, not selected",
-  missing: "Not found in source",
-  conflicting: "Source candidates conflict",
-  human_corrected: "Reviewed correction",
-  model_source_verified: "Model candidate, printed beside its label. Not applied",
-  model_suggested: "Model candidate, role not verified. Not applied",
-  unsupported: "No usable source evidence",
-};
+/** What the reviewer sees under a field: the backend's review signal when present, else the evidence status, in plain words. */
+const fieldStateText = (field: Pick<ExtractedField, "reviewSignal" | "evidenceStatus" | "state">) =>
+  field.reviewSignal ? reviewSignalLabel(field.reviewSignal)
+    : field.evidenceStatus ? evidenceLabel(field.evidenceStatus satisfies EvidenceStatus)
+      : extractionStateLabel(field.state);
 
 /** A reason is required and goes on the audit log. It applies to this revision only, and local-admin approval still follows. */
 function ValidationReviewForm({ rule, busy, onSubmit }: { rule: string; busy: boolean; onSubmit: (note: string) => void }) {
@@ -83,7 +80,7 @@ function ValidationReviewForm({ rule, busy, onSubmit }: { rule: string; busy: bo
 function ProcessingPanel({ trace, type, status, labelFor }: { trace?: ProcessingTrace; type?: string; status?: string; labelFor: (key: string) => string }) {
   const steps = processingSteps(trace);
   if (!steps.length) return null;
-  return <details className="review-field-group processing-panel"><summary><span>Technical processing details</span><small>Diagnostics</small></summary>
+  return <details className="review-field-group processing-panel"><summary><span>Details</span><small>How this document was read</small></summary>
     <ul>
       <li>Detected type: {type ?? "not recorded"}{status && status !== "classified" ? " (needs review)" : ""}</li>
       {steps.map(step => <li key={step}>{step}</li>)}
@@ -147,14 +144,14 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
       {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
     </div>
-    <span className="shoebox-field-state">{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Reviewed correction" : field.evidenceStatus ? EVIDENCE_STATUS[field.evidenceStatus] : "Source state: " + (field.state ?? "unverified")}</span>
+    <span className="shoebox-field-state">{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : fieldStateText(field)}</span>
     <input id={inputId} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving}
       onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
     {fieldKey === "currency" && <datalist id={`${inputId}-currency-options`}>{currencyOptions.map(code => <option key={code} value={code} />)}</datalist>}
     {selected && <div className="shoebox-mobile-evidence"><strong>Selected source evidence</strong>
       {field.evidence?.length ? field.evidence.map((item, index) => <div key={index}><strong>Source page {item.page ?? "not provided"}</strong><p>{item.text ?? "Source text not provided"}</p></div>) : <p>Source evidence not available.</p>}
     </div>}
-    <details className="shoebox-field-metadata"><summary>Raw values and extraction details</summary>
+    <details className="shoebox-field-metadata"><summary>Details</summary>
       <dl><dt>Raw source value</dt><dd>{field.rawValue ?? "Not provided"}</dd>
         <dt>Extracted value</dt><dd>{field.original ?? "Not provided"}</dd>
         <dt>Saved current value</dt><dd>{field.value ?? "Not provided"}</dd>
@@ -183,7 +180,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
       <ul>{currencies.map(code => <li key={code}><button type="button" className="text-link" onClick={() => fillFromCandidate(code)}>{code}</button></li>)}</ul></div>}
     {field.confirmationRequired && field.evidenceStatus !== "source_backed" && <small>Accountant confirmation required</small>}
     {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
-      {warning.reviewed ? "Reviewed source warning" : "Extraction warning"}: {warning.message}
+      {warning.reviewed ? "Reviewed" : "Please check"}: {warning.message}
     </p>)}
     {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict} onClick={async () => {
       setSaving(true); setError("");
@@ -342,7 +339,7 @@ export function DocumentReview({
         description={`${data.doc.id} · Uploaded ${formatDate(data.doc.createdAt)}`}
         actions={
           <>
-            <Badge>{data.doc.status}</Badge>
+            <StatusBadge status={data.doc.status} />
             <Link href={`${base}/documents`} className="btn">
               All documents
             </Link>
@@ -359,17 +356,17 @@ export function DocumentReview({
       {failed || pending ? (
         <section className={`document-processing-card ${failed ? "is-failed" : "is-pending"}`}>
           <div className="document-processing-head">
-            <div><span className="document-processing-kicker">DOCUMENT WORKFLOW</span><h2>{failed ? "Processing needs attention" : extracting ? "Extracting your document" : "Waiting for processing"}</h2><p>{failed ? "The source could not be extracted. Review the processing error before retrying." : extracting ? "A worker is reading the source and preparing the fields for review." : "Your document is stored. Extraction will start when a worker claims its queued job."}</p></div><Badge>{data.doc.status}</Badge>
+            <div><span className="document-processing-kicker">DOCUMENT</span><h2>{failed ? "We could not read this document" : extracting ? "Reading your document" : "Waiting to be read"}</h2><p>{failed ? "Check the file is a clear invoice, bill or receipt, then try again." : extracting ? "The details are being read and prepared for your review." : "Your document is saved. Reading starts shortly."}</p></div><StatusBadge status={data.doc.status} />
           </div>
-          <div className="document-processing-steps"><div className="is-complete"><CheckCircle2 size={18} /><span>Uploaded</span></div><div className={extracting ? "is-current" : ""}><RefreshCw size={18} /><span>{failed ? "Extraction failed" : extracting ? "Extracting fields" : "Queued for extraction"}</span></div><div><FileCheck2 size={18} /><span>Ready for review</span></div></div>
-          <div className="document-processing-footer"><span>{failed ? "Review the error and retry when ready." : "You can leave this page and return to check its progress."}</span><button className="btn primary" disabled={busy || pending} onClick={() => run(() => retryDocumentProcessing(user, documentId), "Extraction retry queued.")}><RefreshCw size={16} /> {failed ? "Retry extraction" : extracting ? "Extraction in progress" : "Waiting for a worker"}</button></div>
+          <div className="document-processing-steps"><div className="is-complete"><CheckCircle2 size={18} /><span>Uploaded</span></div><div className={extracting ? "is-current" : ""}><RefreshCw size={18} /><span>{failed ? "Could not read" : extracting ? "Reading details" : "Waiting to be read"}</span></div><div><FileCheck2 size={18} /><span>Ready for review</span></div></div>
+          <div className="document-processing-footer"><span>{failed ? "Try again, or upload a clearer copy." : "You can leave this page and come back later."}</span><button className="btn primary" disabled={busy || pending} onClick={() => run(() => retryDocumentProcessing(user, documentId), "The document will be read again.")}><RefreshCw size={16} /> {failed ? "Read again" : extracting ? "Reading…" : "Waiting to be read"}</button></div>
         </section>
       ) : (
         <>
           <div className="review-toolbar">
             <button className={panel === "review" ? "active" : ""} onClick={() => setPanel("review")}>Review</button>
-            <button className={panel === "validation" ? "active" : ""} onClick={() => setPanel("validation")}>Validation</button>
-            <button className={panel === "record" ? "active" : ""} onClick={() => setPanel("record")}>Standardised Record</button>
+            <button className={panel === "validation" ? "active" : ""} onClick={() => setPanel("validation")}>Checks</button>
+            <button className={panel === "record" ? "active" : ""} onClick={() => setPanel("record")}>Saved record</button>
             <button className={panel === "activity" ? "active" : ""} onClick={() => setPanel("activity")}>Activity</button>
           </div>
 
@@ -411,7 +408,7 @@ export function DocumentReview({
                     <li className="is-warning"><b>{attentionFieldCount}</b><span>{attentionFieldCount === 1 ? "field needs" : "fields need"} your decision</span></li>
                     <li className="is-info"><b>{sourceBackedFieldCount}</b><span>have source evidence or a human correction</span></li>
                     <li className="is-danger"><b>{missingFieldCount}</b><span>have no value selected</span></li>
-                    <li className="is-neutral"><b>{modelSuggestions}</b><span>{modelSuggestions === 1 ? "field has" : "fields have"} a Qwen suggestion; none are applied automatically</span></li>
+                    <li className="is-neutral"><b>{modelSuggestions}</b><span>{modelSuggestions === 1 ? "field has" : "fields have"} a suggested value; none are applied automatically</span></li>
                     {data.validationReport && <li className="is-validation"><b>Validation</b><span>{summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked</span></li>}
                   </ul>
                 </div>}
@@ -420,8 +417,8 @@ export function DocumentReview({
                   <div className="shoebox-fields">{fieldsIn("source_backed").map(renderField)}</div></details>}
                 {fieldsIn("not_printed").length > 0 && <details open={data.validationReport?.validationStatus !== "PASS" || undefined} className="review-field-group"><summary><span>No value selected</span><b>{fieldsIn("not_printed").length}</b></summary>
                   <div className="shoebox-fields">{fieldsIn("not_printed").map(renderField)}</div></details>}
-                {!!extraction.warnings?.length && <div aria-label="Extraction warnings"><strong>Extraction warnings</strong>
-                  <p>Source uncertainty is separate from accounting validation.</p>
+                {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
+                  <p>Notes about how the document was read. They are separate from the accounting checks.</p>
                   {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
                 </div>}
                 {extraction.lineItems.length > 0 && (
@@ -504,32 +501,34 @@ export function DocumentReview({
           )}
 
           {panel === "validation" && (
-            <Panel title="Validation centre" subtitle="Confirm every extracted value before this document moves to standardisation.">
+            <Panel title="Checks" subtitle="What to fix before this document can be approved.">
               {data.validationReport && <div className="validation-overview">
-                <div className={`validation-score ${summary.failed ? "has-fail" : ""}`}><Badge>{data.validationReport.validationStatus}</Badge><strong>{summary.blocking}</strong><span>blocking findings</span></div>
-                <div className="validation-overview-copy"><strong>Review required before standardisation</strong><p>Confirm every extracted value. Human approval is still required; this is not an extraction accuracy score.</p></div>
+                <div className={`validation-score ${summary.failed ? "has-fail" : ""}`}><StatusBadge status={data.validationReport.validationStatus} /><strong>{summary.blocking}</strong><span>must be fixed</span></div>
+                <div className="validation-overview-copy"><strong>A person approves every document</strong><p>Compare each value with the document. Passing checks does not approve anything by itself.</p></div>
                 <div className="validation-stat is-pass"><strong>{summary.passed}</strong><span>Passed</span></div>
                 <div className="validation-stat is-fail"><strong>{summary.failed}</strong><span>Failed</span></div>
                 <div className="validation-stat is-pending"><strong>{summary.notChecked}</strong><span>Not checked</span></div>
                 <div className="validation-stat"><strong>{summary.notApplicable}</strong><span>Not applicable</span></div>
               </div>}
               {data.validationReport?.transactionAnomaly && <TransactionAnomalyVisual result={data.validationReport.transactionAnomaly} />}
-              <div className="validation-results-head" ref={validationHeadingRef} tabIndex={-1}><div><strong>Rule results</strong><span>{validation.length} backend findings at the current revision</span></div><Badge>{data.doc.status}</Badge></div>
+              <div className="validation-results-head" ref={validationHeadingRef} tabIndex={-1}><div><strong>All checks</strong><span>{validation.length} checks on this version</span></div><StatusBadge status={data.doc.status} /></div>
               <DataTable
                 rows={[...validation].sort((a, b) => validationRank(a) - validationRank(b))}
                 rowKey={(v) => JSON.stringify([v.rule, v.field ?? null, validation.indexOf(v)])}
                 columns={[
-                  { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{v.rule}</strong></div> },
-                  { label: "Result", render: (v) => <><Badge>{validationState(v)}</Badge>{v.preventsApproval && <small> Blocks standardisation</small>}</> },
-                  { label: "Field", render: (v) => v.field ?? "Not provided" },
-                  { label: "Severity", render: (v) => v.severity ?? "Not provided" },
-                  { label: "What to do", render: (v) => <div>{v.causeLabel && <small>{v.causeLabel}</small>} <span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span>
+                  { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{ruleSentence(v.rule, v.field)}</strong></div> },
+                  { label: "Result", render: (v) => <><StatusBadge status={validationState(v)} />{v.preventsApproval && <small> Must be fixed before approval</small>}</> },
+                  { label: "Field", render: (v) => v.field ? fieldLabel(kind, v.field, extraction.fields[v.field]?.label) : "Whole document" },
+                  { label: "Priority", render: (v) => v.severity ? v.severity[0].toUpperCase() + v.severity.slice(1).toLowerCase() : "Normal" },
+                  { label: "What to do", render: (v) => <div><span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span>
+                    <details className="validation-details"><summary>Details</summary><small>Rule {ruleCode(v.rule)}{v.causeLabel ? ` · ${v.causeLabel}` : ""}</small></details>
                     {v.rule === "EX-008" && (v.field === "customer" || receivable) && !readonly && user.role === "LOCAL_ADMIN" && extraction.fields.customer?.value && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createCustomer(extraction.fields.customer!.value!)); await revalidateDocument(user, documentId); }, "Customer added and document revalidated.")}>Add {extraction.fields.customer.value} as a customer</button></p>}
                     {reviewableFinding(v) && !readonly && canRevalidate && extraction.contentRevision && <ValidationReviewForm rule={v.rule} busy={busy} onSubmit={note => run(() => acceptValidationReview(user, documentId, v.rule, note, extraction.contentRevision!), "Review recorded and document revalidated.")} />}
                     {v.rule === "EX-008" && v.field !== "customer" && !receivable && !readonly && user.role === "LOCAL_ADMIN" && newSupplier && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createSupplier(newSupplier)); await revalidateDocument(user, documentId); }, "Supplier added and document revalidated.")}>Add {newSupplier} as a supplier</button></p>}
                     {v.rule === "EX-008" && !readonly && user.role !== "LOCAL_ADMIN" && <p className="validation-hint">Only a local admin can add this name to the {v.field === "customer" || receivable ? "customer" : "supplier"} list. Ask them to add it from this document; it is then revalidated. Approval also needs a local admin.</p>}
                     {v.duplicate_of && <p><Link href={`${base}/documents/${encodeURIComponent(v.duplicate_of)}`}>Related document: {v.duplicate_of}</Link></p>}
-                    {v.vendor_candidate && <p>Vendor suggestion: {v.vendor_candidate.vendor_name ?? "Not provided"}<br />Similarity: {v.vendor_candidate.similarity ?? "Not provided"} (name matching, not extraction confidence)<br />Method: {v.vendor_candidate.score_method ?? "Not provided"}</p>}
+                    {v.vendor_candidate && <p>Did you mean: {v.vendor_candidate.vendor_name ?? "Not provided"}?</p>}
+                    {v.vendor_candidate && <details className="validation-details"><summary>Details</summary><small>Name similarity {v.vendor_candidate.similarity ?? "not provided"} (name matching, not extraction confidence) · method {v.vendor_candidate.score_method ?? "not provided"}</small></details>}
                   </div> },
                 ]}
               />
@@ -538,32 +537,32 @@ export function DocumentReview({
                   <button
                     disabled={busy || unsaved.length > 0}
                     className="btn"
-                    onClick={() => run(() => revalidateDocument(user, documentId), "Document revalidated.")}
+                    onClick={() => run(() => revalidateDocument(user, documentId), "Checks run again.")}
                   >
-                    <RefreshCw size={15} /> Revalidate
+                    <RefreshCw size={15} /> Run checks again
                   </button>
                 )}
                 <button
                   disabled={busy || !canStandardise}
                   className="btn primary"
-                  onClick={() => run(async () => { await standardiseDocument(user, documentId); setPanel("record"); }, "Standardised accounting record created.")}
+                  onClick={() => run(async () => { await standardiseDocument(user, documentId); setPanel("record"); }, "Saved to records.")}
                 >
-                  <FileCheck2 size={16} /> Create standardised record
+                  <FileCheck2 size={16} /> Save to records
                 </button>
               </div>
             </Panel>
           )}
 
           {panel === "record" && (
-            record ? <RecordDetail record={record} /> : <Panel title="Standardised record" subtitle="The accounting record is created only after the extracted values pass validation and you confirm the document.">
+            record ? <RecordDetail record={record} /> : <Panel title="Saved record" subtitle="The record is saved only after the checks pass and you confirm the document.">
               <div className="panel-body record-empty-state">
                 <FileCheck2 size={28} aria-hidden="true" />
-                <strong>No standardised record yet</strong>
-                <p>Review and correct the extracted values, then revalidate the document. Once the blocking checks pass, create the standardised record here.</p>
-                <button type="button" className="btn primary" disabled={busy || !canStandardise} onClick={() => run(async () => { await standardiseDocument(user, documentId); setPanel("record"); }, "Standardised accounting record created.")}>
-                  <FileCheck2 size={16} /> Create standardised record
+                <strong>Not saved to records yet</strong>
+                <p>Correct any values that are wrong, then run the checks again. When nothing must be fixed, save it to records here.</p>
+                <button type="button" className="btn primary" disabled={busy || !canStandardise} onClick={() => run(async () => { await standardiseDocument(user, documentId); setPanel("record"); }, "Saved to records.")}>
+                  <FileCheck2 size={16} /> Save to records
                 </button>
-                {!canStandardise && <small>Complete the blocking validation findings before creating the record.</small>}
+                {!canStandardise && <small>Fix the problems on the Checks tab first.</small>}
               </div>
             </Panel>
           )}

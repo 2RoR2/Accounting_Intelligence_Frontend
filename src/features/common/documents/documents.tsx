@@ -21,7 +21,6 @@ import {
 import { getProcessingJob } from "@/lib/api/processing.service";
 import { ApiError } from "@/lib/api/client";
 import {
-  Badge,
   DataTable,
   ErrorState,
   Field,
@@ -31,7 +30,9 @@ import {
   Panel,
   SearchInput,
   formatDate,
+  StatusBadge,
 } from "@/components/common/ui";
+import { documentKindLabel, statusLabel } from "@/lib/glossary";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
 export function DocumentList({ user }: { user: User }) {
@@ -75,7 +76,7 @@ export function DocumentList({ user }: { user: User }) {
         title={
           user.role === "ACCOUNTANT" ? "My documents" : "Company documents"
         }
-        description="Follow every document from upload through standardisation."
+        description="Everything you have uploaded, from reading to approval."
         actions={
           <div className="new-document-menu">
             <Link className="btn primary new-document-main" href={`${base}/upload`}>
@@ -128,6 +129,7 @@ export function DocumentList({ user }: { user: User }) {
               "COMPLETED",
               "FAILED",
             ]}
+            format={statusLabel}
           />
           <input aria-label="Business" value={business} onChange={(e) => setBusiness(e.target.value)} placeholder="Supplier or customer" />
           <input aria-label="Amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Exact total" />
@@ -159,13 +161,9 @@ export function DocumentList({ user }: { user: User }) {
                 </Link>
               ),
             },
-            { label: "Type", render: (d) => d.type },
+            { label: "Type", render: (d) => documentKindLabel(d.type) },
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
-            {
-              label: "Processing",
-              render: (d) => (d.status === "FAILED" ? "—" : `${d.seconds} sec`),
-            },
-            { label: "Status", render: (d) => <Badge>{d.status}</Badge> },
+            { label: "Status", render: (d) => <StatusBadge status={d.status} /> },
             {
               label: "Action",
               render: (d) => (
