@@ -1,5 +1,5 @@
 import { EffortStudyPage } from "@/features/common/reports/effort-study";
-import { Dashboard } from "@/features/common/dashboard/dashboard";
+import { TodayPage } from "@/features/common/today/today-page";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
 import { ExceptionsPage } from "@/features/common/exceptions/exceptions";
@@ -41,9 +41,9 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     return <WorkspaceSectionPage user={user} section={id.slice(5)} />;
   }
   switch (page) {
-    // "Today" shows the existing dashboard until B3 rebuilds it; /workspace/dashboard redirects here.
+    // Today (plan v2 B3); /workspace/dashboard redirects here.
     case "today":
-    case "dashboard": return <Dashboard user={user} />;
+    case "dashboard": return <TodayPage user={user} />;
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;

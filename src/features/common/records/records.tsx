@@ -29,6 +29,7 @@ import {
   formatDate,
   StatusBadge,
 } from "@/components/common/ui";
+import { isDueWindow, recordFilterLabel } from "@/lib/today";
 
 export function RecordDetail({
   record,
@@ -92,15 +93,24 @@ export function RecordsPage({
   initialRecordId?: string;
 }) {
   const admin = user.role === "SUPER_ADMIN";
+  // Opened from a Today tile (?due= with ?category=, or ?posting=to-post): the backend applies the tile's rule.
+  const params = useSearchParams();
+  const requestedDue = params.get("due");
+  const todayFilter = {
+    category: params.get("category") ?? undefined,
+    due: isDueWindow(requestedDue) ? requestedDue : undefined,
+    posting: params.get("posting") === "to-post" ? "to-post" : undefined,
+  };
+  const todayLabel = admin ? null : recordFilterLabel(todayFilter.category ?? null, todayFilter.due ?? null, todayFilter.posting ?? null);
   const { data, error, loading, refresh } = useResource(
     async () => ({
       tenants: await getTenants(user),
       docs: await getDocuments(user),
       exceptions: await getExceptions(user),
-      records: admin ? [] : await getStandardisedRecords(user),
+      records: admin ? [] : await getStandardisedRecords(user, todayFilter),
       metadata: admin ? await getRecordMetadata(user, tenantId) : [],
     }),
-    `${user.id}:${tenantId}`,
+    `${user.id}:${tenantId}:${todayFilter.category}:${todayFilter.due}:${todayFilter.posting}`,
   );
   const [selectedTenant, setSelectedTenant] = useState(tenantId ?? "");
   const [search, setSearch] = useState("");
@@ -303,6 +313,12 @@ export function RecordsPage({
         </Panel>
       ) : (
         <Panel>
+          {todayLabel && (
+            <p className="today-filter-note" role="status">
+              Showing: <strong>{todayLabel}</strong> ({data.records.length}).{" "}
+              <Link href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/records`}>Show all approved records</Link>
+            </p>
+          )}
           <div className="filter-bar">
             <SearchInput
               value={search}
