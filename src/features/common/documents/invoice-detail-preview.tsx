@@ -1,6 +1,7 @@
 "use client";
 import { Badge } from "@/components/common/ui";
 import { decimalDisplay, documentReference, fieldLabel, sourceKind } from "@/lib/api/document-contract";
+import { statusLabel } from "@/lib/glossary";
 import type { Document, Extraction } from "@/types";
 export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extraction: Extraction }) {
   const kind = sourceKind(extraction, doc.type);
@@ -14,29 +15,31 @@ export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extr
   const amountKeys = ["subtotal", "tax", "discount", "total", "amount_due", "amount_paid", "allowances", "charges", "prepaid", "rounding"].filter(key => key in extraction.fields || kind === "INVOICE").concat(receiptKeys);
   const sources = [...(extraction.classification?.candidates ?? []), ...(extraction.classification?.unsupported_headings ?? [])];
   return <section className="invoice-review-page" aria-label={title}>
-    <div className="invoice-review-heading"><div><span className="invoice-status">{doc.status}</span><h2>{title}</h2>
+    <div className="invoice-review-heading"><div><span className="invoice-status">{statusLabel(doc.status)}</span><h2>{title}</h2>
+      {extraction.classification?.status && extraction.classification.status !== "classified" && <p role="status">The document type is not certain. Check it is the right type before approving.</p>}
+    </div><Badge>A person must approve</Badge></div>
+    {/* Engine output (classification codes, source references, page boxes) for whoever needs to trace a reading. */}
+    <details className="panel-body document-details-toggle"><summary>Details</summary>
       <div className="invoice-classification" aria-label="Document classification">
-        <div><span>Source classification</span><strong>{extraction.classification?.value ?? "Not provided"}</strong><small>{extraction.classification?.status ?? "Not provided"}</small></div>
-        <div><span>Classification reason</span><strong>{extraction.classification?.reason ?? "Not provided"}</strong></div>
+        <div><span>Detected type</span><strong>{extraction.classification?.value ?? "Not provided"}</strong><small>{extraction.classification?.status ?? "Not provided"}</small></div>
+        <div><span>Why this type</span><strong>{extraction.classification?.reason ?? "Not provided"}</strong></div>
         <div><span>Stored kind</span><strong>{doc.kind ?? doc.type}</strong></div>
         <div><span>Intake identifier</span><strong>{doc.code ?? doc.id}</strong></div>
         <div><span>Accounting category</span><strong>{doc.category ?? "Not provided"}</strong></div>
       </div>
-    </div><Badge>Human review required</Badge></div>
-    <details className="panel-body"><summary>Classification evidence</summary>
-      {!sources.length && <p>No supported source heading evidence available. Inspect the original document.</p>}
+      {!sources.length && <p>No heading on the document names its type. Check the original document.</p>}
       {sources.map((item, index) => <div key={index}><p>{item.evidence?.text ?? item.matched_title ?? "Not provided"}</p><small>{item.evidence?.source_ref}</small>
-        {item.evidence?.prov?.map((prov, i) => <p key={i}><a href={"/api/documents/" + encodeURIComponent(doc.id) + "/file" + (prov.page_no ? "#page=" + prov.page_no : "")} target="_blank" rel="noreferrer">Source page {prov.page_no ?? "not provided"}</a>{prov.bbox && <small> | Original Docling box: {JSON.stringify(prov.bbox)}</small>}</p>)}
+        {item.evidence?.prov?.map((prov, i) => <p key={i}><a href={"/api/documents/" + encodeURIComponent(doc.id) + "/file" + (prov.page_no ? "#page=" + prov.page_no : "")} target="_blank" rel="noreferrer">Source page {prov.page_no ?? "not provided"}</a>{prov.bbox && <small> | Position on page: {JSON.stringify(prov.bbox)}</small>}</p>)}
       </div>)}
     </details>
-    {kind === "UNKNOWN" ? <div className="panel-body"><p>No accounting fields were mapped. Inspect the original source and classification explanation. Standardisation is unavailable.</p></div> :
+    {kind === "UNKNOWN" ? <div className="panel-body"><p>No details could be read. Check the original document and its type under Details. It cannot be approved yet.</p></div> :
       <div className="invoice-review-grid">
-        <div className="invoice-detail-card"><h3>Extracted accounting information</h3><div className="invoice-detail-columns">
+        <div className="invoice-detail-card"><h3>Details read from the document</h3><div className="invoice-detail-columns">
           {keys.map(key => <div key={key}><strong>{fieldLabel(kind, key, extraction.fields[key]?.label)}</strong><span>{value(key) ?? "Not provided"}</span></div>)}
         </div></div>
-        <div className="invoice-detail-card"><h3>Source amounts</h3><div className="invoice-totals">
+        <div className="invoice-detail-card"><h3>Amounts</h3><div className="invoice-totals">
           {amountKeys.map(key => <span key={key}>{fieldLabel(kind, key, extraction.fields[key]?.label)}<b>{decimalDisplay(value(key), value("currency"))}</b></span>)}
-        </div><p>Validation and approval do not indicate payment or settlement.</p></div>
+        </div><p>Approving a document does not mean it has been paid.</p></div>
       </div>}
   </section>;
 }

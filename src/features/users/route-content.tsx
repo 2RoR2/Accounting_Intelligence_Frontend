@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 function RedirectTo({ href }: { href: string }) {
   const router = useRouter();
   useEffect(() => { router.replace(href); }, [href, router]);
-  return <p className="empty-state">This page has moved to <a href={href}>Summary</a>.</p>;
+  return <p className="empty-state">This page has moved to <a href={href}>Reports</a>.</p>;
 }
 
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
@@ -41,6 +41,8 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     return <WorkspaceSectionPage user={user} section={id.slice(5)} />;
   }
   switch (page) {
+    // "Today" shows the existing dashboard until B3 rebuilds it; /workspace/dashboard redirects here.
+    case "today":
     case "dashboard": return <Dashboard user={user} />;
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;

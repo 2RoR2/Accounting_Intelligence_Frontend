@@ -96,22 +96,29 @@ const FINAL_ROUTE: Record<string, string> = {
   MODEL_CANDIDATES_FOR_REVIEW: "Model suggestions waiting for review",
   ACCOUNTANT_CONFIRMATION: "Ready for accountant confirmation",
 };
-/** Plain statements of what actually ran. Absent facts are said to be unknown, never assumed. */
+/**
+ * Plain statements of what actually ran. Absent facts are said to be unknown, never assumed.
+ * Engine-neutral on purpose: the same trace shape comes from the lite engine and the legacy one,
+ * so no parser, OCR or model product name is printed here.
+ */
 export function processingSteps(trace?: ProcessingTrace | null) {
   if (!trace) return [];
-  const reading = trace.text_lines == null ? "Docling: line count not recorded"
-    : trace.ocr_lines ? `Docling with RapidOCR: ${trace.ocr_lines} of ${trace.text_lines} text lines came from OCR`
-      : `Docling: ${trace.text_lines} text lines from the PDF text layer, no OCR needed`;
-  const workflow = trace.runner === "langgraph" ? `LangGraph workflow: ${trace.stages?.length ?? 0} stages ran`
-    : trace.runner === "plain" ? `Plain router: ${trace.stages?.length ?? 0} stages ran${trace.runner_reason ? ` (${trace.runner_reason})` : ""}`
-      : "Workflow runner not recorded";
+  const lines = (count: number) => `${count} ${count === 1 ? "line" : "lines"}`;
+  const reading = trace.text_lines == null ? "Text reading: line count not recorded"
+    : trace.ocr_lines ? `Text reading: ${trace.ocr_lines} of ${lines(trace.text_lines)} read from the image (OCR)`
+      : `Text reading: ${lines(trace.text_lines)} from the PDF's own text, no OCR needed`;
+  const stageCount = trace.stages?.length ?? 0;
+  const stagesRan = `${stageCount} ${stageCount === 1 ? "step" : "steps"} ran`;
+  const workflow = trace.runner === "langgraph" ? `Checks: ${stagesRan}`
+    : trace.runner === "plain" ? `Checks: ${stagesRan}${trace.runner_reason ? ` (${trace.runner_reason})` : ""}`
+      : "Check steps not recorded";
   const asked = trace.qwen?.fields ?? [];
-  const model = asked.length ? `Qwen2.5-VL asked about ${asked.length} ${asked.length === 1 ? "field" : "fields"}`
-    : trace.qwen?.attempted ? "Qwen2.5-VL was called but returned nothing usable"
-      : trace.qwen?.status === "failed" ? "Qwen2.5-VL could not be used; the parser result stands" : "Qwen2.5-VL not called: no field qualified for recovery";
+  const model = asked.length ? `AI reader asked about ${asked.length} ${asked.length === 1 ? "field" : "fields"}`
+    : trace.qwen?.attempted ? "AI reader was called but returned nothing usable"
+      : trace.qwen?.status === "failed" ? "AI reader could not be used; the text reading stands" : "AI reader not called: no field needed a second reading";
   const steps = [reading, workflow, model];
   const image = trace.visual_input;
-  if (image?.width && image.height) steps.push(`Image sent to the model: page ${image.page ?? 1}, ${image.width} x ${image.height} px${image.prompt_tokens ? `, ${image.prompt_tokens} prompt tokens with the image` : ""}`);
+  if (image?.width && image.height) steps.push(`Image sent to the AI reader: page ${image.page ?? 1}, ${image.width} x ${image.height} px${image.prompt_tokens ? `, ${image.prompt_tokens} prompt tokens with the image` : ""}`);
   if (trace.retry) steps.push(trace.retry === "retry_used" ? "One targeted retry was used" : "One targeted retry ran; the first result was kept");
   if (trace.final_route) steps.push(`Route: ${FINAL_ROUTE[trace.final_route] ?? trace.final_route}`);
   return steps;

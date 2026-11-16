@@ -4,13 +4,15 @@ export const PUBLIC_ROUTES = new Set(["login", "welcome", "request-access", "act
 export const WORKSPACE_AREA: Record<Role, string> = { SUPER_ADMIN: "admin", LOCAL_ADMIN: "company", ACCOUNTANT: "workspace" };
 export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   admin: new Set(["dashboard", "approvals", "tenants", "users", "processing", "performance", "records", "audit", "settings", "profile"]),
+  // "dashboard" stays allowed for old links; its page redirects to "today" (B3 rebuilds Today).
   company: new Set([
+  "today", "system", "performance",
   "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
   "records", "users", "validation-overview", "validation-rules", "reports", "audit", "evaluation",
   "settings", "profile", "money-in", "money-out", "ledger"
 ]),
-  workspace: new Set(["dashboard", "evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
+  workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
 };
 const DETAIL_PAGES = new Set(["documents", "records", "tenants"]);
 export const isPublicRoute = (path: string[]) => path.length === 1 && PUBLIC_ROUTES.has(path[0]);

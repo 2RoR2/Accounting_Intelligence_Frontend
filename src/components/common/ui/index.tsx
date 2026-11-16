@@ -16,6 +16,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { statusLabel, statusTone } from "@/lib/glossary";
 export function Badge({ children }: { children: ReactNode }) {
   const value = String(children);
   const tone =
@@ -32,6 +33,15 @@ export function Badge({ children }: { children: ReactNode }) {
     <span className={`badge ${tone}`}>
       <span className="badge-dot" />
       {value.replaceAll("_", " ")}
+    </span>
+  );
+}
+/** A document, exception, job or bank-line status in accountant words; the colour follows the raw status. */
+export function StatusBadge({ status }: { status: string | null | undefined }) {
+  return (
+    <span className={`badge ${statusTone(status)}`} title={status ? `Status code: ${status}` : undefined}>
+      <span className="badge-dot" />
+      {statusLabel(status)}
     </span>
   );
 }
@@ -252,11 +262,14 @@ export function Filter({
   value,
   onChange,
   options,
+  format = (option) => option.replaceAll("_", " "),
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  /** Display text for each option; the option value itself is unchanged. */
+  format?: (option: string) => string;
 }) {
   return (
     <select
@@ -267,7 +280,7 @@ export function Filter({
       <option value="">All {label.toLowerCase()}</option>
       {options.map((o) => (
         <option key={o} value={o}>
-          {o.replaceAll("_", " ")}
+          {format(o)}
         </option>
       ))}
     </select>

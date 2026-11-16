@@ -95,10 +95,12 @@ test("field groups order review by what needs a decision",()=>{
 });
 test("processing steps state what actually ran",()=>{
   const ocr=processingSteps({text_lines:54,ocr_lines:54,runner:"langgraph",stages:["a","b"],final_route:"ACCOUNTANT_ACTION_REQUIRED",qwen:{attempted:true,fields:[{field:"transaction_time"}]}});
-  assert.deepEqual(ocr,["Docling with RapidOCR: 54 of 54 text lines came from OCR","LangGraph workflow: 2 stages ran","Qwen2.5-VL asked about 1 field","Route: Accountant action required"]);
+  assert.deepEqual(ocr,["Text reading: 54 of 54 lines read from the image (OCR)","Checks: 2 steps ran","AI reader asked about 1 field","Route: Accountant action required"]);
   const pdf=processingSteps({text_lines:35,ocr_lines:0,runner:"plain",runner_reason:"LANGGRAPH_NOT_INSTALLED:langgraph",stages:["a"],qwen:{attempted:false}});
-  assert.equal(pdf[0],"Docling: 35 text lines from the PDF text layer, no OCR needed");
-  assert.match(pdf[1],/Plain router.*LANGGRAPH_NOT_INSTALLED/);
+  assert.equal(pdf[0],"Text reading: 35 lines from the PDF's own text, no OCR needed");
+  assert.match(pdf[1],/Checks: 1 step ran.*LANGGRAPH_NOT_INSTALLED/);
+  // Engine-neutral: the same words fit the lite engine and the legacy one.
+  for (const step of [...ocr, ...pdf]) assert.doesNotMatch(step, /Docling|RapidOCR|Qwen|LangGraph/);
   assert.match(pdf[2],/not called/);
   assert.deepEqual(processingSteps(null),[]);
   assert.match(processingSteps({})[0],/not recorded/);
@@ -152,7 +154,7 @@ test("model identity shows the model, a short digest, the page and time, and no 
 test("the processing panel states the image actually sent to the model", () => {
   const steps = processingSteps({ text_lines: 42, ocr_lines: 42, runner: "langgraph", stages: ["a"], qwen: { attempted: true, fields: [{ field: "merchant" }] },
     visual_input: { kind: "full_page", page: 1, width: 920, height: 1300, prompt_tokens: 1984 } });
-  assert.ok(steps.some(step => step === "Image sent to the model: page 1, 920 x 1300 px, 1984 prompt tokens with the image"));
+  assert.ok(steps.some(step => step === "Image sent to the AI reader: page 1, 920 x 1300 px, 1984 prompt tokens with the image"));
 });
 
 test("no image line is shown when the model was not called", () => {
