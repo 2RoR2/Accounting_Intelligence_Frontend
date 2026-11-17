@@ -11,13 +11,15 @@ export async function standardiseDocument(user: User, documentId: string) {
   return record.id;
 }
 /** Optional Today filters: unpaid items due in a window (needs `category`), or approved records not yet posted. */
-export type RecordListFilter = { category?: string; due?: string; posting?: string };
+export type RecordListFilter = { category?: string; due?: string; posting?: string; asOf?: string };
 export async function getStandardisedRecords(user: User, filter: RecordListFilter = {}) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   const params = new URLSearchParams();
   if (filter.due) {
     params.set("due", filter.due);
     if (filter.category) params.set("category", filter.category);
+    // The date the Today tile counted on, so the list is due/overdue as of that same day.
+    if (filter.asOf) params.set("asOf", filter.asOf);
   }
   if (filter.posting) params.set("posting", filter.posting);
   const query = params.toString();

@@ -16,15 +16,15 @@ function summary(overrides: Partial<HomeSummary["tiles"]> = {}, monthEnd?: HomeS
       toReview: { available: true, scope: "yours", count: 4, link: { page: "documents", query: "lane=to-review" } },
       readyToApprove: { available: true, scope: "yours", count: 2, link: { page: "documents", query: "lane=ready" } },
       needsFixing: { available: true, scope: "yours", count: 2, topReasons: [{ code: "EX-008", documents: 2 }, { code: "TOTAL", documents: 1 }],
-        link: { page: "exceptions", query: "show=open" } },
+        link: { page: "documents", query: "lane=needs-fixing" } },
       waitingApproval: { available: true, scope: "yours", count: 1, link: { page: "documents", query: "lane=waiting-approval" } },
       bankToMatch: { available: true, scope: "company", count: 2, moneyIn: 1, moneyOut: 1, link: { page: "reconciliation", query: "status=unmatched" } },
       billsDueSoon: { available: true, scope: "company", count: 2, amount: "300.00", currency: "MYR", otherCurrencyCount: 1, days: 7, noDueDate: 1,
-        link: { page: "records", query: "category=ACCOUNTS_PAYABLE&due=next-7-days" } },
+        link: { page: "records", query: "category=ACCOUNTS_PAYABLE&due=next-7-days&asOf=2026-11-16" } },
       billsOverdue: { available: true, scope: "company", count: 1, amount: "800.25", currency: "MYR", otherCurrencyCount: 0, noDueDate: 0,
-        link: { page: "records", query: "category=ACCOUNTS_PAYABLE&due=overdue" } },
+        link: { page: "records", query: "category=ACCOUNTS_PAYABLE&due=overdue&asOf=2026-11-16" } },
       invoicesOverdue: { available: true, scope: "company", count: 0, amount: "0.00", currency: "MYR", otherCurrencyCount: 0, noDueDate: 0,
-        link: { page: "records", query: "category=ACCOUNTS_RECEIVABLE&due=overdue" } },
+        link: { page: "records", query: "category=ACCOUNTS_RECEIVABLE&due=overdue&asOf=2026-11-16" } },
       journalsToPost: { available: true, scope: "company", count: 8, draftJournals: 1, link: { page: "records", query: "posting=to-post" } },
       ...overrides,
     },
@@ -47,7 +47,8 @@ test("tiles follow the daily routine and open the list they count, under the rol
     "billsDueSoon", "billsOverdue", "invoicesOverdue", "journalsToPost"]);
   const byId = Object.fromEntries(tiles.map((t) => [t.id, t]));
   assert.equal(byId.toReview.href, "/workspace/documents?lane=to-review");
-  assert.equal(byId.billsDueSoon.href, "/workspace/records?category=ACCOUNTS_PAYABLE&due=next-7-days");
+  assert.equal(byId.billsDueSoon.href, "/workspace/records?category=ACCOUNTS_PAYABLE&due=next-7-days&asOf=2026-11-16");
+  assert.equal(byId.needsFixing.href, "/workspace/documents?lane=needs-fixing");
   assert.equal(todayTiles(summary(), "LOCAL_ADMIN")[0].href, "/company/documents?lane=to-review");
   assert.equal(linkHref("LOCAL_ADMIN", { page: "approvals", query: null }), "/company/approvals");
   assert.equal(linkHref("ACCOUNTANT", null), null);

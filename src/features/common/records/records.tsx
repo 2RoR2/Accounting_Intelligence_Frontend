@@ -96,10 +96,13 @@ export function RecordsPage({
   // Opened from a Today tile (?due= with ?category=, or ?posting=to-post): the backend applies the tile's rule.
   const params = useSearchParams();
   const requestedDue = params.get("due");
+  const requestedAsOf = params.get("asOf");
   const todayFilter = {
     category: params.get("category") ?? undefined,
     due: isDueWindow(requestedDue) ? requestedDue : undefined,
     posting: params.get("posting") === "to-post" ? "to-post" : undefined,
+    // The Today tile's date (backend sends asOf with the due links); only a plain YYYY-MM-DD is passed on.
+    asOf: requestedAsOf && /^\d{4}-\d{2}-\d{2}$/.test(requestedAsOf) ? requestedAsOf : undefined,
   };
   const todayLabel = admin ? null : recordFilterLabel(todayFilter.category ?? null, todayFilter.due ?? null, todayFilter.posting ?? null);
   const { data, error, loading, refresh } = useResource(
@@ -110,7 +113,7 @@ export function RecordsPage({
       records: admin ? [] : await getStandardisedRecords(user, todayFilter),
       metadata: admin ? await getRecordMetadata(user, tenantId) : [],
     }),
-    `${user.id}:${tenantId}:${todayFilter.category}:${todayFilter.due}:${todayFilter.posting}`,
+    `${user.id}:${tenantId}:${todayFilter.category}:${todayFilter.due}:${todayFilter.posting}:${todayFilter.asOf}`,
   );
   const [selectedTenant, setSelectedTenant] = useState(tenantId ?? "");
   const [search, setSearch] = useState("");
