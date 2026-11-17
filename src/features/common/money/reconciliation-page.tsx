@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, Landmark, Sparkles, UploadCloud } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { bankLineToMatch } from "@/lib/today";
 import { Badge, Modal, PageHeader, Panel, SearchInput } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -147,7 +148,7 @@ export function ReconciliationPage({ user }: { user: User }) {
   const visibleRows = useMemo(() => rows.filter((row) => {
     const text = `${row.description} ${row.reference ?? ""} ${row.postedDate}`.toLowerCase();
     return (!transactionSearch || text.includes(transactionSearch.toLowerCase())) && (transactionView === "all" || row.direction === transactionView) && (!accountFilter || row.bankAccountRef === accountFilter) && (!periodFilter || (row.postedDate ? row.postedDate.startsWith(periodFilter) : false))
-      && (!unmatchedOnly || (row.status !== "matched" && row.status !== "ignored"));
+      && (!unmatchedOnly || bankLineToMatch(row));
   }), [rows, transactionSearch, transactionView, accountFilter, periodFilter, unmatchedOnly]);
   const totals = useMemo(() => visibleRows.reduce((result, row) => {
     const currency = row.currency ?? "MYR";
@@ -303,7 +304,7 @@ export function ReconciliationPage({ user }: { user: User }) {
       {(periods ?? []).map((period) => <div key={period.id} className="reconciliation-card" style={{ marginTop:12 }}><div className="reconciliation-card-heading"><strong>{period.bankAccountRef} · {period.startsOn} to {period.endsOn}</strong><Badge>{period.status.toUpperCase()}</Badge></div><div className="reconciliation-card-grid"><div><span>Statement check</span><strong>{period.statementDifference} difference</strong></div><div><span>Adjusted balance check</span><strong>{period.unexplainedDifference} unexplained</strong></div><div><span>Unaccounted lines</span><strong>{period.unaccountedLines}</strong></div></div>{period.status === 'open' && <button className="btn primary" type="button" disabled={busy || period.statementDifference !== '0.00' || period.unexplainedDifference !== '0.00' || period.unaccountedLines !== 0} onClick={async () => { setBusy(true); try { await completeReconciliationPeriod(period.id); await refreshPeriods(); setNotice('Reconciliation completed.'); } catch (e) { setActionError(e instanceof Error ? e.message : 'Unable to complete reconciliation.'); } finally { setBusy(false); } }}>Complete reconciliation</button>}</div>)}
     </Panel>}
     {activeTab === "transactions" && <Panel title="Transactions" subtitle="Imported from bank statements. Review and reconcile each transaction.">
-      {unmatchedOnly && <p className="today-filter-note" role="status">Showing: <strong>bank lines not matched yet</strong>. <Link href={`${base}/reconciliation`}>Show all bank lines</Link></p>}
+      {unmatchedOnly && <p className="today-filter-note" role="status">Showing: <strong>bank lines not matched or classified yet</strong>. <Link href={`${base}/reconciliation`}>Show all bank lines</Link></p>}
       <div className="bank-transaction-toolbar"><SearchInput value={transactionSearch} onChange={setTransactionSearch} placeholder="Search transactions" /><div className="bank-transaction-filters">{([['all','All'],['money_in','Money In'],['money_out','Money Out']] as const).map(([value,label]) => <button key={value} className={transactionView === value ? "active" : ""} onClick={() => setTransactionView(value)}>{label}</button>)}</div><span className="bank-transaction-count">{visibleRows.length} transactions</span></div>
       <div className="bank-transaction-workspace"><div className="bank-transaction-list">{visibleRows.map((row) => <button className={`bank-transaction-row ${selectedRow?.id === row.id ? "selected" : ""}`} key={row.id} onClick={() => setSelectedRow(row)}><span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong><b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b><Badge>{row.status === "needs_review" ? "NEEDS REVIEW" : row.status === "matched" ? "MATCHED" : "UNRECONCILED"}</Badge></button>)}</div><aside className="bank-transaction-detail">{selectedRow ? <><div className="bank-detail-heading"><h3>{selectedRow.description || "Bank transaction"}</h3><Badge>{selectedRow.direction === "money_in" ? "MONEY IN" : "MONEY OUT"}</Badge></div><p>{selectedRow.postedDate} · {selectedRow.reference || "No reference"}</p><div className="bank-detail-amount"><span>Amount</span><strong>{money(selectedRow.amount, selectedRow.currency)}</strong></div><div className="bank-detail-actions"><button className="btn primary" onClick={() => setReviewRow(selectedRow)}>Open review</button><span>{selectedRow.status === "matched" ? "Matched" : "Awaiting transaction decision"}</span></div></> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside></div>
     </Panel>}

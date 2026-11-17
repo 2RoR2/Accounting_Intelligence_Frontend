@@ -72,6 +72,15 @@ export const DUE_WINDOWS = { "next-7-days": "due in the next 7 days", overdue: "
 export type DueWindow = keyof typeof DUE_WINDOWS;
 export const isDueWindow = (value: string | null | undefined): value is DueWindow => !!value && value in DUE_WINDOWS;
 
+/**
+ * A bank line still waiting for a person, the same rule as the backend's "Bank lines to match" tile: not matched,
+ * not ignored, and not classified to an account (a fee or interest; its latest coding decision is not "cleared").
+ */
+export function bankLineToMatch(row: { status: string; codingDecision?: string | null }) {
+  const classified = !!row.codingDecision && row.codingDecision !== "cleared";
+  return row.status !== "matched" && row.status !== "ignored" && !classified;
+}
+
 /** The sentence a list shows when it was opened from Today, e.g. "Unpaid supplier bills overdue". */
 export function recordFilterLabel(category: string | null, due: string | null, posting: string | null) {
   if (posting === "to-post") return "Approved records not posted yet";

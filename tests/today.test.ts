@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DOCUMENT_LANES, NOT_AVAILABLE, formatRm, linkHref, monthEndView, recordFilterLabel, tileView, todayTiles,
+  DOCUMENT_LANES, NOT_AVAILABLE, bankLineToMatch, formatRm, linkHref, monthEndView, recordFilterLabel, tileView, todayTiles,
   type HomeSummary,
 } from "../src/lib/today";
 import { ruleSentence, ruleTitle } from "../src/lib/glossary";
@@ -125,6 +125,17 @@ test("month-end checklist: progress, nothing yet, and not available with the rea
   assert.equal(calendar.title, "Month-end: February 2026");
   const missing = monthEndView(summary({}, { available: false, reason: "Not set up.", link: null }), "ACCOUNTANT");
   assert.deepEqual([missing.available, missing.details], [false, ["Not set up."]]);
+});
+
+test("the Reconcile list opened from Today hides matched, ignored and classified lines, like the tile", () => {
+  assert.equal(bankLineToMatch({ status: "imported" }), true);
+  assert.equal(bankLineToMatch({ status: "proposed", codingDecision: null }), true);
+  assert.equal(bankLineToMatch({ status: "needs_review" }), true);
+  assert.equal(bankLineToMatch({ status: "matched" }), false);
+  assert.equal(bankLineToMatch({ status: "ignored" }), false);
+  assert.equal(bankLineToMatch({ status: "imported", codingDecision: "manual" }), false, "a classified bank fee is explained");
+  assert.equal(bankLineToMatch({ status: "imported", codingDecision: "accepted" }), false);
+  assert.equal(bankLineToMatch({ status: "imported", codingDecision: "cleared" }), true, "a cleared classification is to match again");
 });
 
 test("lists opened from Today know the backend's list names", () => {
