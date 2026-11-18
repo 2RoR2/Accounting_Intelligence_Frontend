@@ -55,8 +55,13 @@ export interface InboxItem<F extends InboxFile = InboxFile> {
   /** One plain sentence for this file's state when the label alone is not enough. */
   note?: string;
   existing?: { id: string; code?: string; name?: string };
-  /** What "Try again" does: upload the file again, or ask the server to read the stored file again. */
-  retry?: "upload" | "reading";
+  /**
+   * What "Try again" does: upload the file again, ask the server to read the stored file again,
+   * or (status unknown after repeated failed checks) check the stored file's status again.
+   */
+  retry?: "upload" | "reading" | "refresh";
+  /** A "read again" request is in flight; the row is not polled until the server confirms it. */
+  retrying?: boolean;
 }
 
 export const FINAL_STATES: ReadonlySet<InboxState> = new Set(["ready", "needs_fixing", "duplicate", "failed"]);
@@ -119,6 +124,23 @@ export function stateForUploadError(error: unknown): Pick<InboxItem, "state" | "
   return { state: "failed", note: e.message || "The upload did not finish.", retry: "upload" };
 }
 
+/**
+ * Who a queue belongs to. The page keeps one queue per person and company, so re-fetching the signed-in
+ * user as a new object (same id and company) keeps the visible queue and its running uploads.
+ */
+export function queueOwnerKey(user: { id: string; tenantId?: string | null }) {
+  return `${user.tenantId ?? ""}:${user.id}`;
+}
+
+/** Why a file's progress could not be checked. The file itself may still be fine on the server. */
+export function statusLostNote(error: unknown) {
+  const e = (error ?? {}) as ErrorLike;
+  if (e.status === 401) return "Your session ended. Sign in again, then refresh this file's status.";
+  if (e.status === 403) return "Your account cannot see this document any more.";
+  if (e.status === 404) return "This document can no longer be found.";
+  return `Its progress could not be checked${e.message ? ` (${e.message})` : ""}. It may still be reading: refresh to check again.`;
+}
+
 const kindOf = (value?: string) => {
   const kind = String(value ?? "").toUpperCase();
   return kind && kind !== "AUTO" ? kind : undefined;
@@ -141,15 +163,19 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
   private sequence = 0;
   private round = 0;
   private polledAt = new Map<string, number>();
+  private pollFailures = new Map<string, number>();
   private kind: InboxKind = "AUTO";
   /** True when the server cannot detect the type: waiting files need one chosen type. */
   needsType = false;
   readonly concurrency: number;
   readonly maxPolls: number;
+  /** Consecutive failed status checks (about 20 s at the page's 2.5 s interval) before a row says "Status unknown". */
+  readonly maxPollFailures: number;
 
-  constructor(private readonly deps: InboxDeps<F>, options: { concurrency?: number; maxPolls?: number } = {}) {
+  constructor(private readonly deps: InboxDeps<F>, options: { concurrency?: number; maxPolls?: number; maxPollFailures?: number } = {}) {
     this.concurrency = options.concurrency ?? 3;
     this.maxPolls = options.maxPolls ?? 6;
+    this.maxPollFailures = options.maxPollFailures ?? 8;
   }
 
   getItems(): readonly InboxItem<F>[] { return this.items; }
@@ -211,18 +237,28 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
 
   async retry(key: string) {
     const item = this.items.find((entry) => entry.key === key);
-    if (!item || item.state !== "failed" || !item.retry) return;
+    if (!item || item.state !== "failed" || !item.retry || item.retrying) return;
     if (item.retry === "upload") {
       this.patch(key, { state: "waiting", note: undefined, retry: undefined });
       this.pump();
       return;
     }
     if (!item.documentId) return;
-    this.patch(key, { state: "queued", note: undefined, retry: undefined });
+    if (item.retry === "refresh") {
+      // Status unknown: ask the server again; the document id was kept.
+      this.pollFailures.delete(key);
+      this.patch(key, { state: "queued", note: undefined, retry: undefined });
+      return;
+    }
+    // Read again: the row stays failed (and is not polled) until the server confirms the retry,
+    // so a poll cannot read the old FAILED status and end the row while the retry is in flight.
+    this.patch(key, { retrying: true, note: "Sending it to be read again…" });
     try {
       await this.deps.retryReading(item.documentId);
+      this.pollFailures.delete(key);
+      this.patch(key, { state: "queued", note: undefined, retry: undefined, retrying: false });
     } catch (error) {
-      this.patch(key, { state: "failed", note: (error as ErrorLike)?.message || "The file could not be sent for reading again.", retry: "reading" });
+      this.patch(key, { retrying: false, note: (error as ErrorLike)?.message || "The file could not be sent for reading again.", retry: "reading" });
     }
   }
 
@@ -274,14 +310,24 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
       await Promise.all(open.map(async (item) => {
         try {
           const document = await this.deps.getDocument(item.documentId!);
+          this.pollFailures.delete(item.key);
           const current = this.items.find((entry) => entry.key === item.key);
-          if (!current || isFinal(current.state)) return;
+          if (!current || isFinal(current.state) || current.retrying) return;
           // A refreshed document that is still AUTO must never show its stored placeholder kind.
           const pending = typePending({ code: document.code ?? current.code, kind: document.kind ?? document.type, kindDetected: document.kindDetected });
           this.patch(item.key, { ...stateForDocument(document.status, document.code ?? current.code, document.kindDetected),
             code: document.code ?? current.code, kind: pending ? undefined : kindOf(document.kind ?? document.type) ?? current.kind, kindDetected: !pending });
-        } catch {
-          // A missed poll is not a result: the next round asks again.
+        } catch (error) {
+          // A missed poll is not a result: the next round asks again, up to maxPollFailures in a row.
+          // A signed-out session or a missing document will not recover by itself, so it stops at once.
+          const e = (error ?? {}) as ErrorLike;
+          const permanent = e.status === 401 || e.status === 403 || e.status === 404;
+          const failures = (this.pollFailures.get(item.key) ?? 0) + 1;
+          this.pollFailures.set(item.key, failures);
+          if (!permanent && failures < this.maxPollFailures) return;
+          const current = this.items.find((entry) => entry.key === item.key);
+          if (!current || isFinal(current.state) || current.retrying) return;
+          this.patch(item.key, { state: "failed", retry: "refresh", note: statusLostNote(e) });
         }
       }));
     } finally {

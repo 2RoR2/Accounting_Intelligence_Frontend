@@ -4,6 +4,8 @@ import {
   InboxQueue,
   rejectReason,
   stateForDocument,
+  queueOwnerKey,
+  statusLostNote,
   summarise,
   typePending,
   type DocumentSnapshot,
@@ -12,6 +14,7 @@ import {
   type InboxKind,
   type UploadReceipt,
 } from "../src/features/common/documents/inbox/inbox-queue";
+import { filesFromDrop } from "../src/features/common/documents/inbox/collect-files";
 
 type Call = { file: InboxFile; kind: InboxKind; category: InboxCategory; resolve(value: UploadReceipt): void; reject(error: unknown): void };
 
@@ -205,6 +208,98 @@ test("a refreshed document that is still AUTO never shows its stored placeholder
   assert.equal(stateForDocument("EXTRACTED", "INVOICE_1", false).state, "needs_fixing");
   assert.equal(typePending({ kind: "auto" }), true);
   assert.equal(typePending({ kind: "INVOICE", code: "INVOICE_1", kindDetected: true }), false);
+});
+
+test("P2-1: the queue belongs to the person and company, not to the user object", () => {
+  const signedIn = { id: "u-1", tenantId: "t-1", name: "Aina", theme: "light" };
+  const refreshed = { ...signedIn, theme: "dark" }; // re-fetched after a storage event: new object, same person
+  assert.notEqual(signedIn, refreshed);
+  assert.equal(queueOwnerKey(refreshed), queueOwnerKey(signedIn));
+  assert.notEqual(queueOwnerKey({ id: "u-1", tenantId: "t-2" }), queueOwnerKey(signedIn));
+  assert.notEqual(queueOwnerKey({ id: "u-2", tenantId: "t-1" }), queueOwnerKey(signedIn));
+});
+
+test("P2-2: a poll during a pending read-again retry cannot end the row as failed", async () => {
+  let confirm!: () => void;
+  const statuses = new Map<string, DocumentSnapshot>();
+  const calls: Call[] = [];
+  const queue = new InboxQueue<InboxFile>({
+    upload: (file, kind, category) => new Promise((resolve, reject) => calls.push({ file, kind, category, resolve, reject })),
+    getDocument: async (id) => statuses.get(id)!,
+    retryReading: () => new Promise<void>((resolve) => { confirm = resolve; }),
+  });
+  queue.add([file("blurry.jpg")]);
+  calls[0].resolve(receipt("r", { dispatchAccepted: true }));
+  await settle();
+  statuses.set("r", { id: "r", status: "FAILED", code: "DOC_R" });
+  await queue.tick();
+  const key = queue.getItems()[0].key;
+  const retried = queue.retry(key);
+  // The server has not processed the retry yet and still says FAILED.
+  await queue.tick();
+  assert.deepEqual([queue.getItems()[0].state, queue.getItems()[0].retrying], ["failed", true]);
+  // Confirmed: the server now holds a new job.
+  statuses.set("r", { id: "r", status: "QUEUED", code: "DOC_R" });
+  confirm();
+  await retried;
+  assert.deepEqual([queue.getItems()[0].state, queue.getItems()[0].retrying], ["queued", false]);
+  statuses.set("r", { id: "r", status: "EXTRACTED", code: "RECEIPT_100001", kind: "RECEIPT", kindDetected: true });
+  await queue.tick();
+  assert.equal(queue.getItems()[0].state, "ready", "a successful retry ends as ready, not failed");
+});
+
+test("P2-3: one unreadable file in a dropped folder is counted, the rest still go through", async () => {
+  const fileEntry = (name: string, readable = true) => ({
+    name, isFile: true, isDirectory: false,
+    file: (ok: (f: File) => void, fail: (e: Error) => void) => (readable ? ok(new File(["x"], name)) : fail(new Error("NotReadableError"))),
+  });
+  const folder = (name: string, children: unknown[]) => ({
+    name, isFile: false, isDirectory: true,
+    createReader: () => { let done = false; return { readEntries: (ok: (e: unknown[]) => void) => { ok(done ? [] : children); done = true; } }; },
+  });
+  const tree = folder("August", [fileEntry("a.pdf"), fileEntry("locked.pdf", false), folder("photos", [fileEntry("b.jpg"), fileEntry("notes.txt")]), fileEntry("c.png")]);
+  const drop = { items: [{ kind: "file", webkitGetAsEntry: () => tree, getAsFile: () => null }], files: [] } as unknown as DataTransfer;
+  const collected = await filesFromDrop(drop);
+  assert.deepEqual(collected.files.map((f) => f.name).sort(), ["a.pdf", "b.jpg", "c.png"]);
+  assert.equal(collected.skipped, 2, "locked.pdf (unreadable) and notes.txt (not a document)");
+});
+
+test("P2-4: repeated failed status checks end in Status unknown, keep the document, and can be refreshed", async () => {
+  let online = false;
+  let status: DocumentSnapshot = { id: "d", status: "PROCESSING", code: "DOC_D" };
+  const calls: Call[] = [];
+  const queue = new InboxQueue<InboxFile>({
+    upload: (file, kind, category) => new Promise((resolve, reject) => calls.push({ file, kind, category, resolve, reject })),
+    getDocument: async () => { if (!online) throw new Error("Unable to reach the backend API."); return status; },
+    retryReading: async () => ({}),
+  }, { maxPollFailures: 3 });
+  queue.add([file("scan.pdf")]);
+  calls[0].resolve(receipt("d", { dispatchAccepted: true }));
+  await settle();
+  await queue.tick();
+  await queue.tick();
+  assert.equal(queue.getItems()[0].state, "queued", "short outages are retried");
+  await queue.tick();
+  const [lost] = queue.getItems();
+  assert.deepEqual([lost.state, lost.retry, lost.documentId], ["failed", "refresh", "d"]);
+  assert.match(lost.note ?? "", /could not be checked.*Unable to reach the backend API.*refresh/);
+  online = true;
+  await queue.retry(lost.key);
+  assert.equal(queue.getItems()[0].state, "queued");
+  status = { id: "d", status: "EXTRACTED", code: "INVOICE_100001", kind: "INVOICE", kindDetected: true };
+  await queue.tick();
+  assert.equal(queue.getItems()[0].state, "ready");
+  // A signed-out session does not recover by retrying: it stops at the first failure.
+  const signedOut = new InboxQueue<InboxFile>({
+    upload: async () => receipt("s", { dispatchAccepted: true }),
+    getDocument: async () => { throw Object.assign(new Error("Your session expired"), { status: 401 }); },
+    retryReading: async () => ({}),
+  });
+  signedOut.add([file("x.pdf")]);
+  await settle();
+  await signedOut.tick();
+  assert.deepEqual([signedOut.getItems()[0].state, signedOut.getItems()[0].retry], ["failed", "refresh"]);
+  assert.equal(statusLostNote({ status: 401 }), "Your session ended. Sign in again, then refresh this file's status.");
 });
 
 test("a missed poll leaves the file as it was", async () => {

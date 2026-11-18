@@ -13,6 +13,7 @@ import {
   InboxQueue,
   PENDING_CODE_PREFIX,
   isFinal,
+  queueOwnerKey,
   summarise,
   type InboxCategory,
   type InboxItem,
@@ -38,8 +39,16 @@ const STATE_TONE: Record<InboxState, "green" | "red" | "amber" | "neutral"> = {
 };
 
 function stateLabel(item: InboxItem) {
+  if (item.retrying) return "Sending again";
+  if (item.state === "failed" && item.retry === "refresh") return "Status unknown";
   if (item.state === "failed" && item.documentId) return "Could not read";
   return STATE_LABEL[item.state];
+}
+
+function stateTone(item: InboxItem) {
+  // Status unknown is not a failure of the file: the server may still be reading it.
+  if (item.retrying || (item.state === "failed" && item.retry === "refresh")) return "amber";
+  return STATE_TONE[item.state];
 }
 
 function typeText(item: InboxItem) {
@@ -63,11 +72,20 @@ export function InboxPage({ user }: { user: User }) {
   const [skipped, setSkipped] = useState(0);
   const [chosenKind, setChosenKind] = useState<"INVOICE" | "BILL" | "RECEIPT">("BILL");
 
-  const queue = useMemo(() => new InboxQueue<File>({
-    upload: (file, kind, chosenCategory) => uploadDocument(user, file, "real", chosenCategory, kind),
-    getDocument: (documentId) => getDocument(user, documentId),
-    retryReading: (documentId) => retryDocumentProcessing(user, documentId),
-  }), [user]);
+  // The signed-in user is re-fetched as a new object on some events (a theme or sidebar change in another
+  // tab fires `storage`). The queue belongs to the person and company, not to that object, so it survives;
+  // calls always use the latest user object.
+  const latestUser = useRef(user);
+  useEffect(() => { latestUser.current = user; }, [user]);
+  const owner = queueOwnerKey(user);
+  const queue = useMemo(() => {
+    void owner;
+    return new InboxQueue<File>({
+      upload: (file, kind, chosenCategory) => uploadDocument(latestUser.current, file, "real", chosenCategory, kind),
+      getDocument: (documentId) => getDocument(latestUser.current, documentId),
+      retryReading: (documentId) => retryDocumentProcessing(latestUser.current, documentId),
+    });
+  }, [owner]);
   // No dispose on unmount: uploads already started keep going if the accountant moves to another page.
   const items = useSyncExternalStore(
     (listener) => queue.subscribe(listener),
@@ -194,7 +212,7 @@ export function InboxPage({ user }: { user: User }) {
             )}
             {skipped > 0 && (
               <p className="inbox-skipped" role="status">
-                Left out {skipped} file{skipped === 1 ? "" : "s"} from the folder that {skipped === 1 ? "is not a PDF or photo" : "are not PDFs or photos"}.
+                Left out {skipped} file{skipped === 1 ? "" : "s"} from the folder: not a PDF or photo, or could not be opened.
               </p>
             )}
 
@@ -226,7 +244,7 @@ export function InboxPage({ user }: { user: User }) {
                     </small>
                     {item.note && <small className="inbox-row-note">{item.note}</small>}
                   </div>
-                  <span className={`badge ${STATE_TONE[item.state]}`}>
+                  <span className={`badge ${stateTone(item)}`}>
                     <span className="badge-dot" />
                     {stateLabel(item)}
                   </span>
@@ -237,12 +255,15 @@ export function InboxPage({ user }: { user: User }) {
                     {item.state === "duplicate" && item.existing && (
                       <Link className="text-link" href={`${base}/documents/${item.existing.id}`}>Open {item.existing.code ?? "earlier copy"}</Link>
                     )}
-                    {item.state === "failed" && item.retry && (
+                    {item.state === "failed" && item.retry && !item.retrying && (
                       <button type="button" className="text-link" onClick={() => void queue.retry(item.key)}>
-                        <RotateCcw size={13} aria-hidden="true" /> Try again
+                        <RotateCcw size={13} aria-hidden="true" /> {item.retry === "refresh" ? "Refresh" : "Try again"}
                       </button>
                     )}
-                    {(item.state === "waiting" || (item.state === "failed" && !item.documentId) || item.state === "duplicate") && (
+                    {item.state === "failed" && item.documentId && (
+                      <Link className="text-link" href={`${base}/documents/${item.documentId}`}>Open</Link>
+                    )}
+                    {(item.state === "waiting" || (item.state === "failed" && (!item.documentId || item.retry === "refresh") && !item.retrying) || item.state === "duplicate") && (
                       <button type="button" className="text-link" aria-label={`Remove ${item.name} from the list`} onClick={() => queue.remove(item.key)}>Remove</button>
                     )}
                   </div>
