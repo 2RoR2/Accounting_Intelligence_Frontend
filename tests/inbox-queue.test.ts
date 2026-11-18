@@ -5,6 +5,7 @@ import {
   rejectReason,
   stateForDocument,
   summarise,
+  typePending,
   type DocumentSnapshot,
   type InboxCategory,
   type InboxFile,
@@ -182,6 +183,28 @@ test("polling asks at most maxPolls files per round and rotates through the rest
   assert.equal(asked.length, 6);
   await queue.tick();
   assert.equal(new Set(asked).size, 9, "every open file is asked within two rounds");
+});
+
+test("a refreshed document that is still AUTO never shows its stored placeholder as a type", async () => {
+  const { queue, calls, statuses } = fakeServer();
+  queue.add([file("photo.jpg"), file("bill.pdf")]);
+  // Upload receipts as the server sends them for kind=auto.
+  calls[0].resolve(receipt("u", { dispatchAccepted: true, kindDetected: false }));
+  calls[1].resolve(receipt("k", { dispatchAccepted: true, kindDetected: false }));
+  await settle();
+  assert.deepEqual(queue.getItems().map((item) => [item.kind, item.kindDetected]), [[undefined, false], [undefined, false]]);
+  // Read DTOs: kind AUTO + kindDetected false until classified. The code alone need not carry the signal.
+  statuses.set("u", { id: "u", status: "EXCEPTION", code: "SOME_CODE", kind: "AUTO", kindDetected: false });
+  statuses.set("k", { id: "k", status: "EXTRACTED", code: "BILL_100009", kind: "BILL", kindDetected: true });
+  await queue.tick();
+  const [untyped, typed] = queue.getItems();
+  assert.deepEqual([untyped.state, untyped.kind, untyped.kindDetected], ["needs_fixing", undefined, false]);
+  assert.match(untyped.note ?? "", /type was not recognised/);
+  assert.deepEqual([typed.state, typed.kind, typed.kindDetected], ["ready", "BILL", true]);
+  // kindDetected false on an otherwise finished document still needs fixing.
+  assert.equal(stateForDocument("EXTRACTED", "INVOICE_1", false).state, "needs_fixing");
+  assert.equal(typePending({ kind: "auto" }), true);
+  assert.equal(typePending({ kind: "INVOICE", code: "INVOICE_1", kindDetected: true }), false);
 });
 
 test("a missed poll leaves the file as it was", async () => {

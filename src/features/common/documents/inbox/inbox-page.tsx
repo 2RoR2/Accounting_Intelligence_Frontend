@@ -43,10 +43,10 @@ function stateLabel(item: InboxItem) {
 }
 
 function typeText(item: InboxItem) {
-  const detected = item.kind && !item.code?.startsWith(PENDING_CODE_PREFIX);
-  if (detected) return documentKindLabel(item.kind);
+  const pending = item.kindDetected === false || item.code?.startsWith(PENDING_CODE_PREFIX);
+  if (item.kind && !pending) return documentKindLabel(item.kind);
   if (item.state === "queued" || item.state === "reading" || item.state === "uploading") return "Type: detecting";
-  if (item.code?.startsWith(PENDING_CODE_PREFIX)) return "Type not detected";
+  if (pending) return "Type not detected";
   return null;
 }
 

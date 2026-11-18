@@ -23,8 +23,15 @@ export type UploadReceipt = {
   status?: string;
   jobId?: string;
   dispatchAccepted?: boolean;
+  kindDetected?: boolean;
 };
-export type DocumentSnapshot = { id: string; code?: string; status: string; kind?: string; type?: string };
+/** `kindDetected: false` (kind "AUTO", code DOC_…) means the server has not detected the type yet. */
+export type DocumentSnapshot = { id: string; code?: string; status: string; kind?: string; type?: string; kindDetected?: boolean };
+
+/** True when the server says the type is not detected yet; older servers only show it through the DOC_ code. */
+export function typePending(value: { code?: string; kind?: string; kindDetected?: boolean }) {
+  return value.kindDetected === false || String(value.kind ?? "").toUpperCase() === "AUTO" || Boolean(value.code?.startsWith(PENDING_CODE_PREFIX));
+}
 
 export interface InboxDeps<F extends InboxFile = InboxFile> {
   upload(file: F, kind: InboxKind, category: InboxCategory): Promise<UploadReceipt>;
@@ -43,6 +50,8 @@ export interface InboxItem<F extends InboxFile = InboxFile> {
   code?: string;
   /** Detected (or chosen) type, upper case, once the server knows it. */
   kind?: string;
+  /** False while the server has not detected the type (and after reading, when it could not). */
+  kindDetected?: boolean;
   /** One plain sentence for this file's state when the label alone is not enough. */
   note?: string;
   existing?: { id: string; code?: string; name?: string };
@@ -72,12 +81,12 @@ const WAITING = new Set(["UPLOADED", "QUEUED"]);
 const DONE = new Set(["EXTRACTED", "IN_REVIEW", "CORRECTED", "VALIDATED", "STANDARDISED", "COMPLETED"]);
 
 /** State for a document status from the server. */
-export function stateForDocument(status: string, code?: string): Pick<InboxItem, "state" | "note" | "retry"> {
+export function stateForDocument(status: string, code?: string, kindDetected?: boolean): Pick<InboxItem, "state" | "note" | "retry"> {
   const value = String(status || "").toUpperCase();
   if (WAITING.has(value)) return { state: "queued" };
   if (READING.has(value)) return { state: "reading" };
   if (value === "FAILED") return { state: "failed", note: "This file could not be read.", retry: "reading" };
-  const untyped = code?.startsWith(PENDING_CODE_PREFIX);
+  const untyped = typePending({ code, kindDetected });
   const typeNote = "The type was not recognised. Choose it when you fix the document.";
   if (value === "EXCEPTION") return untyped ? { state: "needs_fixing", note: typeNote } : { state: "needs_fixing" };
   if (DONE.has(value)) return untyped ? { state: "needs_fixing", note: typeNote } : { state: "ready" };
@@ -233,8 +242,9 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
     const kind = this.kind;
     try {
       const receipt = await this.deps.upload(file, kind, category);
-      const state = receipt.dispatchAccepted === false ? { state: "queued" as const } : stateForDocument(receipt.status ?? "QUEUED", receipt.code);
-      this.patch(key, { ...state, documentId: receipt.id, code: receipt.code, kind: kindOf(receipt.kind) });
+      const state = receipt.dispatchAccepted === false ? { state: "queued" as const } : stateForDocument(receipt.status ?? "QUEUED", receipt.code, receipt.kindDetected);
+      const pending = typePending(receipt);
+      this.patch(key, { ...state, documentId: receipt.id, code: receipt.code, kind: pending ? undefined : kindOf(receipt.kind), kindDetected: !pending });
     } catch (error) {
       if (kind === "AUTO" && isKindUnsupported(error)) {
         // Older server: put this file back and ask once for a type for everything still waiting.
@@ -266,8 +276,10 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
           const document = await this.deps.getDocument(item.documentId!);
           const current = this.items.find((entry) => entry.key === item.key);
           if (!current || isFinal(current.state)) return;
-          this.patch(item.key, { ...stateForDocument(document.status, document.code), code: document.code ?? current.code,
-            kind: kindOf(document.kind ?? document.type) ?? current.kind });
+          // A refreshed document that is still AUTO must never show its stored placeholder kind.
+          const pending = typePending({ code: document.code ?? current.code, kind: document.kind ?? document.type, kindDetected: document.kindDetected });
+          this.patch(item.key, { ...stateForDocument(document.status, document.code ?? current.code, document.kindDetected),
+            code: document.code ?? current.code, kind: pending ? undefined : kindOf(document.kind ?? document.type) ?? current.kind, kindDetected: !pending });
         } catch {
           // A missed poll is not a result: the next round asks again.
         }
