@@ -208,7 +208,8 @@ export async function uploadDocument(
   file: File,
   scenario: string,
   category: RecordCategory = "ACCOUNTS_PAYABLE",
-  kind: DocumentKind = "INVOICE",
+  /** "AUTO": the backend detects the type while reading (it answers 422 if it predates kind=auto). */
+  kind: DocumentKind | "AUTO" = "INVOICE",
 ) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   if (!/\.(pdf|png|jpe?g)$/i.test(file.name))
@@ -222,7 +223,10 @@ export async function uploadDocument(
   body.append("file", file, file.name);
   void scenario;
   const params = new URLSearchParams({kind: kind.toLowerCase(), category: category.toLowerCase()});
-  return mapDocument(await api<Document>("/api/documents?" + params, { method: "POST", body }));
+  // The upload receipt adds processing fields to the document: dispatchAccepted false means
+  // "stored and waiting for a free reader", which is normal progress, not an error.
+  type UploadReceipt = Document & { jobId?: string; jobStatus?: string; dispatchAccepted?: boolean; kindDetected?: boolean };
+  return mapDocument(await api<UploadReceipt>("/api/documents?" + params, { method: "POST", body })) as UploadReceipt;
 }
 export async function advanceProcessing(
   user: User,
