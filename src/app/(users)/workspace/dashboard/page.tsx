@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { Application } from "@/features/application";
 
-// The home page is now "Today". Old links and bookmarks land there.
+// The Dashboard is the home page (plan v3, R0): the daily overview with month-end progress.
 export default function Page() {
-  redirect("/workspace/today");
+  return <Application path={["workspace", "dashboard"]} />;
 }

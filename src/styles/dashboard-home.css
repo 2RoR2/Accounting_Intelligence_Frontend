@@ -1,0 +1,93 @@
+/* Dashboard (plan v3, R0): the team's banner and cards, laid out as headline numbers, attention list,
+   month-end progress, money due and recent documents. Colours come from the theme variables. */
+.dash-home { display: grid; gap: 18px; min-width: 0; }
+.dash-headline { margin: 6px 0 0; max-width: 560px; color: var(--ui-text-2); font-size: 14px; line-height: 1.5; }
+
+/* Headline numbers */
+.dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.dash-kpi { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; row-gap: 2px; align-items: center; min-width: 0; padding: 16px 18px; border: 1px solid var(--ui-border); border-radius: 18px; background: var(--ui-surface); box-shadow: var(--ui-shadow); color: var(--ui-text); text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+a.dash-kpi:hover { transform: translateY(-2px); border-color: var(--ui-primary-hover); box-shadow: 0 12px 28px rgba(36,101,184,.14); }
+a.dash-kpi:focus-visible, .dash-attention-row:focus-visible, a.dash-money:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.dash-kpi-icon { grid-row: 1 / span 2; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; }
+.dash-kpi-label { color: var(--ui-text-2); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.dash-kpi-value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
+.dash-kpi-caption { grid-column: 1 / -1; margin-top: 8px; color: var(--ui-text-2); font-size: 12px; line-height: 1.4; }
+
+/* Tones: amber = something to do, blue = waiting, green = clear, grey = not available */
+.dash-tone-attention .dash-kpi-icon, .dash-row-icon.dash-tone-attention, .dash-money-icon.dash-tone-attention { background: #fff4e0; color: #b7791f; }
+.dash-tone-neutral .dash-kpi-icon, .dash-row-icon.dash-tone-neutral, .dash-money-icon.dash-tone-neutral { background: #e6f1ff; color: #2465b8; }
+.dash-tone-clear .dash-kpi-icon, .dash-row-icon.dash-tone-clear, .dash-money-icon.dash-tone-clear { background: #e5f6ee; color: #27815b; }
+.dash-tone-unavailable .dash-kpi-icon, .dash-row-icon.dash-tone-unavailable, .dash-money-icon.dash-tone-unavailable { background: var(--ui-surface-2); color: var(--ui-text-3); }
+.dash-kpi.dash-tone-attention { border-top: 3px solid #e7a23b; }
+.dash-kpi.dash-tone-neutral { border-top: 3px solid #3c92f7; }
+.dash-kpi.dash-tone-clear { border-top: 3px solid #3bb07a; }
+.dash-kpi.dash-tone-unavailable { border-top: 3px solid var(--ui-border); }
+
+/* Cards */
+.dash-columns { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.dash-card { min-width: 0; padding: 18px 20px; border: 1px solid var(--ui-border); border-radius: 20px; background: var(--ui-surface); box-shadow: var(--ui-shadow); }
+.dash-card.workspace-documents-card { padding: 0; overflow: hidden; }
+.dash-card.workspace-documents-card .dash-card-head { padding: 18px 20px; margin: 0; }
+.dash-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--ui-border); }
+.dash-card-head h2 { margin: 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.01em; }
+.dash-card-head p { margin: 4px 0 0; color: var(--ui-text-2); font-size: 12.5px; }
+.dash-card-head .btn { flex: none; }
+.dash-muted { margin: 0; color: var(--ui-text-2); }
+
+/* Attention needed */
+.dash-attention-list { display: grid; gap: 10px; }
+.dash-attention-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 13px 14px; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); color: var(--ui-text); text-decoration: none; transition: background .15s ease, border-color .15s ease; }
+a.dash-attention-row:hover { border-color: var(--ui-primary-hover); background: color-mix(in srgb, var(--ui-primary-hover) 6%, var(--ui-surface)); }
+.dash-row-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; }
+.dash-row-text { display: grid; gap: 3px; min-width: 0; }
+.dash-row-text strong { font-size: 14px; font-weight: 650; }
+.dash-row-text strong b { margin-right: 2px; font-weight: 800; }
+.dash-row-text small { overflow: hidden; color: var(--ui-text-2); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row-arrow { color: var(--ui-primary); }
+.dash-all-clear { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px; border-radius: 14px; background: #e5f6ee; color: #1f6b4a; font-weight: 650; }
+
+/* Month-end */
+.dash-month { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.dash-month-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13.5px; }
+.dash-month-row a { color: var(--ui-text); font-weight: 650; text-decoration: none; }
+.dash-month-row a:hover { color: var(--ui-primary); text-decoration: underline; }
+.dash-month-row strong { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-text-2); font-size: 12.5px; font-weight: 650; white-space: nowrap; }
+.dash-month li.complete .dash-month-row strong { color: #27815b; }
+.dash-progress { height: 8px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: var(--ui-surface-2); }
+.dash-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3c92f7, #2465b8); transition: width .4s ease; }
+.dash-month li.complete .dash-progress span { background: #3bb07a; }
+.dash-progress.dash-progress-none { opacity: .6; }
+
+/* Money due */
+.dash-money-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dash-money { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 4px; align-items: center; padding: 14px 16px; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); color: var(--ui-text); text-decoration: none; }
+a.dash-money:hover { border-color: var(--ui-primary-hover); }
+.dash-money-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; }
+.dash-money-label { color: var(--ui-text-2); font-size: 12.5px; font-weight: 700; }
+.dash-money-value { grid-column: 1 / -1; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.dash-money small { grid-column: 1 / -1; color: var(--ui-text-2); font-size: 12px; }
+
+/* Tablet and phone */
+@media (max-width: 1100px) {
+  .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .dash-home { gap: 14px; }
+  .dash-kpis { gap: 10px; }
+  .dash-kpi { padding: 14px; }
+  .dash-kpi-value { font-size: 24px; }
+  .dash-money-grid { grid-template-columns: minmax(0, 1fr); }
+  .dash-card { padding: 16px; }
+  .dash-card-head { flex-direction: column; }
+  .dash-row-text small { white-space: normal; }
+}
+
+/* Dark theme: same structure on the theme's navy surfaces */
+.app-shell.theme-dark .dash-kpi, .app-shell.theme-dark .dash-card, .app-shell.theme-dark .dash-attention-row, .app-shell.theme-dark .dash-money { background: #0c2a52; border-color: rgba(157,202,255,.28); }
+.app-shell.theme-dark a.dash-attention-row:hover { background: rgba(60,146,247,.16); }
+.app-shell.theme-dark .dash-tone-attention .dash-kpi-icon, .app-shell.theme-dark .dash-row-icon.dash-tone-attention, .app-shell.theme-dark .dash-money-icon.dash-tone-attention { background: rgba(242,196,109,.18); color: #f2c46d; }
+.app-shell.theme-dark .dash-tone-neutral .dash-kpi-icon, .app-shell.theme-dark .dash-row-icon.dash-tone-neutral, .app-shell.theme-dark .dash-money-icon.dash-tone-neutral { background: rgba(103,173,255,.18); color: #9dcaff; }
+.app-shell.theme-dark .dash-tone-clear .dash-kpi-icon, .app-shell.theme-dark .dash-row-icon.dash-tone-clear, .app-shell.theme-dark .dash-money-icon.dash-tone-clear { background: rgba(59,176,122,.18); color: #7fd8ac; }
+.app-shell.theme-dark .dash-all-clear { background: rgba(59,176,122,.16); }
+.app-shell.theme-dark .dash-progress { background: rgba(157,202,255,.18); }

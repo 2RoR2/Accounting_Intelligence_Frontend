@@ -1,6 +1,6 @@
 import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { EffortStudyPage } from "@/features/common/reports/effort-study";
-import { TodayPage } from "@/features/common/today/today-page";
+import { DashboardPage } from "@/features/common/today/dashboard-page";
 import { DocumentReview } from "@/features/common/documents/document-review";
 import { DocumentList, UploadPage } from "@/features/common/documents/documents";
 import { ExceptionsPage } from "@/features/common/exceptions/exceptions";
@@ -23,9 +23,9 @@ import type { User } from "@/types";
 export function LocalAdminRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
   switch (page) {
-    // Today (plan v2 B3); /company/dashboard redirects here.
+    // Dashboard (plan v3 R0): the home page, with the Today figures (B3); /today redirects here.
     case "today":
-    case "dashboard": return <TodayPage user={user} />;
+    case "dashboard": return <DashboardPage user={user} />;
     case "system": return <SystemPage user={user} />;
     case "performance": return <PerformancePage user={user} />;
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;

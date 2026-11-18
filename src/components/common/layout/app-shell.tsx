@@ -243,7 +243,7 @@ export function AppShell({
       ]
     : jobNavigation(isCompanyAdmin ? "LOCAL_ADMIN" : "ACCOUNTANT");
   const adminIcon = (page: string) => adminNav.find((item) => item[1] === page)?.[2] ?? LayoutDashboard;
-  const homeHref = `/${prefix}/${isAdmin ? "dashboard" : "today"}`;
+  const homeHref = `/${prefix}/dashboard`;
 
   const tenant = data.data?.tenants.find((t) => t.id === user.tenantId);
   const workspaceName = isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name || "Demo Company").split("—")[0].trim();
@@ -410,7 +410,7 @@ export function AppShell({
             </Link>
             <span className="crumb-divider">/</span>
             <strong>
-              {activeItem?.label ?? PAGE_TITLES[currentPage] ?? (isAdmin ? "Overview" : "Today")}
+              {activeItem?.label ?? PAGE_TITLES[currentPage] ?? (isAdmin ? "Overview" : "Dashboard")}
             </strong>
           </div>
           <div className="topbar-right">
