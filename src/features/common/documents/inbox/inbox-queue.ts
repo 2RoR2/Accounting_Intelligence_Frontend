@@ -14,7 +14,21 @@ export type InboxCategory = "ACCOUNTS_PAYABLE" | "ACCOUNTS_RECEIVABLE";
 export type InboxKind = "AUTO" | "INVOICE" | "BILL" | "RECEIPT";
 
 /** The parts of a browser File the queue reads. The original object is what gets uploaded. */
-export type InboxFile = { name: string; size: number; lastModified?: number };
+export type InboxFile = { name: string; size: number; lastModified?: number; webkitRelativePath?: string; relativePath?: string };
+
+/** Where the file sat in a dropped or picked folder ("August/photos/receipt.jpg"), or just its name. */
+export function filePath(file: InboxFile) {
+  return file.relativePath || file.webkitRelativePath || file.name;
+}
+
+/**
+ * The same file picked twice (paste and drop, or one folder dropped twice) has the same path, size and
+ * modified time, and is listed once. Two different files that share a name in different folders stay two;
+ * if their contents are identical the server's duplicate check reports the second one.
+ */
+export function fileIdentity(file: InboxFile) {
+  return `${filePath(file)}\u0000${file.size}\u0000${file.lastModified ?? 0}`;
+}
 
 export type UploadReceipt = {
   id: string;
@@ -43,6 +57,8 @@ export interface InboxItem<F extends InboxFile = InboxFile> {
   key: string;
   file: F;
   name: string;
+  /** Folder path inside a dropped or picked folder, when it differs from the name. */
+  path?: string;
   size: number;
   state: InboxState;
   category: InboxCategory;
@@ -200,12 +216,13 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
     const added: InboxItem<F>[] = [];
     for (const file of files) {
       // The same file picked twice in one session (paste and drop, say) is listed once.
-      const twin = [...this.items, ...added].some((item) => item.state !== "failed" && item.name === file.name && item.size === file.size
-        && (item.file.lastModified ?? 0) === (file.lastModified ?? 0));
+      const identity = fileIdentity(file);
+      const twin = [...this.items, ...added].some((item) => item.state !== "failed" && fileIdentity(item.file) === identity);
       if (twin) continue;
       const reason = rejectReason(file);
+      const path = filePath(file);
       added.push({ key: `inbox-${++this.sequence}`, file, name: file.name, size: file.size, category,
-        state: reason ? "failed" : "waiting", note: reason ?? undefined });
+        path: path !== file.name ? path : undefined, state: reason ? "failed" : "waiting", note: reason ?? undefined });
     }
     if (!added.length) return [];
     this.items = [...this.items, ...added];

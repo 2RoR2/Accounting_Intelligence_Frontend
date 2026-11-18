@@ -70,6 +70,7 @@ export function InboxPage({ user }: { user: User }) {
   const [camera, setCamera] = useState(() => searchParams.get("source") === "camera");
   const [dragging, setDragging] = useState(false);
   const [skipped, setSkipped] = useState(0);
+  const [tooDeep, setTooDeep] = useState(0);
   const [chosenKind, setChosenKind] = useState<"INVOICE" | "BILL" | "RECEIPT">("BILL");
 
   // The signed-in user is re-fetched as a new object on some events (a theme or sidebar change in another
@@ -134,6 +135,7 @@ export function InboxPage({ user }: { user: User }) {
   const addFolder = (files: File[]) => {
     const folder = keepFromFolder(files);
     setSkipped(folder.skipped);
+    setTooDeep(0);
     queue.add(folder.files, category);
   };
 
@@ -183,6 +185,7 @@ export function InboxPage({ user }: { user: User }) {
                   setDragging(false);
                   void filesFromDrop(event.dataTransfer).then((dropped) => {
                     setSkipped(dropped.skipped);
+                    setTooDeep(dropped.tooDeep);
                     queue.add(dropped.files, category);
                   });
                 }}
@@ -212,7 +215,8 @@ export function InboxPage({ user }: { user: User }) {
             )}
             {skipped > 0 && (
               <p className="inbox-skipped" role="status">
-                Left out {skipped} file{skipped === 1 ? "" : "s"} from the folder: not a PDF or photo, or could not be opened.
+                Left out {skipped} item{skipped === 1 ? "" : "s"} from the folder: not a PDF or photo, or could not be opened.
+                {tooDeep > 0 && ` Some folders are nested too deeply (${tooDeep}); upload them separately.`}
               </p>
             )}
 
@@ -238,7 +242,8 @@ export function InboxPage({ user }: { user: User }) {
                 <li key={item.key} className="selected-file inbox-row">
                   <FileText size={19} aria-hidden="true" />
                   <div className="inbox-row-main">
-                    <strong title={item.name}>{item.name}</strong>
+                    <strong title={item.path ?? item.name}>{item.name}</strong>
+                    {item.path && <small className="inbox-row-note">in {item.path.slice(0, item.path.length - item.name.length).replace(/\/$/, "") || "/"}</small>}
                     <small>
                       {[size(item.size), item.code && !item.code.startsWith(PENDING_CODE_PREFIX) ? item.code : null, typeText(item)].filter(Boolean).join(" · ")}
                     </small>

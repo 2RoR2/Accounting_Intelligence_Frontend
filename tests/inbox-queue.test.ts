@@ -4,6 +4,8 @@ import {
   InboxQueue,
   rejectReason,
   stateForDocument,
+  fileIdentity,
+  filePath,
   queueOwnerKey,
   statusLostNote,
   summarise,
@@ -300,6 +302,56 @@ test("P2-4: repeated failed status checks end in Status unknown, keep the docume
   await signedOut.tick();
   assert.deepEqual([signedOut.getItems()[0].state, signedOut.getItems()[0].retry], ["failed", "refresh"]);
   assert.equal(statusLostNote({ status: 401 }), "Your session ended. Sign in again, then refresh this file's status.");
+});
+
+/** Minimal FileSystemEntry fakes for folder drops (Node has File, not the entry API). */
+const fileEntry = (fullPath: string, readable = true, size = 1) => {
+  const name = fullPath.split("/").pop()!;
+  return {
+    name, fullPath, isFile: true, isDirectory: false,
+    file: (ok: (f: File) => void, fail: (e: Error) => void) =>
+      (readable ? ok(new File(["x".repeat(size)], name, { lastModified: 7 })) : fail(new Error("NotReadableError"))),
+  };
+};
+const folderEntry = (fullPath: string, children: unknown[]) => ({
+  name: fullPath.split("/").pop()!, fullPath, isFile: false, isDirectory: true,
+  createReader: () => { let done = false; return { readEntries: (ok: (e: unknown[]) => void) => { ok(done ? [] : children); done = true; } }; },
+});
+const dropOf = (entry: unknown) => ({ items: [{ kind: "file", webkitGetAsEntry: () => entry, getAsFile: () => null }], files: [] }) as unknown as DataTransfer;
+
+test("R2-2: same-named files from different folders are two files; only a true re-drop is listed once", async () => {
+  // Two different receipts that happen to share a name, size and time, in two sub-folders.
+  const tree = folderEntry("/August", [folderEntry("/August/shop-a", [fileEntry("/August/shop-a/receipt.jpg")]),
+    folderEntry("/August/shop-b", [fileEntry("/August/shop-b/receipt.jpg")])]);
+  const collected = await filesFromDrop(dropOf(tree));
+  assert.deepEqual(collected.files.map((f) => filePath(f as InboxFile)).sort(), ["August/shop-a/receipt.jpg", "August/shop-b/receipt.jpg"]);
+  const { queue, calls } = fakeServer();
+  queue.add(collected.files as InboxFile[]);
+  assert.equal(queue.getItems().length, 2, "both receipts are uploaded; the server's hash check reports real duplicates");
+  assert.deepEqual(queue.getItems().map((item) => item.path), ["August/shop-a/receipt.jpg", "August/shop-b/receipt.jpg"]);
+  // Dropping the same folder again lists nothing new.
+  queue.add((await filesFromDrop(dropOf(tree))).files as InboxFile[]);
+  assert.equal(queue.getItems().length, 2);
+  // Folder picker files carry webkitRelativePath instead.
+  queue.add([{ name: "bill.pdf", size: 9, lastModified: 1, webkitRelativePath: "Sept/a/bill.pdf" }, { name: "bill.pdf", size: 9, lastModified: 1, webkitRelativePath: "Sept/b/bill.pdf" }]);
+  assert.equal(queue.getItems().length, 4);
+  assert.equal(calls.length, 3, "still three uploads at a time");
+  assert.notEqual(fileIdentity({ name: "r.jpg", size: 1, relativePath: "a/r.jpg" }), fileIdentity({ name: "r.jpg", size: 1, relativePath: "b/r.jpg" }));
+});
+
+test("R2-3: folders nested deeper than the limit are reported, not silently dropped", async () => {
+  // August/1/2/3/4/5/6/deep.pdf: the folder at depth 6 is not opened.
+  let deepest: unknown = folderEntry("/August/1/2/3/4/5/6", [fileEntry("/August/1/2/3/4/5/6/deep.pdf")]);
+  for (let level = 5; level >= 1; level--) {
+    const path = "/August/" + Array.from({ length: level }, (_, i) => i + 1).join("/");
+    deepest = folderEntry(path, [deepest, fileEntry(`${path}/level-${level}.pdf`)]);
+  }
+  const tree = folderEntry("/August", [deepest, fileEntry("/August/top.pdf")]);
+  const collected = await filesFromDrop(dropOf(tree));
+  assert.equal(collected.tooDeep, 1);
+  assert.equal(collected.skipped, 1, "the cut-off folder is counted in skipped");
+  assert.ok(collected.files.some((f) => f.name === "level-5.pdf") && collected.files.some((f) => f.name === "top.pdf"));
+  assert.ok(!collected.files.some((f) => f.name === "deep.pdf"));
 });
 
 test("a missed poll leaves the file as it was", async () => {
