@@ -77,11 +77,10 @@ export function stateForDocument(status: string, code?: string): Pick<InboxItem,
   if (WAITING.has(value)) return { state: "queued" };
   if (READING.has(value)) return { state: "reading" };
   if (value === "FAILED") return { state: "failed", note: "This file could not be read.", retry: "reading" };
-  if (value === "EXCEPTION") return { state: "needs_fixing" };
-  if (DONE.has(value)) {
-    if (code?.startsWith(PENDING_CODE_PREFIX)) return { state: "needs_fixing", note: "The type was not recognised. Choose it when you check the document." };
-    return { state: "ready" };
-  }
+  const untyped = code?.startsWith(PENDING_CODE_PREFIX);
+  const typeNote = "The type was not recognised. Choose it when you fix the document.";
+  if (value === "EXCEPTION") return untyped ? { state: "needs_fixing", note: typeNote } : { state: "needs_fixing" };
+  if (DONE.has(value)) return untyped ? { state: "needs_fixing", note: typeNote } : { state: "ready" };
   return { state: "reading" };
 }
 
@@ -107,7 +106,7 @@ export function stateForUploadError(error: unknown): Pick<InboxItem, "state" | "
   }
   if (e.status === 413) return { state: "failed", note: "This file is larger than 20 MB." };
   if (e.status === 422) return { state: "failed", note: e.message || "This file cannot be read. Check it is a PDF or a photo." };
-  if (e.status === 403) return { state: "failed", note: "Your account cannot upload documents." };
+  if (e.status === 403) return { state: "failed", note: e.message || "Your account cannot upload documents." };
   return { state: "failed", note: e.message || "The upload did not finish.", retry: "upload" };
 }
 
@@ -130,7 +129,6 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
   private listeners = new Set<() => void>();
   private uploading = 0;
   private polling = false;
-  private disposed = false;
   private sequence = 0;
   private round = 0;
   private polledAt = new Map<string, number>();
@@ -154,7 +152,6 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
   }
 
   private emit() {
-    if (this.disposed) return;
     this.listeners.forEach((listener) => listener());
   }
 
@@ -222,7 +219,7 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
 
   /** Starts uploads until `concurrency` are running. Safe to call any time. */
   pump() {
-    if (this.disposed || this.needsType) return;
+    if (this.needsType) return;
     while (this.uploading < this.concurrency) {
       const next = this.items.find((item) => item.state === "waiting");
       if (!next) return;
@@ -254,7 +251,7 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
 
   /** One polling round over files the server still holds (in line or being read); least recently asked first. */
   async tick() {
-    if (this.disposed || this.polling) return;
+    if (this.polling) return;
     const open = this.items
       .filter((item) => (item.state === "queued" || item.state === "reading") && item.documentId)
       .sort((a, b) => (this.polledAt.get(a.key) ?? 0) - (this.polledAt.get(b.key) ?? 0))
@@ -283,10 +280,5 @@ export class InboxQueue<F extends InboxFile = InboxFile> {
   /** True while anything is uploading or still held by the server. */
   busy() {
     return this.items.some((item) => !isFinal(item.state));
-  }
-
-  dispose() {
-    this.disposed = true;
-    this.listeners.clear();
   }
 }

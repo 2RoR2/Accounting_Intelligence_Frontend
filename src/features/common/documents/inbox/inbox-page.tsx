@@ -46,6 +46,7 @@ function typeText(item: InboxItem) {
   const detected = item.kind && !item.code?.startsWith(PENDING_CODE_PREFIX);
   if (detected) return documentKindLabel(item.kind);
   if (item.state === "queued" || item.state === "reading" || item.state === "uploading") return "Type: detecting";
+  if (item.code?.startsWith(PENDING_CODE_PREFIX)) return "Type not detected";
   return null;
 }
 
@@ -67,7 +68,7 @@ export function InboxPage({ user }: { user: User }) {
     getDocument: (documentId) => getDocument(user, documentId),
     retryReading: (documentId) => retryDocumentProcessing(user, documentId),
   }), [user]);
-  useEffect(() => () => queue.dispose(), [queue]);
+  // No dispose on unmount: uploads already started keep going if the accountant moves to another page.
   const items = useSyncExternalStore(
     (listener) => queue.subscribe(listener),
     () => queue.getItems(),

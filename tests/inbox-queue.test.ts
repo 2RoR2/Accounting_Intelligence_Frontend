@@ -81,7 +81,8 @@ test("polling moves a file from in line, to reading, to ready, then stops asking
 });
 
 test("exception, unrecognised type and read failure map to plain final states", () => {
-  assert.equal(stateForDocument("EXCEPTION", "INVOICE_1").state, "needs_fixing");
+  assert.deepEqual(stateForDocument("EXCEPTION", "INVOICE_1"), { state: "needs_fixing" });
+  assert.match(stateForDocument("EXCEPTION", "DOC_ABCDEF123456").note ?? "", /type was not recognised/);
   const untyped = stateForDocument("EXTRACTED", "DOC_ABCDEF123456");
   assert.equal(untyped.state, "needs_fixing");
   assert.match(untyped.note ?? "", /type was not recognised/);
