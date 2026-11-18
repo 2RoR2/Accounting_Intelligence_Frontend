@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dashboardView, firstName, greetingFor } from "../src/lib/dashboard";
+import { dashboardView, firstName, greetingFor, pollWhileVisible } from "../src/lib/dashboard";
 import type { HomeSummary } from "../src/lib/today";
 
 /** Shaped like backend GET /api/home/summary (backend PR #6); counts set per test. */
@@ -52,7 +52,45 @@ test("overdue money counts as something to do; money due soon does not", () => {
 test("nothing to do says so", () => {
   const view = dashboardView(summary(), "ACCOUNTANT");
   assert.equal(view.attention.length, 0);
+  assert.equal(view.allClear, true);
   assert.match(view.headline, /^You are all caught up/);
+});
+
+test("an unavailable figure stays visible with its reason and is never called all clear", () => {
+  const data = summary();
+  data.tiles.journalsToPost = { available: false, reason: "Journals are not set up for this company yet.", link: null };
+  const view = dashboardView(data, "ACCOUNTANT");
+  assert.deepEqual(view.attention.map((tile) => [tile.id, tile.tone, tile.details[0]]),
+    [["journalsToPost", "unavailable", "Journals are not set up for this company yet."]]);
+  assert.equal(view.allClear, false);
+  assert.match(view.headline, /^Some figures are not available yet/);
+  data.tiles.needsFixing = { ...data.tiles.needsFixing, count: 2 } as typeof data.tiles.needsFixing;
+  assert.equal(dashboardView(data, "ACCOUNTANT").headline,
+    "1 thing needs you today. Start at the top of \"Attention needed\". Some figures are not available yet.");
+});
+
+test("an open Dashboard refreshes on a timer only while visible, and when it becomes visible again", () => {
+  const listeners: Array<() => void> = [];
+  const doc = { visibilityState: "visible",
+    addEventListener: (_: "visibilitychange", listener: () => void) => { listeners.push(listener); },
+    removeEventListener: (_: "visibilitychange", listener: () => void) => { listeners.splice(listeners.indexOf(listener), 1); } };
+  let tick: () => void = () => {};
+  let cleared = false;
+  let calls = 0;
+  const stop = pollWhileVisible(() => { calls += 1; }, 30_000, doc,
+    { set: (run, ms) => { assert.equal(ms, 30_000); tick = run; return 1; }, clear: () => { cleared = true; } });
+  tick();
+  assert.equal(calls, 1);
+  doc.visibilityState = "hidden";
+  tick();
+  listeners.forEach((listener) => listener());
+  assert.equal(calls, 1, "a hidden tab makes no requests");
+  doc.visibilityState = "visible";
+  listeners.forEach((listener) => listener());
+  assert.equal(calls, 2, "returning to the tab refreshes at once");
+  stop();
+  assert.equal(cleared, true);
+  assert.equal(listeners.length, 0);
 });
 
 test("greeting follows the Malaysian hour and uses the first name", () => {

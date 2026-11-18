@@ -91,3 +91,4 @@ a.dash-money:hover { border-color: var(--ui-primary-hover); }
 .app-shell.theme-dark .dash-tone-clear .dash-kpi-icon, .app-shell.theme-dark .dash-row-icon.dash-tone-clear, .app-shell.theme-dark .dash-money-icon.dash-tone-clear { background: rgba(59,176,122,.18); color: #7fd8ac; }
 .app-shell.theme-dark .dash-all-clear { background: rgba(59,176,122,.16); }
 .app-shell.theme-dark .dash-progress { background: rgba(157,202,255,.18); }
+.dash-row-unknown { color: var(--ui-text-3); font-weight: 600; }

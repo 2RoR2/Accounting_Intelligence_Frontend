@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DOCUMENT_LANES, NOT_AVAILABLE, bankLineToMatch, formatRm, linkHref, monthEndView, recordFilterLabel, tileView, todayTiles,
+  DOCUMENT_LANES, NOT_AVAILABLE, bankLineToMatch, formatRm, linkHref, lockedCategory, monthEndView, recordFilterLabel, tileView, todayTiles,
   type HomeSummary,
 } from "../src/lib/today";
 import { ruleSentence, ruleTitle } from "../src/lib/glossary";
@@ -150,4 +150,14 @@ test("lists opened from Today know the backend's list names", () => {
   assert.equal(recordFilterLabel("ACCOUNTS_RECEIVABLE", "next-7-days", null), "Unpaid customer invoices due in the next 7 days");
   assert.equal(recordFilterLabel(null, null, "to-post"), "Approved records not posted yet");
   assert.equal(recordFilterLabel("ACCOUNTS_PAYABLE", "someday", null), null);
+});
+
+test("a records list fixed to one category by its link locks the Categories selector", () => {
+  // The server returns only the linked category (overdue bills, Purchases/Sales links), so a local
+  // category choice could only empty the table: the selector shows the fixed value instead.
+  assert.equal(lockedCategory("ACCOUNTS_PAYABLE"), "ACCOUNTS_PAYABLE");
+  assert.equal(lockedCategory("ACCOUNTS_RECEIVABLE"), "ACCOUNTS_RECEIVABLE");
+  assert.equal(lockedCategory(null), null);
+  assert.equal(lockedCategory(undefined), null);
+  assert.equal(lockedCategory("SOMETHING_ELSE"), null);
 });

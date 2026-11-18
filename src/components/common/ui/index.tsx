@@ -263,6 +263,8 @@ export function Filter({
   onChange,
   options,
   format = (option) => option.replaceAll("_", " "),
+  disabled = false,
+  title,
 }: {
   label: string;
   value: string;
@@ -270,12 +272,17 @@ export function Filter({
   options: string[];
   /** Display text for each option; the option value itself is unchanged. */
   format?: (option: string) => string;
+  /** Shown but fixed, e.g. while the page was opened for one category; `title` says why. */
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
     <select
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      title={title}
     >
       <option value="">All {label.toLowerCase()}</option>
       {options.map((o) => (

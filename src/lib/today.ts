@@ -81,6 +81,15 @@ export function bankLineToMatch(row: { status: string; codingDecision?: string |
   return row.status !== "matched" && row.status !== "ignored" && !classified;
 }
 
+/**
+ * The category the records list is fixed to by its link (?category=, sent to the server with the Today
+ * filter), or null. While it is set, the Categories selector must not filter locally: the server only
+ * returned that category, so picking the other one would show an empty table.
+ */
+export function lockedCategory(category: string | null | undefined) {
+  return category === "ACCOUNTS_PAYABLE" || category === "ACCOUNTS_RECEIVABLE" ? category : null;
+}
+
 /** The sentence a list shows when it was opened from Today, e.g. "Unpaid supplier bills overdue". */
 export function recordFilterLabel(category: string | null, due: string | null, posting: string | null) {
   if (posting === "to-post") return "Approved records not posted yet";

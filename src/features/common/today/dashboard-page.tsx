@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import {
   AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck, FileSearch, Files, HandCoins,
   Landmark, Plus, Receipt, Search, ShieldAlert, Send, type LucideIcon,
@@ -10,7 +11,7 @@ import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-nig
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getHomeSummary } from "@/lib/api/home.service";
 import { getDocuments } from "@/lib/api/document.service";
-import { dashboardView, firstName, greetingFor } from "@/lib/dashboard";
+import { DASHBOARD_REFRESH_MS, dashboardView, firstName, greetingFor, pollWhileVisible } from "@/lib/dashboard";
 import { documentKindLabel } from "@/lib/glossary";
 import { areaFor, monthEndView, type TileId, type TodayRole, type TodayTileView } from "@/lib/today";
 import type { User } from "@/types";
@@ -46,11 +47,14 @@ function Kpi({ tile }: { tile: TodayTileView }) {
 /** One row of "Attention needed", in the team's style: icon, what it is, what to do, arrow. */
 function AttentionRow({ tile }: { tile: TodayTileView }) {
   const Icon = ICONS[tile.id];
+  const unavailable = tile.tone === "unavailable";
   const content = <>
     <span className={`dash-row-icon dash-tone-${tile.tone}`} aria-hidden><Icon size={18} /></span>
     <span className="dash-row-text">
-      <strong><b>{tile.value}</b> {tile.title.toLowerCase()}</strong>
-      <small>{tile.caption}</small>
+      {unavailable
+        ? <strong>{tile.title}: <span className="dash-row-unknown">{tile.value.toLowerCase()}</span></strong>
+        : <strong><b>{tile.value}</b> {tile.title.toLowerCase()}</strong>}
+      <small>{unavailable ? tile.details[0] ?? "" : tile.caption}</small>
     </span>
     <ArrowRight size={18} aria-hidden className="dash-row-arrow" />
   </>;
@@ -78,6 +82,11 @@ export function DashboardPage({ user }: { user: User }) {
   const base = `/${areaFor(role)}`;
   const summary = useResource(() => getHomeSummary(user), `dashboard:${user.id}`);
   const recent = useResource(() => getDocuments(user).catch(() => []), `dashboard-docs:${user.id}`);
+  const refreshSummary = summary.refresh;
+  const refreshRecent = recent.refresh;
+  // An open Dashboard stays current: refresh every 30 s while the tab is visible, and on return to it.
+  useEffect(() => pollWhileVisible(() => { void refreshSummary(); void refreshRecent(); }, DASHBOARD_REFRESH_MS, document),
+    [refreshSummary, refreshRecent]);
   if (summary.loading) return <LoadingState variant="dashboard" />;
   if (summary.error || !summary.data) return <ErrorState message={summary.error} retry={summary.refresh} />;
 
@@ -111,9 +120,8 @@ export function DashboardPage({ user }: { user: User }) {
           <div className="dash-card-head">
             <div><h2 id="dash-attention-title">Attention needed</h2><p>Your work for today, in the order to do it.</p></div>
           </div>
-          {view.attention.length
-            ? <div className="dash-attention-list">{view.attention.map((tile) => <AttentionRow key={tile.id} tile={tile} />)}</div>
-            : <p className="dash-all-clear"><CheckCircle2 size={18} aria-hidden /> Nothing needs you right now.</p>}
+          {view.attention.length > 0 && <div className="dash-attention-list">{view.attention.map((tile) => <AttentionRow key={tile.id} tile={tile} />)}</div>}
+          {view.allClear && <p className="dash-all-clear"><CheckCircle2 size={18} aria-hidden /> Nothing needs you right now.</p>}
         </section>
 
         <section className="dash-card" aria-labelledby="dash-month-title">

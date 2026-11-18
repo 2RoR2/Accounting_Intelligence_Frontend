@@ -29,7 +29,7 @@ import {
   formatDate,
   StatusBadge,
 } from "@/components/common/ui";
-import { isDueWindow, recordFilterLabel } from "@/lib/today";
+import { isDueWindow, lockedCategory, recordFilterLabel } from "@/lib/today";
 
 export function RecordDetail({
   record,
@@ -105,6 +105,8 @@ export function RecordsPage({
     asOf: requestedAsOf && /^\d{4}-\d{2}-\d{2}$/.test(requestedAsOf) ? requestedAsOf : undefined,
   };
   const todayLabel = admin ? null : recordFilterLabel(todayFilter.category ?? null, todayFilter.due ?? null, todayFilter.posting ?? null);
+  // The server already returns only this category: the Categories selector is shown fixed, not filtered locally.
+  const fixedCategory = admin ? null : lockedCategory(todayFilter.category);
   const { data, error, loading, refresh } = useResource(
     async () => ({
       tenants: await getTenants(user),
@@ -163,7 +165,7 @@ export function RecordsPage({
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
-      (!category || r.category === category) &&
+      (fixedCategory !== null || !category || r.category === category) &&
       (!date || (r.extraction.fields.date?.value ?? "") === date) &&
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
@@ -316,9 +318,9 @@ export function RecordsPage({
         </Panel>
       ) : (
         <Panel>
-          {todayLabel && (
+          {(todayLabel || fixedCategory) && (
             <p className="today-filter-note" role="status">
-              Showing: <strong>{todayLabel}</strong> ({data.records.length}).{" "}
+              Showing: <strong>{todayLabel ?? (fixedCategory === "ACCOUNTS_RECEIVABLE" ? "Customer invoices only" : "Supplier bills only")}</strong> ({data.records.length}).{" "}
               <Link href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/records`}>Show all approved records</Link>
             </p>
           )}
@@ -330,9 +332,11 @@ export function RecordsPage({
             />
             <Filter
               label="Categories"
-              value={category}
+              value={fixedCategory ?? category}
               onChange={setCategory}
               options={["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE"]}
+              disabled={fixedCategory !== null}
+              title={fixedCategory ? "Fixed by the link you opened. Use \"Show all approved records\" to change it." : undefined}
             />
             <Filter
               label="Suppliers"
