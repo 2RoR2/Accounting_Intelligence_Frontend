@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SIGNAL_TEXT, evidenceBox, fieldSignal, isToCheck, laneQueue, neighbourDocument, nextAfterSubmit, notFoundEntries, reviewOrder,
-  reviewShortcut, stepField, suggestedValue, visibleEntries, revisionToSubmit, draftSettled, stableOrder, enterAction, findLane, laneIds,
+  reviewShortcut, stepField, suggestedValue, visibleEntries, revisionToSubmit, settleDraft, stableOrder, enterAction, findLane, laneIds, unsavedOutside,
 } from "../src/features/common/documents/review/review-logic";
 import { loadReviewQueue, reloadReviewQueue } from "../src/features/common/documents/review/use-review-queue";
 import type { ExtractedField, SourceEvidence } from "../src/types";
@@ -111,16 +111,15 @@ const evidence: SourceEvidence = { page: 1, coordinate_units: "pixels", page_siz
 
 test("a pixel box scales to the drawn page, whatever size it is drawn at", () => {
   const expected = { left: 10, top: 20, width: 50, height: 10 };
-  assert.deepEqual(evidenceBox(evidence, 1, { width: 1000, height: 1400 }), expected);
-  assert.deepEqual(evidenceBox(evidence, 1, { width: 500, height: 700 }), expected);
+  assert.deepEqual(evidenceBox(evidence, 1, { width: 1000, height: 1400 }, "image"), expected);
+  assert.deepEqual(evidenceBox(evidence, 1, { width: 500, height: 700 }, "image"), expected);
   // A PDF page drawn from points (595 x 833) has the same shape as the 1000 x 1400 rendering the reader used.
-  assert.deepEqual(evidenceBox(evidence, 1, { width: 595, height: 833 }), expected);
+  assert.deepEqual(evidenceBox(evidence, 1, { width: 595, height: 833 }, "pdf"), expected);
 });
 
 test("boxes appear only on their own page, and page 2 evidence draws on page 2", () => {
-  assert.equal(evidenceBox(evidence, 2, { width: 1000, height: 1400 }), null);
-  assert.deepEqual(evidenceBox({ ...evidence, page: 2 }, 2, { width: 1000, height: 1400 }), { left: 10, top: 20, width: 50, height: 10 });
-  assert.ok(evidenceBox({ ...evidence, page: undefined }, 1, { width: 1000, height: 1400 }));
+  assert.equal(evidenceBox(evidence, 2, { width: 1000, height: 1400 }, "pdf"), null);
+  assert.deepEqual(evidenceBox({ ...evidence, page: 2 }, 2, { width: 1000, height: 1400 }, "pdf"), { left: 10, top: 20, width: 50, height: 10 });
 });
 
 test("unknown origin, units, shape or out-of-page boxes are not drawn", () => {
@@ -131,11 +130,22 @@ test("unknown origin, units, shape or out-of-page boxes are not drawn", () => {
     { ...evidence, coordinate_units: "document_points", page_size: null },
     { ...evidence, bbox: null },
     ...[{ l: -1 }, { r: 1100 }, { t: NaN }, { b: 200 }, { r: 50 }].map(change => ({ ...evidence, bbox: { ...evidence.bbox!, ...change } })),
-  ]) assert.equal(evidenceBox(item, 1, page), null);
-  assert.equal(evidenceBox(evidence, 1, { width: 1400, height: 1000 }), null);
-  assert.equal(evidenceBox(evidence, 1, { width: 0, height: 0 }), null);
-  // Pixel evidence with no page size uses the drawn image's own size.
-  assert.deepEqual(evidenceBox({ ...evidence, page_size: undefined }, 1, page), { left: 10, top: 20, width: 50, height: 10 });
+  ]) for (const source of ["pdf", "image"] as const) assert.equal(evidenceBox(item, 1, page, source), null);
+  assert.equal(evidenceBox(evidence, 1, { width: 1400, height: 1000 }, "pdf"), null);
+  assert.equal(evidenceBox(evidence, 1, { width: 0, height: 0 }, "image"), null);
+  // Pixel evidence with no page size uses an image's own size.
+  assert.deepEqual(evidenceBox({ ...evidence, page_size: undefined }, 1, page, "image"), { left: 10, top: 20, width: 50, height: 10 });
+});
+
+test("P2: evidence missing its page, origin or units is never drawn with guessed defaults", () => {
+  const page = { width: 1000, height: 1400 };
+  for (const source of ["pdf", "image"] as const) {
+    assert.equal(evidenceBox({ ...evidence, page: undefined }, 1, page, source), null, "no page");
+    assert.equal(evidenceBox({ ...evidence, bbox: { l: 100, t: 280, r: 600, b: 420 } }, 1, page, source), null, "no origin");
+    assert.equal(evidenceBox({ ...evidence, coordinate_units: undefined }, 1, page, source), null, "no units");
+  }
+  // A PDF page is drawn from points: pixel boxes need the size of the page image they were measured on.
+  assert.equal(evidenceBox({ ...evidence, page_size: undefined }, 1, page, "pdf"), null);
 });
 
 /* ---------- Next document ---------- */
@@ -177,10 +187,38 @@ test("P1: the submit uses the reviewed revision, moved on only by the accountant
 });
 
 test("P2: a draft is cleared only when stored, or when it is exactly the draft the page saved", () => {
-  assert.equal(draftSettled("12.00", "12.00"), true);
-  assert.equal(draftSettled("12.00", "11.00"), false, "old stored value: still unsaved");
-  assert.equal(draftSettled("1,200.00", "1200.00", "1,200.00"), true, "the backend normalised the saved draft");
-  assert.equal(draftSettled("1,250.00", "1200.00", "1,200.00"), false, "typed after the save: stays unsaved");
+  assert.equal(settleDraft("12.00", "12.00", undefined, undefined).settled, true);
+  assert.equal(settleDraft("12.00", "11.00", undefined, undefined).settled, false, "old stored value: still unsaved");
+  const note = { value: "1,200.00", id: 1 };
+  assert.deepEqual(settleDraft("1,200.00", "1200.00", note, undefined), { settled: true, usedId: 1 }, "the backend normalised the saved draft");
+  assert.deepEqual(settleDraft("1,250.00", "1200.00", note, undefined), { settled: false, usedId: 1 }, "typed after the save: stays unsaved");
+});
+
+test("P2 (round 2): a save note is used once, so repeating an old saved value later stays unsaved", () => {
+  const note = { value: "1,200.00", id: 7 };
+  const first = settleDraft("1,200.00", "1200.00", note, undefined);
+  assert.equal(first.settled, true);
+  // Checks failed; the accountant edits again and types the same text as before. The old note must not clear it.
+  assert.deepEqual(settleDraft("1,200.00", "1200.00", note, first.usedId), { settled: false, usedId: 7 });
+  // A new save of that draft brings a new note, which settles it once more.
+  assert.equal(settleDraft("1,200.00", "1200.00", { value: "1,200.00", id: 8 }, first.usedId).settled, true);
+});
+
+test("P1 (round 2): Enter never puts a machine candidate over a person's correction or a filled value", () => {
+  assert.equal(enterAction({ dirty: false, value: "Kedai Aina", suggestion: "KEDAI AINA SDN BHD", signal: "verified", corrected: true }), "move");
+  assert.equal(enterAction({ dirty: false, value: "Kedai Aina", suggestion: "KEDAI AINA SDN BHD", signal: "check", corrected: true }), "move");
+  // A filled "Please check" field with a different candidate: Enter confirms what is shown, never swaps it.
+  assert.deepEqual(enterAction({ dirty: false, value: "INV-1", suggestion: "INV-7", signal: "check", corrected: false }), { save: "INV-1" });
+  // An empty field takes the candidate; a typed change always wins.
+  assert.deepEqual(enterAction({ dirty: false, value: "", suggestion: "INV-7", signal: "missing", corrected: false }), { save: "INV-7" });
+  assert.deepEqual(enterAction({ dirty: true, value: "INV-9", suggestion: "INV-7", signal: "check", corrected: true }), { save: "INV-9" });
+});
+
+test("P1 (round 2): a line item changed during save and submit stops the submit", () => {
+  // Header fields saved by this submit are excluded; a line edited meanwhile is not.
+  assert.deepEqual(unsavedOutside(["Invoice number", "Line 2 Amount"], new Set(["Invoice number"])), ["Line 2 Amount"]);
+  assert.deepEqual(unsavedOutside(["Invoice number"], new Set(["Invoice number"])), []);
+  assert.deepEqual(unsavedOutside([], new Set()), []);
 });
 
 test("P2: the keyboard order stays as opened, so Enter after the last field goes to submit", () => {

@@ -99,14 +99,20 @@ export function stableOrder(entries: ReviewEntry[], opening: readonly string[]):
 }
 
 /**
- * What Enter does in a field: save a typed change; else accept the printed or suggested value; else, on a filled field
- * that still asks for a check, save its value as the accountant's confirmation (recorded with their name); else move on.
+ * What Enter does in a field, in this order:
+ * 1. a typed change is saved;
+ * 2. a person's correction is never replaced: move on;
+ * 3. an empty or "Suggested" field takes the printed or suggested value (a filled value is never swapped for a candidate);
+ * 4. a filled "Please check" field is saved as the accountant's confirmation (recorded with their name);
+ * 5. otherwise move on.
  */
 export function enterAction(field: { dirty: boolean; value: string; suggestion: string | null; signal?: ReviewSignal; corrected: boolean }): { save: string } | "move" {
   if (field.dirty) return { save: field.value };
-  if (field.suggestion != null) return { save: field.suggestion };
+  if (field.corrected) return "move";
+  const empty = field.value.trim() === "";
+  if (field.suggestion != null && (empty || field.signal === "suggestion")) return { save: field.suggestion };
   // A value with line breaks (a printed address) cannot be saved unchanged: the API refuses control characters.
-  if (!field.corrected && field.signal === "check" && field.value.trim() !== "" && !CONTROL_CHARACTERS.test(field.value)) return { save: field.value };
+  if (field.signal === "check" && !empty && !CONTROL_CHARACTERS.test(field.value)) return { save: field.value };
   return "move";
 }
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
@@ -147,16 +153,17 @@ export interface BoxPercent { left: number; top: number; width: number; height: 
 
 /**
  * Where `item` sits on page `page`, in percent of the displayed page. `displayed` is the page as drawn (canvas or image
- * size, any unit). Boxes are drawn only for top-left coordinates with a known page size whose shape matches the drawn
- * page; anything else returns null rather than a guessed position.
+ * size, any unit). Like `imageEvidenceBox`, nothing is assumed: the evidence must name its page, a top-left origin and
+ * its units, and give a page size whose shape matches the drawn page. Only on an image may pixel coordinates without a
+ * page size use the image's own size; a PDF page is drawn from points, so pixels need the size of the page they came
+ * from. Anything else returns null rather than a guessed position.
  */
-export function evidenceBox(item: SourceEvidence, page: number, displayed: { width: number; height: number }): BoxPercent | null {
+export function evidenceBox(item: SourceEvidence, page: number, displayed: { width: number; height: number }, source: "pdf" | "image"): BoxPercent | null {
   const box = item.bbox;
-  if (!box || (item.page ?? 1) !== page) return null;
-  if (box.coord_origin && box.coord_origin !== "TOPLEFT") return null;
-  const units = item.coordinate_units ?? "pixels";
-  if (!["pixels", "document_points"].includes(units)) return null;
-  const size = item.page_size ?? (units === "pixels" ? displayed : null);
+  if (!box || item.page !== page || box.coord_origin !== "TOPLEFT") return null;
+  const units = item.coordinate_units;
+  if (units !== "pixels" && units !== "document_points") return null;
+  const size = item.page_size ?? (units === "pixels" && source === "image" ? displayed : null);
   if (!size) return null;
   const numbers = [size.width, size.height, displayed.width, displayed.height, box.l, box.t, box.r, box.b];
   if (!numbers.every(Number.isFinite) || size.width <= 0 || size.height <= 0 || displayed.width <= 0 || displayed.height <= 0) return null;
@@ -175,12 +182,26 @@ export function evidenceBox(item: SourceEvidence, page: number, displayed: { wid
  */
 export const revisionToSubmit = (reviewed: number, ownSaves: readonly number[]) => ownSaves.length ? ownSaves[ownSaves.length - 1] : reviewed;
 
+/** The page's note that it saved this draft itself (Ctrl+Enter). `id` is unique per save, so each note is used once. */
+export interface SavedDraft { value: string; id: number }
+
 /**
- * A typed draft is settled (no longer unsaved) when the stored value equals it, or when the page itself saved exactly
- * this draft and has read the result back. A draft typed after that save differs from `savedDraft` and stays unsaved.
+ * Whether a typed draft is settled (no longer unsaved), and which save note has been used. A draft is settled when the
+ * stored value equals it, or when a save note not used before carries exactly this draft (the backend may normalise
+ * what it stores). A note is used the first time it is seen, whatever the draft, so a later edit that happens to repeat
+ * an old saved value stays unsaved instead of being wiped.
  */
-export const draftSettled = (draft: string, stored: string | null | undefined, savedDraft?: string) =>
-  draft === stored || (savedDraft !== undefined && draft === savedDraft);
+export function settleDraft(draft: string, stored: string | null | undefined, note: SavedDraft | undefined, usedId: number | undefined): { settled: boolean; usedId: number | undefined } {
+  const fresh = note && note.id !== usedId ? note : undefined;
+  return { settled: draft === stored || (!!fresh && draft === fresh.value), usedId: fresh ? fresh.id : usedId };
+}
+
+/**
+ * Unsaved fields (by label) that the submit would leave behind: anything still unsaved other than what this submit just
+ * saved. Line items are saved on their own, so one edited during the save must stop the submit.
+ */
+export const unsavedOutside = (unsavedLabels: readonly string[], savedLabels: ReadonlySet<string>) =>
+  unsavedLabels.filter(label => !savedLabels.has(label));
 
 /* ---------- Next document in the same lane ---------- */
 

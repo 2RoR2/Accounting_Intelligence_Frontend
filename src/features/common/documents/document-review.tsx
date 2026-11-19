@@ -60,7 +60,7 @@ import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
 import { useReviewQueue } from "./review/use-review-queue";
-import { SIGNAL_TEXT, draftSettled, enterAction, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, stableOrder, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
+import { SIGNAL_TEXT, enterAction, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -138,8 +138,8 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   onInputKey?: (event: KeyboardEvent<HTMLInputElement>, actions: FieldKeyActions) => void;
   /** Reports the unsaved value (null when saved) so Ctrl+Enter can save it. */
   onPendingChange?: (value: string | null) => void;
-  /** The draft the page saved for this field itself (Ctrl+Enter), passed once the saved values have been read back. */
-  savedDraft?: string;
+  /** The page's note that it saved this field's draft itself (Ctrl+Enter), passed once the saved values were read back. */
+  savedDraft?: SavedDraft;
   /** True while the page saves and submits: no edit may start after its snapshot of the drafts. */
   locked?: boolean;
 }) {
@@ -160,10 +160,13 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     return () => onDirtyChange?.(field.label, false);
   }, [dirty, field.label, onDirtyChange]);
   useEffect(() => { onPendingChange?.(dirty ? value : null); }, [dirty, value, onPendingChange]);
-  // A draft is settled once the stored value equals it, or the page saved exactly this draft (the backend may normalise it).
-  // Only the draft that was sent is cleared; anything typed afterwards stays unsaved.
+  // A draft is settled once the stored value equals it, or the page's save note carries exactly this draft (the backend
+  // may normalise it). Each note is used once (settleDraft), so a later edit repeating an old saved value stays unsaved.
+  const usedNote = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (dirty && draftSettled(value, field.value, savedDraft)) setDirty(false);
+    const result = settleDraft(value, field.value, savedDraft, usedNote.current);
+    usedNote.current = result.usedId;
+    if (dirty && result.settled) setDirty(false);
   }, [dirty, value, field.value, savedDraft]);
   /** Fills the input only. Nothing is stored until the reviewer presses Save. */
   const fillFromCandidate = (candidate: string) => { setValue(candidate); setDirty(true); setConflict(false); setError(""); };
@@ -173,8 +176,11 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     catch (e) { setError((e as Error).message); setConflict(e instanceof ApiError && e.status === 409); return false; }
     finally { setSaving(false); }
   };
-  // Enter accepts a printed or suggested value, except an unclear day/month order, which the reviewer must choose.
-  const suggestion = readonly || readings.length ? null : suggestedValue(candidates, field.value);
+  // Enter accepts a printed or suggested value, except an unclear day/month order, which the reviewer must choose, and
+  // never over a person's correction or a filled value (enterAction). The hint shows only when Enter would use it.
+  const candidate = readonly || readings.length ? null : suggestedValue(candidates, field.value);
+  const enterPlan = enterAction({ dirty: false, value: field.value ?? "", suggestion: candidate, signal, corrected: !!field.correctedBy });
+  const suggestion = enterPlan !== "move" && enterPlan.save === candidate ? candidate : null;
   return <div className={`shoebox-field${selected ? " selected" : ""}${signal ? ` review-signal-${signal}` : ""}`} onFocusCapture={onFocus} data-field={fieldKey}>
     <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
       {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
@@ -274,8 +280,13 @@ function DocumentReviewPage({
   const [onlyToCheck, setOnlyToCheck] = useState(true);
   const [unsaved, setUnsaved] = useState<string[]>([]);
   const [assistSource, setAssistSource] = useState<{ label: string; evidence: SourceEvidence[] } | undefined>();
-  const markDirty = useCallback((label: string, isDirty: boolean) => setUnsaved(current =>
-    isDirty ? (current.includes(label) ? current : [...current, label]) : current.filter(item => item !== label)), []);
+  // `unsavedNow` mirrors `unsaved` as it changes, so save-and-submit can re-check it after its awaits (the state it closed over is stale).
+  const unsavedNow = useRef<string[]>([]);
+  const markDirty = useCallback((label: string, isDirty: boolean) => setUnsaved(current => {
+    const next = isDirty ? (current.includes(label) ? current : [...current, label]) : current.filter(item => item !== label);
+    unsavedNow.current = next;
+    return next;
+  }), []);
   const [note, setNote] = useState("");
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
@@ -315,8 +326,12 @@ function DocumentReviewPage({
   // `order` is the field order at opening: the keyboard keeps it, so corrected fields do not move.
   const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string>; order: string[] }>();
   const [focusRequest, setFocusRequest] = useState<string>();
-  // Drafts that save-and-submit sent, set after the saved values were read back (see FormField `savedDraft`).
-  const [savedDrafts, setSavedDrafts] = useState<ReadonlyMap<string, string>>(new Map());
+  // Save notes for the drafts save-and-submit sent, set after the saved values were read back (see FormField `savedDraft`).
+  // Each note has a new id, so a field uses it once and an old note never clears a later edit.
+  const [savedDrafts, setSavedDrafts] = useState<ReadonlyMap<string, SavedDraft>>(new Map());
+  const noteId = useRef(0);
+  const acknowledge = (sent: ReadonlyMap<string, string>) =>
+    setSavedDrafts(new Map([...sent].map(([key, value]) => [key, { value, id: ++noteId.current }])));
   const inputs = useRef(new Map<string, HTMLInputElement>());
   const pendingValues = useRef(new Map<string, string>());
   const submitButton = useRef<HTMLButtonElement>(null);
@@ -464,7 +479,7 @@ function DocumentReviewPage({
         sent.set(key, value);
       }
       // Read the saved values back before the drafts are cleared, so the inputs never show the old values.
-      if (sent.size) { await refresh(); setSavedDrafts(new Map(sent)); }
+      if (sent.size) { await refresh(); acknowledge(sent); }
       // Always check the revision being submitted: an earlier PASS may belong to the revision before a field was confirmed.
       await revalidateDocument(user, documentId);
       const report = await getValidationReport(user, documentId);
@@ -482,6 +497,14 @@ function DocumentReviewPage({
         if (target) focusField(target);
         return;
       }
+      // Every field is locked while this runs; still, never submit past a change that was not saved (a line item, say).
+      const sentLabels = new Set([...sent.keys()].map(key => fieldLabel(kind, key, extraction.fields[key]?.label)));
+      const left = unsavedOutside(unsavedNow.current, sentLabels);
+      if (left.length) {
+        await refresh();
+        setFailure(`Not submitted: ${left.join(", ")} ${left.length === 1 ? "has" : "have"} unsaved changes. Save, then press Ctrl+Enter again.`);
+        return;
+      }
       await submitDocumentReview(documentId, "submitted", note || "Ready for approval", revisionToSubmit(reviewed, savedRevisions));
       const following = nextAfterSubmit(queue, await reloadQueue(), documentId);
       if (following) { router.push(`${base}/documents/${encodeURIComponent(following)}`); return; }
@@ -490,7 +513,7 @@ function DocumentReviewPage({
     } catch (e) {
       setFailure((e as Error).message + (sent.size ? ` Saved before this: ${sent.size} field${sent.size === 1 ? "" : "s"}.` : ""));
       // Show what is stored now: the fields saved before the failure, or someone else's newer version after a 409.
-      if (sent.size || (e instanceof ApiError && e.status === 409)) { await refresh(); setSavedDrafts(new Map(sent)); }
+      if (sent.size || (e instanceof ApiError && e.status === 409)) { await refresh(); acknowledge(sent); }
     } finally {
       setBusy(false);
     }
@@ -623,7 +646,7 @@ function DocumentReviewPage({
                           const original = originalRows?.[index]?.[key]?.value ?? null;
                           const correction = extraction.lineCorrections?.find(item => item.line_item_id === line.id && item.field_key === key);
                           const guidance = line.guidance?.[key];
-                          return <FormField key={key} readonly={readonly || !line.id}
+                          return <FormField key={key} readonly={readonly || !line.id} locked={busy}
                             selected={selectedLine?.index === index && selectedLine.key === key}
                             onFocus={() => { setHighlightedField(undefined); setSelectedLine({ index, key, label: `Line ${index + 1} ${label}` }); }}
                             field={{label: `Line ${index + 1} ${label}`, value: line[property] == null ? null : String(line[property]),

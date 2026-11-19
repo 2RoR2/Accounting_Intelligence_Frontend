@@ -124,7 +124,7 @@ export function ReviewSource({ documentId, name, mimeType, extraction, fields, s
   const boxesFor = (page: PageShape) => {
     const items: Array<{ id: string; key?: string; label: string; selected: boolean; style: CSSProperties }> = [];
     const add = (key: string | undefined, label: string, evidence: SourceEvidence[], isSelected: boolean) => evidence.forEach((item, index) => {
-      const box = evidenceBox(item, page.number, page);
+      const box = evidenceBox(item, page.number, page, page.canvas ? "pdf" : "image");
       if (box) items.push({ id: `${key ?? "selected"}-${index}`, key, label, selected: isSelected,
         style: { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` } });
     });
