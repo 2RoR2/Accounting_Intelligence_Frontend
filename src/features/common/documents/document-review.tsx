@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, CircleX, FileCheck2, RefreshCw } from "luc
 import type { CurrencyReview, EvidenceStatus, ExtractedField, SourceEvidence, User } from "@/types";
 import { AiAssistPanel } from "./ai-assist-panel";
 import { MissingLineForm } from "./missing-line-form";
-import { CURRENCY_SUPPORT, sourceCheckReason, aiAssistOutcomeLabel, alternativeCandidates, candidateText, dateReadings, dollarCurrencyChoices, fieldGroup, processingSteps, validationRank, type FieldGroup, type ProcessingTrace } from "@/lib/api/document-contract";
+import { CURRENCY_SUPPORT, sourceCheckReason, aiAssistOutcomeLabel, alternativeCandidates, candidateText, dateReadings, dollarCurrencyChoices, processingSteps, validationRank, type ProcessingTrace } from "@/lib/api/document-contract";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   acceptValidationReview,
@@ -41,7 +41,7 @@ import { ApiError } from "@/lib/api/client";
 import { canEditDocument, canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay as money, fieldLabel, reviewableFinding, sourceKind, standardisationAvailable, validationState, validationSummary } from "@/lib/api/document-contract";
 import { TransactionAnomalyVisual } from "@/features/common/documents/transaction-anomaly-visual";
-import { DocumentViewer, SourceEvidenceList } from "@/components/common/documents/document-viewer";
+import { SourceEvidenceList } from "@/components/common/documents/document-viewer";
 import { DocumentDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
 import {
@@ -56,6 +56,12 @@ import {
   submitDocumentReview,
   type DocumentComment,
 } from "@/lib/api/workflow.service";
+import type { KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
+import { ReviewSource } from "./review/source-pages";
+import { useReviewQueue } from "./review/use-review-queue";
+import { SIGNAL_TEXT, failedCheckNames, needsAttention, neighbourDocument, nextAfterSubmit, reviewOrder, reviewShortcut, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
+import "@/styles/review.css";
 
 
 /** What the reviewer sees under a field: the backend's review signal when present, else the evidence status, in plain words. */
@@ -118,9 +124,22 @@ function CurrencyReviewPanel({ review, readonly, saving, onConfirm }: { review: 
 /** Another document may have added this contact since this result was stored: then only revalidation is needed. */
 const addedOrExisting = (request: Promise<unknown>) => request.catch(e => { if (!(e instanceof ApiError && e.status === 409)) throw e; });
 
-function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview }: {
+/** Focus target after the last field: the "Save and submit" button. */
+const SUBMIT_TARGET = "__submit__";
+
+/** What the review page's keyboard handler can do inside one field (task B4b). */
+interface FieldKeyActions { value: string; dirty: boolean; suggestion: string | null; save: (value: string) => Promise<boolean> }
+
+function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedToken }: {
   field: ExtractedField; fieldKey?: string; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean; selected?: boolean;
   onDirtyChange?: (label: string, dirty: boolean) => void; currencyReview?: CurrencyReview | null;
+  /** Review signal in plain words; header fields only. */
+  signal?: ReviewSignal; inputRef?: (element: HTMLInputElement | null) => void;
+  onInputKey?: (event: KeyboardEvent<HTMLInputElement>, actions: FieldKeyActions) => void;
+  /** Reports the unsaved value (null when saved) so Ctrl+Enter can save it. */
+  onPendingChange?: (value: string | null) => void;
+  /** Changes after the page saved this field's value itself (Ctrl+Enter). */
+  savedToken?: number;
 }) {
   const inputId = useId();
   const [value, setValue] = useState(field.value ?? "");
@@ -138,15 +157,28 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     onDirtyChange?.(field.label, dirty);
     return () => onDirtyChange?.(field.label, false);
   }, [dirty, field.label, onDirtyChange]);
+  useEffect(() => { onPendingChange?.(dirty ? value : null); }, [dirty, value, onPendingChange]);
+  useEffect(() => { if (savedToken) setDirty(false); }, [savedToken]);
   /** Fills the input only. Nothing is stored until the reviewer presses Save. */
   const fillFromCandidate = (candidate: string) => { setValue(candidate); setDirty(true); setConflict(false); setError(""); };
-  return <div className={`shoebox-field${selected ? " selected" : ""}`} onFocusCapture={onFocus}>
+  const save = async (next: string) => {
+    setSaving(true); setError("");
+    try { await onSave(next); setDirty(false); return true; }
+    catch (e) { setError((e as Error).message); setConflict(e instanceof ApiError && e.status === 409); return false; }
+    finally { setSaving(false); }
+  };
+  // Enter accepts a printed or suggested value, except an unclear day/month order, which the reviewer must choose.
+  const suggestion = readonly || readings.length ? null : suggestedValue(candidates, field.value);
+  return <div className={`shoebox-field${selected ? " selected" : ""}${signal ? ` review-signal-${signal}` : ""}`} onFocusCapture={onFocus} data-field={fieldKey}>
     <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
       {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
     </div>
-    <span className="shoebox-field-state">{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : fieldStateText(field)}</span>
-    <input id={inputId} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving}
+    <span className={`shoebox-field-state${signal ? ` review-signal is-${signal}` : ""}`}>{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : signal ? SIGNAL_TEXT[signal] : fieldStateText(field)}</span>
+    <input id={inputId} ref={inputRef} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving}
+      aria-describedby={suggestion && onInputKey ? `${inputId}-enter` : undefined}
+      onKeyDown={onInputKey ? event => onInputKey(event, { value, dirty, suggestion, save }) : undefined}
       onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
+    {suggestion && onInputKey && <small className="review-enter-hint" id={`${inputId}-enter`}>Press Enter to use {suggestion}</small>}
     {fieldKey === "currency" && <datalist id={`${inputId}-currency-options`}>{currencyOptions.map(code => <option key={code} value={code} />)}</datalist>}
     {selected && <div className="shoebox-mobile-evidence"><strong>Selected source evidence</strong>
       {field.evidence?.length ? field.evidence.map((item, index) => <div key={index}><strong>Source page {item.page ?? "not provided"}</strong><p>{item.text ?? "Source text not provided"}</p></div>) : <p>Source evidence not available.</p>}
@@ -170,24 +202,14 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
       {field.value != null && <small>Parser value: {field.value}. The parser value is kept unless you change it.</small>}</div>}
     {!readonly && readings.length > 0 && <div className="shoebox-field-candidates"><small>Day and month order is not clear. Check the document, then choose:</small>
       <ul>{readings.map(item => <li key={item.value}>{item.label}: {item.value} <button type="button" className="text-link" onClick={() => fillFromCandidate(item.value)}>Use this reading</button></li>)}</ul></div>}
-    {currencyReview && <CurrencyReviewPanel review={currencyReview} readonly={readonly} saving={saving} onConfirm={async code => {
-      setSaving(true); setError("");
-      try { await onSave(code); setDirty(false); }
-      catch (e) { setError((e as Error).message); setConflict(e instanceof ApiError && e.status === 409); }
-      finally { setSaving(false); }
-    }} />}
+    {currencyReview && <CurrencyReviewPanel review={currencyReview} readonly={readonly} saving={saving} onConfirm={code => void save(code)} />}
     {!readonly && currencies.length > 0 && <div className="shoebox-field-candidates"><small>&quot;$&quot; does not name a currency. If the document or supplier shows which one, choose:</small>
       <ul>{currencies.map(code => <li key={code}><button type="button" className="text-link" onClick={() => fillFromCandidate(code)}>{code}</button></li>)}</ul></div>}
     {field.confirmationRequired && field.evidenceStatus !== "source_backed" && <small>Accountant confirmation required</small>}
     {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
       {warning.reviewed ? "Reviewed" : "Please check"}: {warning.message}
     </p>)}
-    {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict} onClick={async () => {
-      setSaving(true); setError("");
-      try { await onSave(value); setDirty(false); }
-      catch (e) { setError((e as Error).message); setConflict(e instanceof ApiError && e.status === 409); }
-      finally { setSaving(false); }
-    }}>{saving ? "Saving..." : "Save field"}</button>}
+    {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict} onClick={() => void save(value)}>{saving ? "Saving..." : "Save field"}</button>}
     {error && <p role="alert">{error}{conflict ? " Latest data refreshed; your draft is retained. Edit again after reviewing the saved value." : ""}</p>}
   </div>;
 }
@@ -234,7 +256,8 @@ export function DocumentReview({
     `${user.id}:${documentId}`,
   );
   const [panel, setPanel] = useState<"review" | "validation" | "record" | "activity">("review");
-  const [fieldFilter, setFieldFilter] = useState<"attention" | "all" | "reviewed">("attention");
+  // "Only fields to check" (task B4b): on by default, hides fields read from the document.
+  const [onlyToCheck, setOnlyToCheck] = useState(true);
   const [unsaved, setUnsaved] = useState<string[]>([]);
   const [assistSource, setAssistSource] = useState<{ label: string; evidence: SourceEvidence[] } | undefined>();
   const markDirty = useCallback((label: string, isDirty: boolean) => setUnsaved(current =>
@@ -271,6 +294,43 @@ export function DocumentReview({
     return () => window.clearInterval(timer);
   }, [data, refresh]);
 
+  /* ---------- Keyboard review (task B4b) ---------- */
+  const router = useRouter();
+  const { queue, reload: reloadQueue } = useReviewQueue(documentId);
+  // Fields that needed a check when this document opened. They stay on screen after a correction, so the list does not jump.
+  const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string> }>();
+  const [focusRequest, setFocusRequest] = useState<string>();
+  const [savedToken, setSavedToken] = useState(0);
+  const inputs = useRef(new Map<string, HTMLInputElement>());
+  const pendingValues = useRef(new Map<string, string>());
+  const submitButton = useRef<HTMLButtonElement>(null);
+  const keyHandler = useRef<(event: globalThis.KeyboardEvent) => void>(() => undefined);
+  // useResource keeps the previous document on screen while the next one loads: act only on the one asked for.
+  const current = data && String(data.doc.id) === documentId ? data : undefined;
+  const openingDoc = openingChecks?.doc;
+  useEffect(() => {
+    if (!current || openingDoc === documentId) return;
+    const failed = (current.validation ?? []).filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
+    const order = reviewOrder(current.extraction?.fields ?? {}, failed);
+    setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => needsAttention(entry.signal)).map(entry => entry.key)) });
+    pendingValues.current.clear();
+    const first = order.find(entry => needsAttention(entry.signal))?.key;
+    if (first) setFocusRequest(first);
+  }, [current, documentId, openingDoc]);
+  // Move focus once the target exists and is enabled (a save disables the inputs while it runs).
+  useEffect(() => {
+    if (!focusRequest || busy) return;
+    const element = focusRequest === SUBMIT_TARGET ? submitButton.current : inputs.current.get(focusRequest);
+    if (element && !element.disabled) element.focus();
+    setFocusRequest(undefined);
+  }, [focusRequest, busy]);
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent) => keyHandler.current(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
+  keyHandler.current = () => undefined;
   if (loading) return <LoadingState variant="review" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
@@ -282,16 +342,36 @@ export function DocumentReview({
   const validation = data.validation ?? [];
   const summary = validationSummary(validation);
   const failedFields = validation.filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
-  const fieldsIn = (group: FieldGroup) => Object.entries(extraction.fields).filter(([key, field]) => {
-    if (fieldFilter === "reviewed" && !field.correctedBy) return false;
-    if (fieldFilter === "attention" && fieldGroup(key, field, failedFields) !== "attention") return false;
-    return fieldGroup(key, field, failedFields) === group;
-  });
   const allFieldCount = Object.keys(extraction.fields).length;
-  const attentionFieldCount = Object.entries(extraction.fields).filter(([key, field]) => fieldGroup(key, field, failedFields) === "attention").length;
-  const reviewedFieldCount = Object.values(extraction.fields).filter(field => !!field.correctedBy).length;
-  const sourceBackedFieldCount = Object.entries(extraction.fields).filter(([key, field]) => fieldGroup(key, field, failedFields) === "source_backed").length;
-  const missingFieldCount = Object.entries(extraction.fields).filter(([key, field]) => fieldGroup(key, field, failedFields) === "not_printed").length;
+  // Review order and the "Only fields to check" filter (task B4b).
+  const order = reviewOrder(extraction.fields, failedFields);
+  const signalOf = new Map(order.map(entry => [entry.key, entry.signal]));
+  const visible = visibleEntries(order, onlyToCheck, openingChecks?.doc === documentId ? openingChecks.keys : undefined);
+  const visibleKeys = visible.map(entry => entry.key);
+  const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
+  const toCheckCount = order.filter(entry => needsAttention(entry.signal)).length;
+  const fieldForCheck = (name: string) => Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
+  const focusField = (key: string) => {
+    setPanel("review");
+    if (!visibleKeys.includes(key)) setOnlyToCheck(false);
+    setFocusRequest(key);
+  };
+  /** Tab / Shift+Tab move between the fields on screen; Enter saves a change, accepts a suggestion, or confirms and moves on. */
+  const fieldKeys = (key: string) => (event: KeyboardEvent<HTMLInputElement>, actions: FieldKeyActions) => {
+    const shortcut = reviewShortcut(event, true);
+    if (shortcut === "next-field" || shortcut === "previous-field") {
+      const target = stepField(visibleKeys, key, shortcut === "next-field" ? 1 : -1);
+      if (target) { event.preventDefault(); setFocusRequest(target); }
+      else if (shortcut === "next-field" && submitButton.current && !submitButton.current.disabled) { event.preventDefault(); setFocusRequest(SUBMIT_TARGET); }
+      return;
+    }
+    if (shortcut !== "accept") return;
+    event.preventDefault();
+    const next = stepField(visibleKeys, key, 1) ?? SUBMIT_TARGET;
+    const value = actions.dirty ? actions.value : actions.suggestion;
+    if (value == null) { setFocusRequest(next); return; }
+    void actions.save(value).then(saved => { if (saved) setFocusRequest(next); });
+  };
   const renderField = ([key, field]: [string, ExtractedField]) => (
     <FormField
       key={key}
@@ -301,6 +381,11 @@ export function DocumentReview({
       currencyReview={key === "currency" ? extraction.currencyReview : undefined}
       selected={!selectedLine && highlightedField === key}
       onDirtyChange={markDirty}
+      signal={signalOf.get(key)}
+      savedToken={savedToken}
+      inputRef={element => { if (element) inputs.current.set(key, element); else inputs.current.delete(key); }}
+      onInputKey={fieldKeys(key)}
+      onPendingChange={value => { if (value == null) pendingValues.current.delete(key); else pendingValues.current.set(key, value); }}
       onFocus={() => { setAssistSource(undefined); setSelectedLine(undefined); setHighlightedField(key); }}
       onSave={(value) =>
         run(
@@ -310,7 +395,6 @@ export function DocumentReview({
       }
     />
   );
-  const modelSuggestions = Object.values(extraction.fields).filter(field => alternativeCandidates(field).model.length > 0).length;
   // A receivable's counterparty is the customer, even before the company has a customer list.
   const receivable = data.doc.category?.toUpperCase() === "ACCOUNTS_RECEIVABLE";
   const newSupplier = extraction.fields.supplier?.value ?? extraction.fields.merchant?.value ?? extraction.fields.issuer?.value;
@@ -331,6 +415,64 @@ export function DocumentReview({
   const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
   const extracting = data.doc.status === "PROCESSING";
 
+  /* ---------- Next document and Ctrl+Enter (task B4b) ---------- */
+  const queueIndex = queue.indexOf(documentId);
+  const previousId = neighbourDocument(queue, documentId, -1);
+  const nextId = neighbourDocument(queue, documentId, 1);
+  const openDocument = (id: string) => {
+    if (unsaved.length && !window.confirm(`Leave this document without saving ${unsaved.length} change${unsaved.length === 1 ? "" : "s"}?`)) return;
+    router.push(`${base}/documents/${encodeURIComponent(id)}`);
+  };
+  const canSubmit = user.role === "ACCOUNTANT" && canRevalidate && !readonly;
+  /** Saves every unsaved field, runs the checks again, submits when nothing must be fixed, then opens the next document in the lane. */
+  async function saveAndSubmit() {
+    if (busy || !current) return;
+    if (readonly || !canRevalidate) { setFailure(data!.doc.status === "IN_REVIEW" ? "This document is already submitted for approval." : "This document cannot be changed here."); return; }
+    const changes = [...pendingValues.current.entries()];
+    if (unsaved.length > changes.length) { setFailure("Save the line item changes first, then press Ctrl+Enter."); return; }
+    setBusy(true); setFailure(""); setToast("");
+    try {
+      let revision = extraction.contentRevision!;
+      for (const [key, value] of changes) revision = (await updateExtractedField(user, documentId, key, value, revision)).contentRevision;
+      if (changes.length) { pendingValues.current.clear(); setSavedToken(token => token + 1); }
+      if (changes.length || validationStatus !== "PASS") await revalidateDocument(user, documentId);
+      const [doc, report] = await Promise.all([getDocument(user, documentId), getValidationReport(user, documentId)]);
+      const results = report?.results ?? [];
+      const blocking = validationSummary(results).blocking;
+      if (user.role !== "ACCOUNTANT") {
+        await refresh();
+        setToast(changes.length ? "Changes saved and checked. An accountant submits documents for approval." : "Checked. An accountant submits documents for approval.");
+        return;
+      }
+      if (report?.validationStatus !== "PASS" || blocking > 0) {
+        await refresh();
+        setFailure(`${blocking || "Some"} ${blocking === 1 ? "check needs" : "checks need"} fixing before this document can be submitted.${changes.length ? " Your changes are saved." : ""}`);
+        const target = results.map(item => item.result === "FAIL" && item.field ? fieldForCheck(item.field) : undefined).find(Boolean);
+        if (target) focusField(target);
+        return;
+      }
+      await submitDocumentReview(documentId, "submitted", note || "Ready for approval", doc.contentRevision ?? revision);
+      const following = nextAfterSubmit(queue, await reloadQueue(), documentId);
+      if (following) { router.push(`${base}/documents/${encodeURIComponent(following)}`); return; }
+      await refresh();
+      setToast("Submitted for approval. No other document waits in this list.");
+    } catch (e) {
+      setFailure((e as Error).message);
+      if (e instanceof ApiError && e.status === 409) await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+  keyHandler.current = event => {
+    if (!current || failed || pending || event.defaultPrevented) return;
+    const shortcut = reviewShortcut(event);
+    if (shortcut === "submit") { event.preventDefault(); void saveAndSubmit(); }
+    if (shortcut === "next-document" || shortcut === "previous-document") {
+      const target = shortcut === "next-document" ? nextId : previousId;
+      if (target) { event.preventDefault(); openDocument(target); }
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -340,6 +482,11 @@ export function DocumentReview({
         actions={
           <>
             <StatusBadge status={data.doc.status} />
+            {queue.length > 1 && <span className="review-queue-nav" role="group" aria-label="Documents in this list">
+              <button type="button" className="btn small" disabled={!previousId} aria-keyshortcuts="Alt+ArrowLeft" title="Previous document (Alt+Left)" onClick={() => previousId && openDocument(previousId)}>Previous</button>
+              <span className="review-queue-position">{queueIndex >= 0 ? `${queueIndex + 1} of ${queue.length}` : `${queue.length} to review`}</span>
+              <button type="button" className="btn small" disabled={!nextId} aria-keyshortcuts="Alt+ArrowRight" title="Next document (Alt+Right)" onClick={() => nextId && openDocument(nextId)}>Next</button>
+            </span>}
             <Link href={`${base}/documents`} className="btn">
               All documents
             </Link>
@@ -373,17 +520,18 @@ export function DocumentReview({
           {panel === "review" && (
             <div className="shoebox-split">
               <div className="shoebox-doc">
-                <DocumentViewer name={data.doc.name} extraction={extraction} highlightedField={highlightedField}
-                  selectedSource={assistSource ? assistSource : selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [] }
-                    : highlightedField ? { label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [] } : undefined} />
+                <ReviewSource documentId={documentId} name={data.doc.name} extraction={extraction} onSelectField={focusField}
+                  fields={visibleKeys.map(key => ({ key, label: fieldLabel(kind, key, extraction.fields[key]?.label), evidence: extraction.fields[key]?.evidence ?? [] }))}
+                  selected={assistSource ? assistSource : selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [] }
+                    : highlightedField ? { key: highlightedField, label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [] } : undefined} />
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">
                   <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : kind[0] + kind.slice(1).toLowerCase() + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}</small></div>
                   <div className="review-filter-bar" role="toolbar" aria-label="Field filters">
-                    <button type="button" className={fieldFilter === "attention" ? "active" : ""} onClick={() => setFieldFilter("attention")}>Needs attention <b>{attentionFieldCount}</b></button>
-                    <button type="button" className={fieldFilter === "all" ? "active" : ""} onClick={() => setFieldFilter("all")}>All fields <b>{allFieldCount}</b></button>
-                    <button type="button" className={fieldFilter === "reviewed" ? "active" : ""} onClick={() => setFieldFilter("reviewed")}>Reviewed <b>{reviewedFieldCount}</b></button>
+                    <label className="review-only-toggle"><input type="checkbox" role="switch" checked={onlyToCheck} onChange={event => setOnlyToCheck(event.target.checked)} />
+                      Only fields to check <b>{toCheckCount}</b></label>
+                    <small className="review-key-hint">Tab next field · Enter accept · Ctrl+Enter save and submit · Alt+→ next document</small>
                   </div>
                 </div>
                 {kind === "UNKNOWN" && (Object.keys(extraction.fields).length > 0 || extraction.lineItems.length > 0) &&
@@ -405,18 +553,16 @@ export function DocumentReview({
                 {Object.keys(extraction.fields).length > 0 && <div role="status" className="review-focus-summary">
                   <strong className="review-summary-title">Review status</strong>
                   <ul className="review-summary-list">
-                    <li className="is-warning"><b>{attentionFieldCount}</b><span>{attentionFieldCount === 1 ? "field needs" : "fields need"} your decision</span></li>
-                    <li className="is-info"><b>{sourceBackedFieldCount}</b><span>have source evidence or a human correction</span></li>
-                    <li className="is-danger"><b>{missingFieldCount}</b><span>have no value selected</span></li>
-                    <li className="is-neutral"><b>{modelSuggestions}</b><span>{modelSuggestions === 1 ? "field has" : "fields have"} a suggested value; none are applied automatically</span></li>
+                    <li className="is-warning"><b>{signalCount("check")}</b><span>{signalCount("check") === 1 ? "field says" : "fields say"} &quot;Please check&quot;</span></li>
+                    <li className="is-info"><b>{signalCount("verified")}</b><span>read from the document or corrected by a person</span></li>
+                    <li className="is-danger"><b>{signalCount("missing")}</b><span>not found on the document</span></li>
+                    <li className="is-neutral"><b>{signalCount("suggestion")}</b><span>{signalCount("suggestion") === 1 ? "field has" : "fields have"} a suggested value; nothing is applied until you accept it</span></li>
                     {data.validationReport && <li className="is-validation"><b>Validation</b><span>{summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked</span></li>}
                   </ul>
                 </div>}
-                {fieldsIn("attention").length > 0 && <details open className="review-field-group review-priority-group"><summary><span>Needs your attention</span><b>{fieldsIn("attention").length}</b></summary><p className="review-section-help">Fields with missing, conflicting, or uncertain values. Compare each one with the source document.</p><div className="shoebox-fields" aria-label="Fields that need your decision">{fieldsIn("attention").map(renderField)}</div></details>}
-                {fieldsIn("source_backed").length > 0 && <details className="review-field-group"><summary><span>Source-backed and reviewed fields</span><b>{fieldsIn("source_backed").length}</b></summary>
-                  <div className="shoebox-fields">{fieldsIn("source_backed").map(renderField)}</div></details>}
-                {fieldsIn("not_printed").length > 0 && <details open={data.validationReport?.validationStatus !== "PASS" || undefined} className="review-field-group"><summary><span>No value selected</span><b>{fieldsIn("not_printed").length}</b></summary>
-                  <div className="shoebox-fields">{fieldsIn("not_printed").map(renderField)}</div></details>}
+                {visible.length > 0 && <div className="shoebox-fields review-field-list" aria-label={onlyToCheck ? "Fields to check" : "All fields"}>
+                  {visible.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div>}
+                {allFieldCount > 0 && visible.length === 0 && <p className="review-all-read" role="status">Every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
                 {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
                   <p>Notes about how the document was read. They are separate from the accounting checks.</p>
                   {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
@@ -484,6 +630,8 @@ export function DocumentReview({
                         <button className="btn" disabled={readonly || busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.")}>Save draft</button>
                         {canRevalidate && <button className="btn primary" disabled={readonly || busy || unsaved.length > 0} onClick={() => run(() => revalidateDocument(user, documentId), "Review saved and revalidated.")}><CheckCircle2 size={16} /> Save & revalidate</button>}
                         {user.role === "ACCOUNTANT" && canRevalidate && <button className={`btn ${validationStatus === "PASS" && blockingFindings === 0 ? "primary" : "secondary"}`} disabled={readonly || busy || validationStatus !== "PASS" || blockingFindings > 0 || unsaved.length > 0} onClick={() => run(() => submitDocumentReview(documentId, "submitted", note || "Ready for approval", data.doc.contentRevision ?? 1), "Submitted for approval.")}>Submit for approval</button>}
+                        {canSubmit && <button ref={submitButton} type="button" className="btn primary review-save-submit" disabled={busy} aria-keyshortcuts="Control+Enter" onClick={() => void saveAndSubmit()}>
+                          Save, check and submit <kbd>Ctrl+Enter</kbd></button>}
                       </div>
                     </div>
                     {user.role === "ACCOUNTANT" && canRevalidate && blockingFindings > 0 && <div className="review-blocking-notice" role="status"><strong>{blockingFindings} {blockingFindings === 1 ? "issue blocks" : "issues block"} submission</strong><span>Review the validation findings to continue.</span><button type="button" className="text-link" onClick={viewIssues}>View issues</button></div>}
@@ -530,6 +678,9 @@ export function DocumentReview({
                     {v.vendor_candidate && <p>Did you mean: {v.vendor_candidate.vendor_name ?? "Not provided"}?</p>}
                     {v.vendor_candidate && <details className="validation-details"><summary>Details</summary><small>Name similarity {v.vendor_candidate.similarity ?? "not provided"} (name matching, not extraction confidence) · method {v.vendor_candidate.score_method ?? "not provided"}</small></details>}
                   </div> },
+                  // Task B4b: jump from a failed check to the field it concerns, on the Review tab with its source highlighted.
+                  { label: "Fix", render: (v) => { const key = v.result === "FAIL" && v.field ? fieldForCheck(v.field) : undefined;
+                    return key ? <button type="button" className="btn small" onClick={() => focusField(key)} aria-label={`Fix ${fieldLabel(kind, key, extraction.fields[key]?.label)}`}>Fix</button> : null; } },
                 ]}
               />
               <div className="panel-body actions validation-actions">

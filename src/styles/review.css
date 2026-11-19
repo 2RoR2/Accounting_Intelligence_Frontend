@@ -1,0 +1,45 @@
+/* Side-by-side review (plan v3 task B4b). Builds on the shoebox-*, doc-viewer and image-viewer-* classes in common.css;
+   only what those do not cover lives here. Colours come from the theme tokens in common.css. */
+
+/* Signal beside each field, in plain words. */
+.review-signal { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+.review-signal::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.review-signal.is-check { color: #9a3412; background: #fff4e5; }
+.review-signal.is-suggestion { color: #1763b2; background: var(--color-4); }
+.review-signal.is-missing { color: #b42318; background: #fef0ef; }
+.review-signal.is-verified { color: #166534; background: #ecfdf3; }
+.shoebox-field.review-signal-check { border-left: 3px solid #f59e0b; }
+.shoebox-field.review-signal-missing { border-left: 3px solid #ef4444; }
+.shoebox-field.review-signal-suggestion { border-left: 3px solid var(--color-0); }
+.review-enter-hint { color: var(--muted); font-size: 12px; }
+
+/* "Only fields to check" toggle and keyboard hint in the form head. */
+.review-only-toggle { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #c7d8eb; border-radius: 999px; padding: 6px 12px; background: #fff; color: #135ea9; font-size: 13px; font-weight: 600; cursor: pointer; }
+.review-only-toggle input { width: 16px; height: 16px; accent-color: var(--color-0); margin: 0; }
+.review-only-toggle b { font-size: 12px; }
+.review-key-hint { align-self: center; color: #6b7f96; font-size: 12px; font-weight: 500; }
+.review-all-read { margin: 12px 16px; padding: 12px; border: 1px solid #bbf7d0; border-radius: 8px; background: #f0fdf4; color: #166534; font-size: 14px; }
+.review-field-list { padding-top: 4px; }
+
+/* Previous / next document in the page header. */
+.review-queue-nav { display: inline-flex; align-items: center; gap: 6px; }
+.review-queue-position { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.review-save-submit kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: rgb(255 255 255 / 22%); font: inherit; font-size: 11px; }
+
+/* The original document with evidence boxes. */
+.review-source-caption { margin: 0; padding: 8px 16px; background: var(--color-4); color: var(--ink); font-size: 13px; border-bottom: 1px solid var(--border); }
+.review-source-viewport { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.review-source-status { margin: 0 auto; color: #e2e8f0; font-size: 14px; }
+.review-source-status a { color: #bae6fd; }
+.review-source-probe { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.review-page { position: relative; flex: none; margin-inline: auto; background: #fff; box-shadow: 0 4px 18px rgb(8 30 56 / 35%); }
+.review-page-canvas, .review-page-canvas canvas, .review-page > img { display: block; width: 100%; height: 100%; }
+.review-evidence-box { position: absolute; padding: 0; min-height: 0; border: 1px solid rgb(60 146 247 / 45%); border-radius: 2px; background: rgb(60 146 247 / 8%); cursor: pointer; }
+.review-evidence-box:hover { border-color: var(--color-0); background: rgb(60 146 247 / 18%); }
+.review-evidence-box.is-selected { z-index: 1; border: 2px solid #f59e0b; background: rgb(251 191 36 / 22%); box-shadow: 0 0 0 3px rgb(251 191 36 / 35%); }
+
+@media (max-width: 760px) {
+  .review-key-hint { display: none; }
+  .review-queue-nav { width: 100%; justify-content: space-between; }
+  .review-source-viewport { height: clamp(260px, 46dvh, 520px); }
+}
