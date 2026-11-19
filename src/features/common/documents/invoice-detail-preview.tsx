@@ -1,14 +1,15 @@
 "use client";
 import { Badge } from "@/components/common/ui";
 import { decimalDisplay, documentReference, fieldLabel, sourceKind } from "@/lib/api/document-contract";
-import { documentKindLabel, formatChosenBy, statusLabel, typeWasLookedFor } from "@/lib/glossary";
+import { documentKindLabel, formatChosenBy, readingFacts, statusLabel, typeHeadingNote } from "@/lib/glossary";
 import type { Document, Extraction } from "@/types";
 export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extraction: Extraction }) {
   const kind = sourceKind(extraction, doc.type);
   const title = kind === "UNKNOWN" ? "Unknown / Needs Review" : documentKindLabel(kind) + " details";
   const decision = extraction.kindDecision;
-  // "No heading names its type" is true only when reading looked for one. With nothing mapped, no type rules ran.
-  const lookedForType = typeWasLookedFor({ typeReason: extraction.classification?.reason, typeMethod: extraction.classification?.method });
+  // "No heading names its type" only when reading looked for one; "not looked for" only when nothing was
+  // read at all (no type detected, no field read), never next to values reading found.
+  const headingNote = typeHeadingNote(readingFacts(extraction.raw, doc.mimeType, extraction.classification, extraction.fields));
   const value = (key: string) => key === "reference" ? documentReference(extraction.fields) : extraction.fields[key]?.value;
   const keys = kind === "BILL" ? ["supplier", "reference", "account_number", "billing_period", "date", "due", "currency"]
     : kind === "RECEIPT" ? ["supplier", "reference", "date", "transaction_time", "payment_method", "currency"]
@@ -32,7 +33,7 @@ export function DocumentDetailPreview({ doc, extraction }: { doc: Document; extr
         <div><span>Intake identifier</span><strong>{doc.code ?? doc.id}</strong></div>
         <div><span>Accounting category</span><strong>{doc.category ?? "Not provided"}</strong></div>
       </div>
-      {!sources.length && <p>{lookedForType ? "No heading on the document names its type. Check the original document." : "The type was not looked for: nothing was read from this document automatically."}</p>}
+      {!sources.length && <p>{headingNote}</p>}
       {sources.map((item, index) => <div key={index}><p>{item.evidence?.text ?? item.matched_title ?? "Not provided"}</p><small>{item.evidence?.source_ref}</small>
         {item.evidence?.prov?.map((prov, i) => <p key={i}><a href={"/api/documents/" + encodeURIComponent(doc.id) + "/file" + (prov.page_no ? "#page=" + prov.page_no : "")} target="_blank" rel="noreferrer">Source page {prov.page_no ?? "not provided"}</a>{prov.bbox && <small> | Position on page: {JSON.stringify(prov.bbox)}</small>}</p>)}
       </div>)}

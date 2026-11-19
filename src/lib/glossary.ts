@@ -123,11 +123,34 @@ export interface ReadingFacts {
   aiMode?: string | null; aiError?: string | null; issueCodes?: string[];
   typeStatus?: string | null; typeReason?: string | null; typeMethod?: string | null;
   isPdf?: boolean;
+  /** At least one field was read from the document (not typed in by a person). */
+  fieldsRead?: boolean;
+}
+
+type FieldReading = { value?: string | null; original?: string | null; correctedBy?: string | null };
+/** True when reading put a value in at least one field. A person's own entries do not count. */
+export function fieldsWereRead(fields?: Record<string, FieldReading> | null) {
+  return Object.values(fields ?? {}).some(field => field.original != null || (field.value != null && !field.correctedBy));
 }
 
 /** True when reading looked for a printed heading. False when no type rules ran at all (nothing was mapped). */
 export function typeWasLookedFor(facts: Pick<ReadingFacts, "typeReason" | "typeMethod">) {
   return !!facts.typeMethod && facts.typeMethod !== "none" && facts.typeReason !== "NO_AUTOMATIC_MAPPING";
+}
+
+/**
+ * Nothing was read automatically: no type was detected and no field holds a read value. Decided from
+ * the result, not from the classification method, which a successful reading may leave out.
+ */
+export function nothingWasRead(facts: Pick<ReadingFacts, "typeStatus" | "fieldsRead">) {
+  return facts.typeStatus !== "classified" && !facts.fieldsRead;
+}
+
+/** The line under the type details when no printed heading is listed for it. */
+export function typeHeadingNote(facts: Pick<ReadingFacts, "typeStatus" | "typeReason" | "typeMethod" | "fieldsRead">) {
+  if (facts.typeStatus === "classified") return "The type was detected, but the heading it was read from is not listed. Check it against the original document.";
+  if (nothingWasRead(facts) && !typeWasLookedFor(facts)) return "The type was not looked for: nothing was read from this document automatically.";
+  return "No heading on the document names its type. Check the original document.";
 }
 
 /**
@@ -146,7 +169,7 @@ export function readingReason(facts: ReadingFacts, { typeChosen = false } = {}):
   if (facts.aiError || codes.has("AI_UNAVAILABLE"))
     return `Automatic reading could not be reached${facts.aiError ? ` (${facts.aiError})` : ""}, so ${subject} was only read with the basic rules. ${next} Ask your admin to check automatic reading.`;
   const off = facts.aiMode === "off";
-  if (!typeWasLookedFor(facts))
+  if (nothingWasRead(facts) && !typeWasLookedFor(facts))
     return off
       ? `Automatic reading is switched off on this installation, so ${subject} was not read. ${next} Ask your admin to turn reading on for new uploads.`
       : `${subject === "this PDF" ? "This PDF" : "This document"} was not read automatically. ${next}`;
@@ -166,7 +189,8 @@ export function formatChosenBy(decision: { chosenBy?: string | null; chosenAt?: 
  * classification, else raw.document_type), so a type the API reports as classified is never called unread.
  */
 export function readingFacts(raw: Record<string, unknown> | undefined, mimeType?: string | null,
-  classification?: { status?: string | null; reason?: string | null; method?: string | null } | null): ReadingFacts {
+  classification?: { status?: string | null; reason?: string | null; method?: string | null } | null,
+  fields?: Record<string, FieldReading> | null): ReadingFacts {
   const record = (value: unknown) => (value && typeof value === "object" ? value as Record<string, unknown> : {});
   const text = (value: unknown) => (typeof value === "string" ? value : null);
   const ai = record(record(raw?.provenance).ai);
@@ -177,6 +201,7 @@ export function readingFacts(raw: Record<string, unknown> | undefined, mimeType?
     issueCodes: issues.map(issue => text(record(issue).code)).filter((code): code is string => !!code),
     typeStatus: text(type.status), typeReason: text(type.reason), typeMethod: text(type.method),
     isPdf: String(mimeType ?? "").toLowerCase() === "application/pdf",
+    fieldsRead: fieldsWereRead(fields),
   };
 }
 

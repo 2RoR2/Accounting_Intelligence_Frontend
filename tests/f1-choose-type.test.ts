@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CHOOSABLE_DOCUMENT_KINDS, documentKindLabel, formatChosenBy, readingFacts, readingReason, ruleSentence, ruleTitle,
-  typePendingCheck, typeWasLookedFor,
+  CHOOSABLE_DOCUMENT_KINDS, documentKindLabel, fieldsWereRead, formatChosenBy, nothingWasRead, readingFacts, readingReason, ruleSentence, ruleTitle,
+  typeHeadingNote, typePendingCheck, typeWasLookedFor,
 } from "../src/lib/glossary";
 import { mapExtraction, sourceKind, validationSummary } from "../src/lib/api/document-contract";
 import type { ValidationResult } from "../src/types";
@@ -56,7 +56,7 @@ test("type-pending checks do not count as problems to fix, the type finding stil
 test("the reason says reading was switched off, not that no heading names the type", () => {
   const facts = readingFacts(PDF_NOT_READ, "application/pdf");
   assert.deepEqual(facts, { aiMode: "off", aiError: null, issueCodes: ["OCR_REQUIRES_REVIEW"], typeStatus: "unknown",
-    typeReason: "NO_AUTOMATIC_MAPPING", typeMethod: "none", isPdf: true });
+    typeReason: "NO_AUTOMATIC_MAPPING", typeMethod: "none", isPdf: true, fieldsRead: false });
   assert.equal(typeWasLookedFor(facts), false);
   const reason = readingReason(facts)!;
   assert.match(reason, /^Automatic reading is switched off on this installation, so this PDF was not read\. Choose the type and enter the details/);
@@ -103,4 +103,25 @@ test("a type the API reports as classified is never called unread, even without 
   // Without a top-level classification, mapExtraction falls back to raw.document_type, as before.
   const fallback = mapExtraction({ documentId: "d", raw: PDF_NOT_READ });
   assert.match(readingReason(readingFacts(fallback.raw, "application/pdf", fallback.classification))!, /switched off/);
+});
+
+test("values reading found are never called unread, even without a classification method (Codex P2 on #7)", () => {
+  // The classified-bill fixture from d22-contract.test.ts: classified, no method, no candidate headings, a read total.
+  const bill = mapExtraction({ documentId: "bill", classification: { value: "bill", status: "classified", reason: "EXPLICIT_DOCUMENT_HEADING" },
+    fields: [{ key: "total", value: "80.00", confidence: null }, { key: "tax", value: null }], lineItems: [{ quantity: null, unit_price: null, amount: "80.00" }] });
+  const facts = readingFacts(bill.raw, "application/pdf", bill.classification, bill.fields);
+  assert.equal(facts.fieldsRead, true);
+  assert.equal(nothingWasRead(facts), false);
+  assert.doesNotMatch(typeHeadingNote(facts), /nothing was read/);
+  assert.match(typeHeadingNote(facts), /^The type was detected/);
+  assert.equal(readingReason(facts), null);
+  // Fields read but no type: the type is uncertain, but the document was read.
+  const untyped = { ...facts, typeStatus: "unknown", typeReason: "NO_AUTOMATIC_MAPPING", typeMethod: null };
+  assert.equal(typeHeadingNote(untyped), "No heading on the document names its type. Check the original document.");
+  assert.doesNotMatch(readingReason({ ...untyped, aiMode: "off" })!, /was not read/);
+  // Nothing read: empty fields added by a type choice and a person's own entries do not count as read.
+  assert.equal(fieldsWereRead({ supplier: { value: null }, total: { value: "5.00", correctedBy: "u1" } }), false);
+  const unread = readingFacts(PDF_NOT_READ, "application/pdf", null, { supplier: { value: null } });
+  assert.match(typeHeadingNote(unread), /^The type was not looked for/);
+  assert.match(readingReason(unread)!, /so this PDF was not read/);
 });
