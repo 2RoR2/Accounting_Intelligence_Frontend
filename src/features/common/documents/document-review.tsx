@@ -60,7 +60,7 @@ import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
 import { useReviewQueue } from "./review/use-review-queue";
-import { SIGNAL_TEXT, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
+import { SIGNAL_TEXT, draftSettled, enterAction, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, stableOrder, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -130,7 +130,7 @@ const SUBMIT_TARGET = "__submit__";
 /** What the review page's keyboard handler can do inside one field (task B4b). */
 interface FieldKeyActions { value: string; dirty: boolean; suggestion: string | null; save: (value: string) => Promise<boolean> }
 
-function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedToken }: {
+function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedDraft, locked }: {
   field: ExtractedField; fieldKey?: string; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean; selected?: boolean;
   onDirtyChange?: (label: string, dirty: boolean) => void; currencyReview?: CurrencyReview | null;
   /** Review signal in plain words; header fields only. */
@@ -138,8 +138,10 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   onInputKey?: (event: KeyboardEvent<HTMLInputElement>, actions: FieldKeyActions) => void;
   /** Reports the unsaved value (null when saved) so Ctrl+Enter can save it. */
   onPendingChange?: (value: string | null) => void;
-  /** Changes after the page saved this field's value itself (Ctrl+Enter). */
-  savedToken?: number;
+  /** The draft the page saved for this field itself (Ctrl+Enter), passed once the saved values have been read back. */
+  savedDraft?: string;
+  /** True while the page saves and submits: no edit may start after its snapshot of the drafts. */
+  locked?: boolean;
 }) {
   const inputId = useId();
   const [value, setValue] = useState(field.value ?? "");
@@ -158,7 +160,11 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     return () => onDirtyChange?.(field.label, false);
   }, [dirty, field.label, onDirtyChange]);
   useEffect(() => { onPendingChange?.(dirty ? value : null); }, [dirty, value, onPendingChange]);
-  useEffect(() => { if (savedToken) setDirty(false); }, [savedToken]);
+  // A draft is settled once the stored value equals it, or the page saved exactly this draft (the backend may normalise it).
+  // Only the draft that was sent is cleared; anything typed afterwards stays unsaved.
+  useEffect(() => {
+    if (dirty && draftSettled(value, field.value, savedDraft)) setDirty(false);
+  }, [dirty, value, field.value, savedDraft]);
   /** Fills the input only. Nothing is stored until the reviewer presses Save. */
   const fillFromCandidate = (candidate: string) => { setValue(candidate); setDirty(true); setConflict(false); setError(""); };
   const save = async (next: string) => {
@@ -174,7 +180,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
       {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
     </div>
     <span className={`shoebox-field-state${signal ? ` review-signal is-${signal}` : ""}`}>{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : signal ? SIGNAL_TEXT[signal] : fieldStateText(field)}</span>
-    <input id={inputId} ref={inputRef} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving}
+    <input id={inputId} ref={inputRef} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving || locked}
       aria-describedby={suggestion && onInputKey ? `${inputId}-enter` : undefined}
       onKeyDown={onInputKey ? event => onInputKey(event, { value, dirty, suggestion, save }) : undefined}
       onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
@@ -209,7 +215,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
       {warning.reviewed ? "Reviewed" : "Please check"}: {warning.message}
     </p>)}
-    {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict} onClick={() => void save(value)}>{saving ? "Saving..." : "Save field"}</button>}
+    {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict || locked} onClick={() => void save(value)}>{saving ? "Saving..." : "Save field"}</button>}
     {error && <p role="alert">{error}{conflict ? " Latest data refreshed; your draft is retained. Edit again after reviewing the saved value." : ""}</p>}
   </div>;
 }
@@ -306,9 +312,11 @@ function DocumentReviewPage({
   const router = useRouter();
   const { queue, reload: reloadQueue } = useReviewQueue(documentId);
   // Fields that needed a check when this document opened. They stay on screen after a correction, so the list does not jump.
-  const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string> }>();
+  // `order` is the field order at opening: the keyboard keeps it, so corrected fields do not move.
+  const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string>; order: string[] }>();
   const [focusRequest, setFocusRequest] = useState<string>();
-  const [savedToken, setSavedToken] = useState(0);
+  // Drafts that save-and-submit sent, set after the saved values were read back (see FormField `savedDraft`).
+  const [savedDrafts, setSavedDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   const inputs = useRef(new Map<string, HTMLInputElement>());
   const pendingValues = useRef(new Map<string, string>());
   const submitButton = useRef<HTMLButtonElement>(null);
@@ -320,7 +328,7 @@ function DocumentReviewPage({
     if (!current || openingDoc === documentId) return;
     const failed = (current.validation ?? []).filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
     const order = reviewOrder(current.extraction?.fields ?? {}, failed);
-    setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => isToCheck(entry.signal)).map(entry => entry.key)) });
+    setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => isToCheck(entry.signal)).map(entry => entry.key)), order: order.map(entry => entry.key) });
     pendingValues.current.clear();
     const first = order.find(entry => isToCheck(entry.signal))?.key;
     if (first) setFocusRequest(first);
@@ -354,8 +362,9 @@ function DocumentReviewPage({
   // Review order and the "Only fields to check" filter (task B4b).
   const order = reviewOrder(extraction.fields, failedFields);
   const signalOf = new Map(order.map(entry => [entry.key, entry.signal]));
-  const keepKeys = openingChecks?.doc === documentId ? openingChecks.keys : undefined;
-  const visible = visibleEntries(order, onlyToCheck, keepKeys);
+  const opened = openingChecks?.doc === documentId ? openingChecks : undefined;
+  const keepKeys = opened?.keys;
+  const visible = stableOrder(visibleEntries(order, onlyToCheck, keepKeys), opened?.order ?? []);
   const notFound = notFoundEntries(order, onlyToCheck, keepKeys);
   const visibleKeys = visible.map(entry => entry.key);
   const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
@@ -378,9 +387,10 @@ function DocumentReviewPage({
     if (shortcut !== "accept") return;
     event.preventDefault();
     const next = stepField(visibleKeys, key, 1) ?? SUBMIT_TARGET;
-    const value = actions.dirty ? actions.value : actions.suggestion;
-    if (value == null) { setFocusRequest(next); return; }
-    void actions.save(value).then(saved => { if (saved) setFocusRequest(next); });
+    const action = enterAction({ dirty: actions.dirty, value: actions.value, suggestion: actions.suggestion,
+      signal: signalOf.get(key), corrected: !!extraction.fields[key]?.correctedBy });
+    if (action === "move") { setFocusRequest(next); return; }
+    void actions.save(action.save).then(saved => { if (saved) setFocusRequest(next); });
   };
   const renderField = ([key, field]: [string, ExtractedField]) => (
     <FormField
@@ -392,7 +402,8 @@ function DocumentReviewPage({
       selected={!selectedLine && highlightedField === key}
       onDirtyChange={markDirty}
       signal={signalOf.get(key)}
-      savedToken={savedToken}
+      savedDraft={savedDrafts.get(key)}
+      locked={busy}
       inputRef={element => { if (element) inputs.current.set(key, element); else inputs.current.delete(key); }}
       onInputKey={fieldKeys(key)}
       onPendingChange={value => { if (value == null) pendingValues.current.delete(key); else pendingValues.current.set(key, value); }}
@@ -440,35 +451,46 @@ function DocumentReviewPage({
     if (readonly || !canRevalidate) { setFailure(data!.doc.status === "IN_REVIEW" ? "This document is already submitted for approval." : "This document cannot be changed here."); return; }
     const changes = [...pendingValues.current.entries()];
     if (unsaved.length > changes.length) { setFailure("Save the line item changes first, then press Ctrl+Enter."); return; }
-    setBusy(true); setFailure(""); setToast("");
+    // The revision on screen: what the accountant reviewed. Only their own saves below move it on, so if anyone else
+    // changed the document meanwhile, a save or the submit is refused (409) instead of submitting unseen content.
+    const reviewed = extraction.contentRevision ?? data!.doc.contentRevision;
+    if (!reviewed) { setFailure("Refresh the document to obtain its current revision."); return; }
+    setBusy(true); setFailure(""); setToast(""); // busy locks the fields: nothing typed after this snapshot is lost.
+    const sent = new Map<string, string>();
+    const savedRevisions: number[] = [];
     try {
-      let revision = extraction.contentRevision!;
-      for (const [key, value] of changes) revision = (await updateExtractedField(user, documentId, key, value, revision)).contentRevision;
-      if (changes.length) { pendingValues.current.clear(); setSavedToken(token => token + 1); }
-      if (changes.length || validationStatus !== "PASS") await revalidateDocument(user, documentId);
-      const [doc, report] = await Promise.all([getDocument(user, documentId), getValidationReport(user, documentId)]);
+      for (const [key, value] of changes) {
+        savedRevisions.push((await updateExtractedField(user, documentId, key, value, revisionToSubmit(reviewed, savedRevisions))).contentRevision);
+        sent.set(key, value);
+      }
+      // Read the saved values back before the drafts are cleared, so the inputs never show the old values.
+      if (sent.size) { await refresh(); setSavedDrafts(new Map(sent)); }
+      // Always check the revision being submitted: an earlier PASS may belong to the revision before a field was confirmed.
+      await revalidateDocument(user, documentId);
+      const report = await getValidationReport(user, documentId);
       const results = report?.results ?? [];
       const blocking = validationSummary(results).blocking;
       if (user.role !== "ACCOUNTANT") {
         await refresh();
-        setToast(changes.length ? "Changes saved and checked. An accountant submits documents for approval." : "Checked. An accountant submits documents for approval.");
+        setToast(sent.size ? "Changes saved and checked. An accountant submits documents for approval." : "Checked. An accountant submits documents for approval.");
         return;
       }
       if (report?.validationStatus !== "PASS" || blocking > 0) {
         await refresh();
-        setFailure(`${blocking || "Some"} ${blocking === 1 ? "check needs" : "checks need"} fixing before this document can be submitted.${changes.length ? " Your changes are saved." : ""}`);
+        setFailure(`${blocking || "Some"} ${blocking === 1 ? "check needs" : "checks need"} fixing before this document can be submitted.${sent.size ? " Your changes are saved." : ""}`);
         const target = results.map(item => item.result === "FAIL" && item.field ? fieldForCheck(item.field) : undefined).find(Boolean);
         if (target) focusField(target);
         return;
       }
-      await submitDocumentReview(documentId, "submitted", note || "Ready for approval", doc.contentRevision ?? revision);
+      await submitDocumentReview(documentId, "submitted", note || "Ready for approval", revisionToSubmit(reviewed, savedRevisions));
       const following = nextAfterSubmit(queue, await reloadQueue(), documentId);
       if (following) { router.push(`${base}/documents/${encodeURIComponent(following)}`); return; }
       await refresh();
       setToast("Submitted for approval. No other document waits in this list.");
     } catch (e) {
-      setFailure((e as Error).message);
-      if (e instanceof ApiError && e.status === 409) await refresh();
+      setFailure((e as Error).message + (sent.size ? ` Saved before this: ${sent.size} field${sent.size === 1 ? "" : "s"}.` : ""));
+      // Show what is stored now: the fields saved before the failure, or someone else's newer version after a 409.
+      if (sent.size || (e instanceof ApiError && e.status === 409)) { await refresh(); setSavedDrafts(new Map(sent)); }
     } finally {
       setBusy(false);
     }

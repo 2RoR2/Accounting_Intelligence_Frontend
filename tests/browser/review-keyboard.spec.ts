@@ -75,6 +75,7 @@ test("a document with three check fields is completed without the mouse", async 
 
   // Alt+Right opens the next document in the list and Alt+Left comes back (once that page has loaded its list).
   const here = page.url();
+  await expect(page.getByRole("button", { name: "Next", exact: true })).toBeEnabled({ timeout: 30000 });
   await page.keyboard.press("Alt+ArrowRight");
   await expect(page).not.toHaveURL(here);
   await expect(page.getByRole("button", { name: "Previous", exact: true })).toBeEnabled({ timeout: 30000 });

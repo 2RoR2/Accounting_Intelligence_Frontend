@@ -32,32 +32,48 @@ function usePdfPages(documentId: string, enabled: boolean) {
     if (!enabled) return;
     let cancelled = false;
     const controller = new AbortController();
+    // Held so leaving the document (unmount, or the next document) stops the worker and any page still drawing.
+    let loadingTask: { destroy: () => Promise<void> } | undefined;
+    let renderTask: { cancel: () => void } | undefined;
     setPages([]); setState("loading");
     (async () => {
       const response = await fetch(fileUrl(documentId), { credentials: "include", signal: controller.signal });
       if (!response.ok) throw new Error("file " + response.status);
       const data = new Uint8Array(await response.arrayBuffer());
       const pdfjs = await import("pdfjs-dist");
+      if (cancelled) return;
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-      const pdf = await pdfjs.getDocument({ data }).promise;
+      const task = pdfjs.getDocument({ data });
+      loadingTask = task;
+      const pdf = await task.promise;
       if (cancelled) return;
       setPageCount(pdf.numPages);
       const drawn: PageShape[] = [];
       for (let number = 1; number <= Math.min(pdf.numPages, MAX_PAGES); number++) {
         const page = await pdf.getPage(number);
+        if (cancelled) return;
         const base = page.getViewport({ scale: 1 });
         const viewport = page.getViewport({ scale: RENDER_SCALE });
         const canvas = document.createElement("canvas");
         canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-        await page.render({ canvas, viewport }).promise;
+        const render = page.render({ canvas, viewport });
+        renderTask = render;
+        await render.promise;
+        renderTask = undefined;
         if (cancelled) return;
         drawn.push({ number, width: base.width, height: base.height, canvas });
         setPages([...drawn]);
       }
       setState("ready");
-      void pdf.destroy();
+      loadingTask = undefined;
+      void task.destroy();
     })().catch(() => { if (!cancelled) setState("failed"); });
-    return () => { cancelled = true; controller.abort(); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      renderTask?.cancel();
+      void loadingTask?.destroy().catch(() => undefined);
+    };
   }, [documentId, enabled]);
   return { pages, state, pageCount };
 }

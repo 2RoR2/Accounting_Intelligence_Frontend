@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SIGNAL_TEXT, evidenceBox, fieldSignal, isToCheck, laneQueue, neighbourDocument, nextAfterSubmit, notFoundEntries, reviewOrder,
-  reviewShortcut, stepField, suggestedValue, visibleEntries,
+  reviewShortcut, stepField, suggestedValue, visibleEntries, revisionToSubmit, draftSettled, stableOrder, enterAction, findLane, laneIds,
 } from "../src/features/common/documents/review/review-logic";
+import { loadReviewQueue, reloadReviewQueue } from "../src/features/common/documents/review/use-review-queue";
 import type { ExtractedField, SourceEvidence } from "../src/types";
 
 const field = (patch: Partial<ExtractedField> = {}): ExtractedField => ({ label: "x", value: "1", original: "1", confidence: null, ...patch });
@@ -166,4 +167,62 @@ test("after a submit the next waiting document in the same lane opens", () => {
   assert.equal(nextAfterSubmit([], ["p", "q"], "c"), "p");
   assert.equal(nextAfterSubmit(["a", "b"], ["b"], "b"), null);
   assert.equal(nextAfterSubmit(["a"], [], "a"), null);
+});
+
+/* ---------- Codex review fixes (PR #8) ---------- */
+
+test("P1: the submit uses the reviewed revision, moved on only by the accountant's own saves", () => {
+  assert.equal(revisionToSubmit(4, []), 4);
+  assert.equal(revisionToSubmit(4, [5, 6]), 6);
+});
+
+test("P2: a draft is cleared only when stored, or when it is exactly the draft the page saved", () => {
+  assert.equal(draftSettled("12.00", "12.00"), true);
+  assert.equal(draftSettled("12.00", "11.00"), false, "old stored value: still unsaved");
+  assert.equal(draftSettled("1,200.00", "1200.00", "1,200.00"), true, "the backend normalised the saved draft");
+  assert.equal(draftSettled("1,250.00", "1200.00", "1,200.00"), false, "typed after the save: stays unsaved");
+});
+
+test("P2: the keyboard order stays as opened, so Enter after the last field goes to submit", () => {
+  const opening = reviewOrder(fields).map(e => e.key);
+  const keys = (map: typeof fields, keep: Set<string>) => stableOrder(visibleEntries(reviewOrder(map), true, keep), opening).map(e => e.key);
+  const keep = new Set(["date", "invoice", "total"]);
+  // The accountant confirms date, then invoice: both become read fields but keep their places.
+  const afterTwo = { ...fields, date: field({ reviewSignal: "check", correctedBy: "Aina" }), invoice: field({ reviewSignal: "check", correctedBy: "Aina" }) };
+  assert.deepEqual(keys(afterTwo, keep), ["date", "invoice", "total"]);
+  assert.equal(stepField(keys(afterTwo, keep), "total", 1), null, "after the last field: submit, not back to the first");
+  assert.equal(stepField(keys(afterTwo, keep), "date", 1), "invoice");
+});
+
+test("P2: Enter on a filled 'Please check' field saves it as a confirmation", () => {
+  assert.deepEqual(enterAction({ dirty: true, value: "9", suggestion: "8", signal: "check", corrected: false }), { save: "9" });
+  assert.deepEqual(enterAction({ dirty: false, value: "9", suggestion: "8", signal: "suggestion", corrected: false }), { save: "8" });
+  assert.deepEqual(enterAction({ dirty: false, value: "INV-1", suggestion: null, signal: "check", corrected: false }), { save: "INV-1" });
+  assert.equal(enterAction({ dirty: false, value: "INV-1", suggestion: null, signal: "check", corrected: true }), "move", "already confirmed");
+  assert.equal(enterAction({ dirty: false, value: "INV-1", suggestion: null, signal: "verified", corrected: false }), "move");
+  assert.equal(enterAction({ dirty: false, value: " ", suggestion: null, signal: "check", corrected: false }), "move", "nothing to confirm");
+  // The API refuses control characters, so a multi-line printed address cannot be saved unchanged: move on instead of a 422.
+  assert.equal(enterAction({ dirty: false, value: "No. 80, Jalan Belatuk\nTaman Cempedak", suggestion: null, signal: "check", corrected: false }), "move");
+});
+
+test("P2: after a submit the next document comes from the lane the page opened in", async () => {
+  const lanes = [
+    { lanes: { ready: [{ id: "r1" }, { id: "r2" }], to_check: [{ id: "a" }, { id: "b" }], exceptions: [] } },
+    // After "a" was submitted it left its lane; the other lanes are unchanged.
+    { lanes: { ready: [{ id: "r1" }, { id: "r2" }], to_check: [{ id: "b" }], exceptions: [] } },
+  ];
+  const original = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = (async () => new Response(JSON.stringify(lanes[Math.min(call++, 1)]), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const opened = await loadReviewQueue("a");
+    assert.deepEqual(opened, { source: { kind: "lanes", lane: "to_check" }, ids: ["a", "b"] });
+    const fresh = await reloadReviewQueue(opened.source);
+    assert.deepEqual(fresh, ["b"]);
+    assert.equal(nextAfterSubmit(opened.ids, fresh, "a"), "b", "stays in to_check, never jumps to ready");
+    assert.deepEqual(findLane(lanes[0], "r2"), { lane: "ready", ids: ["r1", "r2"] });
+    assert.deepEqual(laneIds(lanes[1], "exceptions"), []);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

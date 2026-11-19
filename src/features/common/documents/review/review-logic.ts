@@ -87,6 +87,30 @@ export function notFoundEntries(order: ReviewEntry[], onlyToCheck: boolean, keep
   return onlyToCheck ? order.filter(entry => entry.signal === "missing" && !keep.has(entry.key)) : [];
 }
 
+/**
+ * Keeps the order the fields had when the document opened. A corrected field changes signal and would otherwise move
+ * behind the fields still to check, so Enter after the last field would loop back to it. Fields not seen at opening go last.
+ */
+export function stableOrder(entries: ReviewEntry[], opening: readonly string[]): ReviewEntry[] {
+  const rank = (key: string) => { const index = opening.indexOf(key); return index < 0 ? opening.length : index; };
+  return entries.map((entry, index) => ({ entry, index }))
+    .sort((a, b) => rank(a.entry.key) - rank(b.entry.key) || a.index - b.index)
+    .map(({ entry }) => entry);
+}
+
+/**
+ * What Enter does in a field: save a typed change; else accept the printed or suggested value; else, on a filled field
+ * that still asks for a check, save its value as the accountant's confirmation (recorded with their name); else move on.
+ */
+export function enterAction(field: { dirty: boolean; value: string; suggestion: string | null; signal?: ReviewSignal; corrected: boolean }): { save: string } | "move" {
+  if (field.dirty) return { save: field.value };
+  if (field.suggestion != null) return { save: field.suggestion };
+  // A value with line breaks (a printed address) cannot be saved unchanged: the API refuses control characters.
+  if (!field.corrected && field.signal === "check" && field.value.trim() !== "" && !CONTROL_CHARACTERS.test(field.value)) return { save: field.value };
+  return "move";
+}
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
 /** Tab / Shift+Tab: the next or previous field in `keys`, or null at either end (focus then leaves the list normally). */
 export function stepField(keys: readonly string[], current: string | undefined, direction: 1 | -1): string | null {
   if (!keys.length) return null;
@@ -144,6 +168,20 @@ export function evidenceBox(item: SourceEvidence, page: number, displayed: { wid
   return { left: pct(box.l, size.width), top: pct(box.t, size.height), width: pct(box.r - box.l, size.width), height: pct(box.b - box.t, size.height) };
 }
 
+/**
+ * The revision to send with a save or the submit: the one the accountant reviewed on screen, moved on only by their own
+ * saves (each returns the next revision). Never a revision read from the server just before submitting, which could
+ * hold someone else's change the accountant has not seen; the backend refuses a stale revision with 409.
+ */
+export const revisionToSubmit = (reviewed: number, ownSaves: readonly number[]) => ownSaves.length ? ownSaves[ownSaves.length - 1] : reviewed;
+
+/**
+ * A typed draft is settled (no longer unsaved) when the stored value equals it, or when the page itself saved exactly
+ * this draft and has read the result back. A draft typed after that save differs from `savedDraft` and stays unsaved.
+ */
+export const draftSettled = (draft: string, stored: string | null | undefined, savedDraft?: string) =>
+  draft === stored || (savedDraft !== undefined && draft === savedDraft);
+
 /* ---------- Next document in the same lane ---------- */
 
 /** GET /api/review/lanes (backend #12). Only the ids are used here. */
@@ -151,12 +189,20 @@ export interface LanesResponse { lanes?: Record<string, Array<{ id: string }>> }
 
 /** The lane that holds the current document, as an ordered list of ids; empty when no lane has it. */
 export function laneQueue(response: LanesResponse | null | undefined, currentId: string): string[] {
-  for (const items of Object.values(response?.lanes ?? {})) {
-    const ids = items.map(item => String(item.id));
-    if (ids.includes(currentId)) return ids;
-  }
-  return [];
+  return findLane(response, currentId)?.ids ?? [];
 }
+
+/** The lane that holds the current document, by name, so the same lane can be read again after a submit. */
+export function findLane(response: LanesResponse | null | undefined, currentId: string): { lane: string; ids: string[] } | null {
+  for (const [lane, items] of Object.entries(response?.lanes ?? {})) {
+    const ids = items.map(item => String(item.id));
+    if (ids.includes(currentId)) return { lane, ids };
+  }
+  return null;
+}
+
+/** The documents still in a named lane (the submitted one has left it). */
+export const laneIds = (response: LanesResponse | null | undefined, lane: string) => (response?.lanes?.[lane] ?? []).map(item => String(item.id));
 
 /** Alt+Right / Alt+Left: the neighbouring document, or null at the ends. */
 export function neighbourDocument(queue: readonly string[], currentId: string, direction: 1 | -1): string | null {
