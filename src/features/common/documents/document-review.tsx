@@ -60,7 +60,7 @@ import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
 import { useReviewQueue } from "./review/use-review-queue";
-import { SIGNAL_TEXT, failedCheckNames, needsAttention, neighbourDocument, nextAfterSubmit, reviewOrder, reviewShortcut, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
+import { SIGNAL_TEXT, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, stepField, suggestedValue, visibleEntries, type ReviewSignal } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -214,7 +214,15 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   </div>;
 }
 
-export function DocumentReview({
+/**
+ * One review page per document: moving to the next document (Alt+Right, or after a submit) starts from a clean page,
+ * so the previous document's values are never on screen, or editable, under the next document's id.
+ */
+export function DocumentReview({ user, documentId }: { user: User; documentId: string }) {
+  return <DocumentReviewPage key={documentId} user={user} documentId={documentId} />;
+}
+
+function DocumentReviewPage({
   user,
   documentId,
 }: {
@@ -312,9 +320,9 @@ export function DocumentReview({
     if (!current || openingDoc === documentId) return;
     const failed = (current.validation ?? []).filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
     const order = reviewOrder(current.extraction?.fields ?? {}, failed);
-    setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => needsAttention(entry.signal)).map(entry => entry.key)) });
+    setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => isToCheck(entry.signal)).map(entry => entry.key)) });
     pendingValues.current.clear();
-    const first = order.find(entry => needsAttention(entry.signal))?.key;
+    const first = order.find(entry => isToCheck(entry.signal))?.key;
     if (first) setFocusRequest(first);
   }, [current, documentId, openingDoc]);
   // Move focus once the target exists and is enabled (a save disables the inputs while it runs).
@@ -346,10 +354,12 @@ export function DocumentReview({
   // Review order and the "Only fields to check" filter (task B4b).
   const order = reviewOrder(extraction.fields, failedFields);
   const signalOf = new Map(order.map(entry => [entry.key, entry.signal]));
-  const visible = visibleEntries(order, onlyToCheck, openingChecks?.doc === documentId ? openingChecks.keys : undefined);
+  const keepKeys = openingChecks?.doc === documentId ? openingChecks.keys : undefined;
+  const visible = visibleEntries(order, onlyToCheck, keepKeys);
+  const notFound = notFoundEntries(order, onlyToCheck, keepKeys);
   const visibleKeys = visible.map(entry => entry.key);
   const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
-  const toCheckCount = order.filter(entry => needsAttention(entry.signal)).length;
+  const toCheckCount = order.filter(entry => isToCheck(entry.signal)).length;
   const fieldForCheck = (name: string) => Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
   const focusField = (key: string) => {
     setPanel("review");
@@ -562,7 +572,10 @@ export function DocumentReview({
                 </div>}
                 {visible.length > 0 && <div className="shoebox-fields review-field-list" aria-label={onlyToCheck ? "Fields to check" : "All fields"}>
                   {visible.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div>}
-                {allFieldCount > 0 && visible.length === 0 && <p className="review-all-read" role="status">Every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
+                {allFieldCount > 0 && visible.length === 0 && <p className="review-all-read" role="status">Nothing to check: every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
+                {notFound.length > 0 && <details className="review-field-group review-not-found"><summary><span>Not found on the document</span><b>{notFound.length}</b></summary>
+                  <p className="review-section-help">No check needs these. Fill one only if it is printed on the original.</p>
+                  <div className="shoebox-fields">{notFound.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div></details>}
                 {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
                   <p>Notes about how the document was read. They are separate from the accounting checks.</p>
                   {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  SIGNAL_TEXT, evidenceBox, fieldSignal, laneQueue, neighbourDocument, nextAfterSubmit, reviewOrder, reviewShortcut,
-  stepField, suggestedValue, visibleEntries,
+  SIGNAL_TEXT, evidenceBox, fieldSignal, isToCheck, laneQueue, neighbourDocument, nextAfterSubmit, notFoundEntries, reviewOrder,
+  reviewShortcut, stepField, suggestedValue, visibleEntries,
 } from "../src/features/common/documents/review/review-logic";
 import type { ExtractedField, SourceEvidence } from "../src/types";
 
@@ -52,13 +52,20 @@ test("fields to check come first, then suggestions, not found, and read fields, 
   assert.deepEqual(reviewOrder(fields).map(e => e.key), ["date", "invoice", "total", "due", "supplier", "currency"]);
 });
 
-test("the filter hides read fields but keeps fields that needed a check when the page opened", () => {
+test("the filter shows check and suggested fields, lists not-found ones apart, and keeps fields that needed a check", () => {
   const order = reviewOrder(fields);
-  assert.deepEqual(visibleEntries(order, true).map(e => e.key), ["date", "invoice", "total", "due"]);
+  assert.deepEqual(visibleEntries(order, true).map(e => e.key), ["date", "invoice", "total"]);
+  assert.deepEqual(notFoundEntries(order, true).map(e => e.key), ["due"]);
   assert.deepEqual(visibleEntries(order, false).map(e => e.key), order.map(e => e.key));
+  assert.deepEqual(notFoundEntries(order, false), []);
   const corrected = reviewOrder({ ...fields, date: field({ reviewSignal: "check", correctedBy: "Aina" }) });
-  assert.deepEqual(visibleEntries(corrected, true).map(e => e.key), ["invoice", "total", "due"]);
-  assert.deepEqual(visibleEntries(corrected, true, new Set(["date"])).map(e => e.key), ["invoice", "total", "due", "date"]);
+  assert.deepEqual(visibleEntries(corrected, true).map(e => e.key), ["invoice", "total"]);
+  assert.deepEqual(visibleEntries(corrected, true, new Set(["date"])).map(e => e.key), ["invoice", "total", "date"]);
+  // A missing value a failed check needs is "Please check", so it is in the list, not the not-found group.
+  const failing = reviewOrder({ total: field({ reviewSignal: "missing", value: null }) }, ["total"]);
+  assert.deepEqual(visibleEntries(failing, true).map(e => e.key), ["total"]);
+  assert.equal(isToCheck("missing"), false);
+  assert.equal(isToCheck("suggestion"), true);
 });
 
 /* ---------- Keyboard ---------- */

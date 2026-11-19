@@ -53,6 +53,12 @@ export function fieldSignal(key: string, field: SignalInput, failedFields: Itera
 }
 
 export const needsAttention = (signal: ReviewSignal) => signal !== "verified";
+/**
+ * The fields "Only fields to check" keeps: "Please check" and "Suggested". "Not found" fields are optional items the
+ * document does not print (discount, tax ids, order number); a missing value a check needs already says "Please check"
+ * through the failed check, so they are listed apart rather than in the keyboard order.
+ */
+export const isToCheck = (signal: ReviewSignal) => signal === "check" || signal === "suggestion";
 
 const SIGNAL_RANK: Record<ReviewSignal, number> = { check: 0, suggestion: 1, missing: 2, verified: 3 };
 
@@ -68,11 +74,17 @@ export function reviewOrder(fields: Record<string, SignalInput>, failedFields: I
 }
 
 /**
- * The fields on screen. With "Only fields to check" on, read fields are hidden, except those in `keep`: fields that needed
- * a check when the document opened stay in place after the accountant corrects them, so the list does not jump.
+ * The fields on screen, in keyboard order. With "Only fields to check" on, only "Please check" and "Suggested" fields
+ * show, plus those in `keep`: fields that needed a check when the document opened stay in place after the accountant
+ * corrects them, so the list does not jump.
  */
 export function visibleEntries(order: ReviewEntry[], onlyToCheck: boolean, keep: ReadonlySet<string> = new Set()) {
-  return onlyToCheck ? order.filter(entry => needsAttention(entry.signal) || keep.has(entry.key)) : order;
+  return onlyToCheck ? order.filter(entry => isToCheck(entry.signal) || keep.has(entry.key)) : order;
+}
+
+/** With the filter on: the "Not found" fields, shown apart in a closed group. Empty with the filter off. */
+export function notFoundEntries(order: ReviewEntry[], onlyToCheck: boolean, keep: ReadonlySet<string> = new Set()) {
+  return onlyToCheck ? order.filter(entry => entry.signal === "missing" && !keep.has(entry.key)) : [];
 }
 
 /** Tab / Shift+Tab: the next or previous field in `keys`, or null at either end (focus then leaves the list normally). */
