@@ -160,12 +160,17 @@ export function formatChosenBy(decision: { chosenBy?: string | null; chosenAt?: 
   return `Chosen by ${decision.chosenBy || "a reviewer"}${decision.chosenAt ? ` on ${decision.chosenAt.slice(0, 10)}` : ""}.`;
 }
 
-/** The reading facts held in a stored raw extraction (provenance.ai, issues, document_type). */
-export function readingFacts(raw: Record<string, unknown> | undefined, mimeType?: string | null): ReadingFacts {
+/**
+ * The reading facts held in a stored raw extraction (provenance.ai, issues). The type facts come from
+ * `classification` when given: pass the normalised one from mapExtraction (the response's top-level
+ * classification, else raw.document_type), so a type the API reports as classified is never called unread.
+ */
+export function readingFacts(raw: Record<string, unknown> | undefined, mimeType?: string | null,
+  classification?: { status?: string | null; reason?: string | null; method?: string | null } | null): ReadingFacts {
   const record = (value: unknown) => (value && typeof value === "object" ? value as Record<string, unknown> : {});
   const text = (value: unknown) => (typeof value === "string" ? value : null);
   const ai = record(record(raw?.provenance).ai);
-  const type = record(raw?.document_type);
+  const type = classification ? record(classification) : record(raw?.document_type);
   const issues = Array.isArray(raw?.issues) ? raw.issues : [];
   return {
     aiMode: text(ai.mode), aiError: text(ai.error),

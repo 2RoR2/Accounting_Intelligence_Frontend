@@ -92,3 +92,15 @@ test("a person's type choice settles the kind the page works with, notes include
 test("the type menu offers the five kinds in plain words", () => {
   assert.deepEqual(CHOOSABLE_DOCUMENT_KINDS.map(documentKindLabel), ["Invoice", "Bill", "Receipt", "Credit note", "Debit note"]);
 });
+
+test("a type the API reports as classified is never called unread, even without raw.document_type", () => {
+  // Codex P2 on #7: the top-level classification is the normalised one; raw may lack document_type.
+  const response = { documentId: "d", raw: { provenance: { ai: { mode: "off" } }, issues: [] },
+    classification: { value: "invoice", status: "classified", method: "native_ocr_heading_rules", reason: "CORROBORATED_OCR_INVOICE" } };
+  const extraction = mapExtraction(response);
+  assert.equal(readingReason(readingFacts(extraction.raw, "application/pdf", extraction.classification)), null);
+  assert.equal(readingFacts(extraction.raw, "application/pdf", extraction.classification).typeReason, "CORROBORATED_OCR_INVOICE");
+  // Without a top-level classification, mapExtraction falls back to raw.document_type, as before.
+  const fallback = mapExtraction({ documentId: "d", raw: PDF_NOT_READ });
+  assert.match(readingReason(readingFacts(fallback.raw, "application/pdf", fallback.classification))!, /switched off/);
+});

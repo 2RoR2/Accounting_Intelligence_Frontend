@@ -342,7 +342,7 @@ export function DocumentReview({
   const disagreement = !decision && detected?.status === "classified" && detected.value && data.doc.type
     && detected.value.toUpperCase() !== String(data.doc.type).toUpperCase()
     ? `Reading found the type ${documentKindLabel(detected.value)}, but the document is filed as ${documentKindLabel(data.doc.type)}. Choose the right type.` : null;
-  const typeReason = readingReason(readingFacts(extraction.raw, data.doc.mimeType), { typeChosen: !!decision }) ?? disagreement;
+  const typeReason = readingReason(readingFacts(extraction.raw, data.doc.mimeType, extraction.classification), { typeChosen: !!decision }) ?? disagreement;
   const typeRevision = data.doc.contentRevision ?? extraction.contentRevision;
   const canChooseType = canEditDocument(user, data.doc, !!record) && ["EXTRACTED", "CORRECTED", "EXCEPTION"].includes(data.doc.status) && !!typeRevision;
   const chosenKind = decision?.value?.toUpperCase();
