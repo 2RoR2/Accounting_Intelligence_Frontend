@@ -10,6 +10,9 @@ export interface Document {
   kind?: string;
   code?: string;
   category?: string;
+  mimeType?: string;
+  /** False for a kind=auto upload whose type was not detected yet (code DOC_..., type AUTO). */
+  kindDetected?: boolean;
   jobId?: string;
   queueJobId?: string | null;
   status: DocumentStatus;

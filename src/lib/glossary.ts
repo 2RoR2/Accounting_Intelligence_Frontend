@@ -72,6 +72,18 @@ export const BACKEND_RULE_CODES: readonly string[] = [
 
 const FALLBACK_RULE: Rule = { title: "Needs a check", action: "compare this with the document before approving." };
 const CUSTOMER_FIELDS = new Set(["customer", "buyer", "buyer_name", "customer_name"]);
+/** EX-002 on the document type: the type is unknown, not detected, or disagrees with the stored type. */
+const TYPE_NOT_CERTAIN: Rule = { title: "Type not certain", action: "choose the document type." };
+const TYPE_PENDING: Rule = { title: "Runs after the type is chosen", action: "choose the document type first." };
+
+/**
+ * Checks the backend reports only because the type is unknown: "<KIND>_REQUIRED_FIELDS" and
+ * "<KIND>_FINANCIAL_MATH" with the kind "unknown" (document_validation.evaluate_document). They run
+ * once a type is chosen, so they are not a separate problem to fix.
+ */
+export function typePendingCheck(code: string | null | undefined) {
+  return /^(UNKNOWN|NONE)_(REQUIRED_FIELDS|FINANCIAL_MATH)$/.test(ruleCode(code));
+}
 
 /** Strips the "VALIDATION:" prefix the exception queue stores in front of rule codes. */
 export function ruleCode(code: string | null | undefined) {
@@ -81,6 +93,8 @@ export function ruleCode(code: string | null | undefined) {
 function findRule(code: string | null | undefined, field?: string | null): Rule | null {
   const key = ruleCode(code);
   if (key === "EX-008" && field && CUSTOMER_FIELDS.has(field)) return { title: "New customer", action: "add it to Contacts." };
+  if (key === "EX-002" && field === "document_type") return TYPE_NOT_CERTAIN;
+  if (typePendingCheck(key)) return TYPE_PENDING;
   const known = EX_RULES[key] ?? BR_RULES[key] ?? OTHER_RULES[key];
   if (known) return known;
   const kind = FINANCIAL_KINDS.find((name) => key.startsWith(`${name}-`));
@@ -100,6 +114,65 @@ export function ruleTitle(code: string | null | undefined, field?: string | null
 export function ruleSentence(code: string | null | undefined, field?: string | null) {
   const rule = findRule(code, field) ?? FALLBACK_RULE;
   return `${rule.title}: ${rule.action}`;
+}
+
+/* ---------- Why reading left the type or the details empty ---------- */
+
+/** The parts of the stored reading result (raw extraction) that say how far reading got. */
+export interface ReadingFacts {
+  aiMode?: string | null; aiError?: string | null; issueCodes?: string[];
+  typeStatus?: string | null; typeReason?: string | null; typeMethod?: string | null;
+  isPdf?: boolean;
+}
+
+/** True when reading looked for a printed heading. False when no type rules ran at all (nothing was mapped). */
+export function typeWasLookedFor(facts: Pick<ReadingFacts, "typeReason" | "typeMethod">) {
+  return !!facts.typeMethod && facts.typeMethod !== "none" && facts.typeReason !== "NO_AUTOMATIC_MAPPING";
+}
+
+/**
+ * Plain sentences on why the type or the details are missing, from the stored reading result,
+ * or null when reading settled the type. Never claims a step that did not run. "Read again" is
+ * not suggested: the backend reads a document again only when it could not be read at all.
+ */
+export function readingReason(facts: ReadingFacts, { typeChosen = false } = {}): string | null {
+  const codes = new Set(facts.issueCodes ?? []);
+  const subject = facts.isPdf ? "this PDF" : "this document";
+  const next = typeChosen ? "Enter the details from the document." : "Choose the type and enter the details from the document.";
+  if (codes.has("OCR_NO_TEXT")) return `No text could be found in ${subject}. Upload a clearer copy, or a PDF that contains text.`;
+  if (facts.typeStatus === "classified") return null;
+  if (facts.aiError === "AI_RESULT_REJECTED_BY_CONTRACT" || codes.has("AI_RESULT_REJECTED"))
+    return `Automatic reading returned details that did not fit the accounting fields, so none were used. ${next}`;
+  if (facts.aiError || codes.has("AI_UNAVAILABLE"))
+    return `Automatic reading could not be reached${facts.aiError ? ` (${facts.aiError})` : ""}, so ${subject} was only read with the basic rules. ${next} Ask your admin to check automatic reading.`;
+  const off = facts.aiMode === "off";
+  if (!typeWasLookedFor(facts))
+    return off
+      ? `Automatic reading is switched off on this installation, so ${subject} was not read. ${next} Ask your admin to turn reading on for new uploads.`
+      : `${subject === "this PDF" ? "This PDF" : "This document"} was not read automatically. ${next}`;
+  if (facts.typeReason === "RECEIPT_REQUIRES_REVIEW")
+    return `${off ? "Automatic reading is switched off on this installation, so this photo was only checked with the basic receipt rules. They" : "The receipt rules"} could not confirm it is a receipt. ${next}`;
+  return `No heading on the document names its type. ${next}`;
+}
+
+/** "Chosen by Aina on 2026-11-19." for a person's type decision. */
+export function formatChosenBy(decision: { chosenBy?: string | null; chosenAt?: string | null }) {
+  return `Chosen by ${decision.chosenBy || "a reviewer"}${decision.chosenAt ? ` on ${decision.chosenAt.slice(0, 10)}` : ""}.`;
+}
+
+/** The reading facts held in a stored raw extraction (provenance.ai, issues, document_type). */
+export function readingFacts(raw: Record<string, unknown> | undefined, mimeType?: string | null): ReadingFacts {
+  const record = (value: unknown) => (value && typeof value === "object" ? value as Record<string, unknown> : {});
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  const ai = record(record(raw?.provenance).ai);
+  const type = record(raw?.document_type);
+  const issues = Array.isArray(raw?.issues) ? raw.issues : [];
+  return {
+    aiMode: text(ai.mode), aiError: text(ai.error),
+    issueCodes: issues.map(issue => text(record(issue).code)).filter((code): code is string => !!code),
+    typeStatus: text(type.status), typeReason: text(type.reason), typeMethod: text(type.method),
+    isPdf: String(mimeType ?? "").toLowerCase() === "application/pdf",
+  };
 }
 
 /* ---------- Statuses ---------- */
@@ -168,6 +241,8 @@ export function statusTone(status: string | null | undefined): "green" | "red" |
 const DOCUMENT_KINDS: Record<string, string> = {
   INVOICE: "Invoice", BILL: "Bill", RECEIPT: "Receipt", CREDIT_NOTE: "Credit note", DEBIT_NOTE: "Debit note",
 };
+/** The types a person can choose for a document, in menu order. */
+export const CHOOSABLE_DOCUMENT_KINDS = Object.keys(DOCUMENT_KINDS);
 /** "CREDIT_NOTE" -> "Credit note". Unknown kinds are tidied, never blank. */
 export function documentKindLabel(kind: string | null | undefined) {
   const key = String(kind ?? "").toUpperCase();

@@ -7369,6 +7369,14 @@ dialog {
 .review-unsaved-hint { margin: 0; color: #92530a; font-size: 12px; }
 .review-blocking-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; padding: 10px 12px; border: 1px solid #efc36b; border-left: 4px solid #d99a27; border-radius: 8px; background: #fff8e9; color: #71420b; font-size: 13px; }
 .review-blocking-notice span { flex: 1 1 auto; }
+/* Document type: why reading left it open, and the control to choose it (F1/F2). */
+.document-type-notice { align-items: flex-start; margin: 0 0 16px; }
+.document-type-notice-copy { display: grid; gap: 4px; flex: 1 1 320px; min-width: 0; }
+.document-type-notice.is-chosen { border-color: #bcd3f5; border-left-color: #3b6fd8; background: #f3f7ff; color: #1d3b72; }
+.choose-type { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.choose-type label { font-weight: 600; }
+.choose-type select { flex: 1 1 160px; width: auto; min-width: 0; }
+.validation-message + .choose-type { margin-top: 8px; }
 
 .validation-overview { display:grid; grid-template-columns: 150px 1fr repeat(3, minmax(90px, 1fr)); align-items:center; gap:18px; margin:0 22px 18px; padding:18px; border:1px solid #dbe8f5; border-radius:14px; background:#f8fbff; }
 .validation-overview { grid-template-columns: 150px minmax(220px, 1fr) repeat(4, minmax(76px, 100px)); width: calc(100% - 56px); margin: 22px auto; background: linear-gradient(135deg,#f7fbff,#edf6ff); }
@@ -8054,6 +8062,7 @@ html[data-theme="dark"] .structured-source a { color: #8fc2ff; }
 .app-shell.theme-dark .review-save-state { color: #b9d5f2; }
 .app-shell.theme-dark .review-save-state.is-dirty, .app-shell.theme-dark .review-unsaved-hint { color: #ffd06b; }
 .app-shell.theme-dark .review-action-buttons .btn.secondary { background: #174979; color: #e5f2ff; border-color: #67adff; }
+.app-shell.theme-dark .document-type-notice.is-chosen { background: #17284a; border-color: #3b6fd8; color: #d6e4ff; }
 .app-shell.theme-dark .review-blocking-notice { background: #513b16; border-color: #d99a27; color: #ffe6a8; }
 .app-shell.theme-dark .shoebox-field-candidates,
 .app-shell.theme-dark .shoebox-field-metadata,

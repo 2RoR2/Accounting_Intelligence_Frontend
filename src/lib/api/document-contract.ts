@@ -1,8 +1,10 @@
+import { typePendingCheck } from "../glossary";
 import type { CurrencyProposal, Document, StandardisedRecord, AiAssistOutcome, AiAssistResult, AiAssistResultField, ExtractedField, Extraction, FieldCandidate, LineItem, ValidationResult, TransactionAnomaly } from "@/types";
 export interface ExtractionResponse {
   currencyReview?: Extraction["currencyReview"];
   lineCorrections?: Extraction["lineCorrections"];
   warnings?: Extraction["warnings"]; documentId: string; contentRevision?: number; raw?: Record<string, unknown>; classification?: Extraction["classification"];
+  kindDecision?: Extraction["kindDecision"];
   fields?: Array<Partial<ExtractedField> & { key: string }>;
   lineItems?: Array<Partial<LineItem> & { unit_price?: string | null }>;
 }
@@ -28,6 +30,7 @@ export function mapExtraction(value: ExtractionResponse): Extraction {
     currencyReview: value.currencyReview ?? null,
     lineCorrections: value.lineCorrections ?? [], warnings: value.warnings ?? [], documentId: value.documentId, contentRevision: value.contentRevision, raw: value.raw,
     classification: value.classification ?? value.raw?.document_type as Extraction["classification"],
+    kindDecision: value.kindDecision ?? null,
     fields: Object.fromEntries((value.fields ?? []).map(field => [field.key, {
       ...field, label: field.label ?? field.key, value: field.value ?? null,
       original: field.normalizedValue ?? field.original ?? null,
@@ -236,7 +239,10 @@ export function mapSupportView(record: SupportViewResponse): SupportViewRecord {
 }
 
 /** Source classification overrides stored intake kind, including explicit unknown. */
-export function sourceKind(extraction: Pick<Extraction, "classification">, intake?: string): string {
+export function sourceKind(extraction: Pick<Extraction, "classification" | "kindDecision">, intake?: string): string {
+  // A person's choice for this reading settles the type, including credit and debit notes.
+  const chosen = extraction.kindDecision?.value?.toUpperCase();
+  if (chosen && ["INVOICE", "BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"].includes(chosen)) return chosen;
   if (extraction.classification?.value !== undefined) {
     const kind = extraction.classification.value.toUpperCase();
     return ["INVOICE", "BILL", "RECEIPT"].includes(kind) ? kind : "UNKNOWN";
@@ -342,7 +348,8 @@ export function validationSummary(results: ValidationResult[]): ValidationSummar
     notChecked,
     notApplicable: results.filter(item => item.result === "NOT_APPLICABLE").length,
     warnings: results.filter(item => item.result === "WARNING").length - notChecked,
-    blocking: results.filter(item => item.result === "FAIL" || item.preventsApproval === true).length,
+    // Checks that wait for the type are not counted: the type finding (EX-002) already blocks.
+    blocking: results.filter(item => (item.result === "FAIL" || item.preventsApproval === true) && !typePendingCheck(item.rule)).length,
   };
 }
 
