@@ -37,5 +37,5 @@ export const roleHome = (role: Role) =>
   role === "SUPER_ADMIN"
     ? "/admin/dashboard"
     : role === "LOCAL_ADMIN"
-      ? "/company/today"
-      : "/workspace/today";
+      ? "/company/dashboard"
+      : "/workspace/dashboard";

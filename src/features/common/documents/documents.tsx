@@ -33,12 +33,16 @@ import {
   StatusBadge,
 } from "@/components/common/ui";
 import { documentKindLabel, statusLabel } from "@/lib/glossary";
+import { DOCUMENT_LANES, isDocumentLane } from "@/lib/today";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
   const selectedTab = searchParams.get("tab") || "all";
+  // Opened from a Today tile: the backend applies the same rule the tile counted with.
+  const requestedLane = searchParams.get("lane");
+  const lane = isDocumentLane(requestedLane) ? requestedLane : "";
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [date, setDate] = useState("");
@@ -46,8 +50,8 @@ export function DocumentList({ user }: { user: User }) {
   const [business, setBusiness] = useState("");
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const { data, error, loading, refresh } = useResource(
-    () => getDocuments(user, { q: search, status, date, amount, business }),
-    `${user.id}:${search}:${status}:${date}:${amount}:${business}`,
+    () => getDocuments(user, { q: search, status, date, amount, business, lane }),
+    `${user.id}:${search}:${status}:${date}:${amount}:${business}:${lane}`,
   );
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -105,6 +109,11 @@ export function DocumentList({ user }: { user: User }) {
         }
       />
       <Panel>
+        {lane && (
+          <p className="today-filter-note" role="status">
+            Showing: <strong>{DOCUMENT_LANES[lane]}</strong> ({visibleDocuments.length}). <Link href={`${base}/documents`}>Show all documents</Link>
+          </p>
+        )}
         <div className="workspace-tabs document-list-tabs" role="tablist" aria-label="Document categories">
           {documentTabs.map(([label, tab]) => <Link key={tab} className={selectedTab === tab ? "active" : ""} href={tab === "all" ? `${base}/documents` : `${base}/documents?tab=${tab}`} role="tab" aria-selected={selectedTab === tab}>{label}</Link>)}
         </div>

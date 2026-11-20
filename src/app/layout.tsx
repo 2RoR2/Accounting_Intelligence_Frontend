@@ -4,6 +4,7 @@ import "@/styles/common.css";
 import "@/styles/landing.css";
 import "@/styles/dashboard.css";
 import "@/styles/theme.css";
+import "@/styles/dashboard-home.css";
 
 export const metadata: Metadata = {
   title: "AccordAI | Accounting Intelligence",

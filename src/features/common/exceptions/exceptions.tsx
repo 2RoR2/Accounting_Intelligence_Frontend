@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -35,6 +36,8 @@ export function ExceptionsPage({ user }: { user: User }) {
     }),
     user.id,
   );
+  // Opened from Today's "Needs fixing" tile (?show=open): only problems not yet resolved.
+  const openOnly = useSearchParams().get("show") === "open";
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [severity, setSeverity] = useState("");
@@ -54,6 +57,11 @@ export function ExceptionsPage({ user }: { user: User }) {
         description="Documents with a problem to fix before they can be approved. Each line says what to do."
       />
       <Panel>
+        {openOnly && (
+          <p className="today-filter-note" role="status">
+            Showing: <strong>problems not yet resolved</strong>. <Link href={`${base}/exceptions`}>Show all, including resolved</Link>
+          </p>
+        )}
         <div className="filter-bar">
           <SearchInput
             value={search}
@@ -107,6 +115,7 @@ export function ExceptionsPage({ user }: { user: User }) {
           rows={data.exceptions.filter(
             (e) =>
               (!status || e.status === status) &&
+              (!openOnly || e.status !== "RESOLVED") &&
               (!severity || e.severity === severity) &&
               (!type || e.type === type) &&
               (!assigned || e.assignedTo === assigned) &&

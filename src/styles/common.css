@@ -10212,3 +10212,46 @@ select option { background:#fff; color:#183452; font-weight:500; }
 
 /* Summary: measured SAIC evaluation section */
 .summary-section-title { margin: 28px 0 12px; font-size: 1.15rem; font-weight: 700; color: var(--ui-text); }
+
+/* Today page (plan v2 B3): tiles that open the list they count; one column on phones. */
+.today-page { min-width: 0; }
+.today-all-clear { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; background: #ecfdf3; color: #146c43; font-weight: 600; }
+.today-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.today-tile { display: flex; flex-direction: column; min-width: 0; border: 1px solid #e1ebf8; border-left-width: 4px; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgba(6, 20, 51, .03); }
+.today-tile-attention { border-left-color: #d97706; }
+.today-tile-neutral { border-left-color: #3c92f7; }
+.today-tile-clear { border-left-color: #22a06b; }
+.today-tile-unavailable { border-left-color: #9aa8b8; background: #f8fafc; }
+.today-tile-main { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 16px 40px 12px 16px; color: inherit; text-decoration: none; border-radius: 14px 14px 0 0; }
+a.today-tile-main:hover, a.today-tile-main:focus-visible { background: #f4f8fe; }
+a.today-tile-main:focus-visible { outline: 2px solid #3c92f7; outline-offset: -2px; }
+.today-tile-arrow { position: absolute; top: 18px; right: 14px; color: #6b7c93; }
+.today-tile-title { font-size: .9rem; font-weight: 600; color: #42536b; }
+.today-tile-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: #0b2545; overflow-wrap: anywhere; }
+.today-tile-unavailable .today-tile-value { font-size: 1.1rem; color: #52637a; }
+.today-tile-caption { font-size: .88rem; color: #52637a; }
+.today-tile-next { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 0 16px 12px; font-size: .88rem; color: #146c43; }
+.today-tile-next svg { flex: none; margin-top: 2px; }
+.today-tile-next a { color: inherit; text-decoration: underline; }
+.today-details { margin: auto 16px 12px; font-size: .84rem; color: #52637a; }
+.today-details summary { cursor: pointer; font-weight: 600; color: #2f5f9a; }
+.today-details ul { margin: 6px 0 0; padding-left: 18px; }
+.today-month { display: grid; gap: 14px; margin: 0; padding: 4px 0 0; list-style: none; }
+.today-month-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.today-month-row a { font-weight: 600; }
+.today-month li.complete .today-month-row strong { color: #146c43; }
+.today-progress { height: 8px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: #e7eef8; }
+.today-progress span { display: block; height: 100%; border-radius: inherit; background: #3c92f7; }
+.today-month li.complete .today-progress span { background: #22a06b; }
+.today-month .today-details { margin: 6px 0 0; }
+.today-filter-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: #eef5ff; color: #1e3a5f; font-size: .9rem; }
+.today-filter-note a { margin-left: 4px; font-weight: 600; }
+@media (max-width: 560px) {
+  .today-grid { grid-template-columns: 1fr; gap: 10px; }
+  .today-tile-value { font-size: 1.5rem; }
+}
+.app-shell.theme-dark .today-tile { border-color: rgba(157,202,255,.28); background: rgba(12,42,82,.82); }
+.app-shell.theme-dark .today-tile-title, .app-shell.theme-dark .today-tile-caption, .app-shell.theme-dark .today-details { color: #cce3ff; }
+.app-shell.theme-dark .today-tile-value { color: #ecf5ff; }
+.app-shell.theme-dark a.today-tile-main:hover { background: rgba(60,146,247,.16); }
+.app-shell.theme-dark .today-filter-note, .app-shell.theme-dark .today-all-clear { background: rgba(60,146,247,.16); color: #ecf5ff; }
