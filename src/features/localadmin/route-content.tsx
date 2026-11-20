@@ -43,7 +43,7 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "reports": return <AccountingReportsPage user={user} />;
     case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "approvals": return <ApprovalQueuePage user={user} />;
-    case "ledger": return <LedgerPage />;
+    case "ledger": return <LedgerPage canPost />;
     case "audit": return <AuditPage user={user} />;
     case "profile": return <ProfilePage user={user} />;
     default: return <SettingsPage user={user} />;

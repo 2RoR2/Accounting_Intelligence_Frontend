@@ -1,4 +1,5 @@
 "use client";
+import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -221,9 +222,10 @@ export function MoneyFlowPage({
     setBusy(true);
     setActionError("");
     try {
-      const updated = await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
-      setDetail(updated);
-      setSelectedCandidateId(updated.candidateId ?? "");
+      await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
+      const updated = await getMoneyTransactionDetail(user, detail.id).catch(() => undefined);
+      setDetail(updated ?? null);
+      setSelectedCandidateId(updated?.candidateId ?? "");
       setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
       reload();
@@ -741,6 +743,9 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
+            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" && (
+              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate }} onPosted={reload} />
+            )}
           </div>
         </Modal>
       )}

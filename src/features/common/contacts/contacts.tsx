@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { getCustomers, getSuppliers } from "@/lib/api/workflow.service";
 import { getDocuments } from "@/lib/api/document.service";
 import type { Document, User } from "@/types";
-import { Badge, ErrorState, Panel, StatusBadge } from "@/components/common/ui";
+import { ErrorState, Panel, StatusBadge } from "@/components/common/ui";
 
 type Contact = {
   id: string;
@@ -111,6 +111,13 @@ export function ContactsPage({ user }: { user: User }) {
             title={selected ? selected.name : "Related documents"}
             subtitle={selected ? `${related.length} document${related.length === 1 ? "" : "s"}` : "Select a contact"}
           >
+            {selected && (
+              <dl className="panel-body detail-list">
+                <div><dt>Contact type</dt><dd>{selected.type}</dd></div>
+                <div><dt>Registration number</dt><dd>{selected.registrationNumber || "Not recorded"}</dd></div>
+                <div><dt>Address</dt><dd>{selected.address || "Not recorded"}</dd></div>
+              </dl>
+            )}
             {!selected ? (
               <div className="panel-body">
                 <p className="empty-state">Choose a customer or supplier to see their documents.</p>

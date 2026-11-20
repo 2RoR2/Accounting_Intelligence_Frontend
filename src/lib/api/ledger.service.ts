@@ -7,6 +7,39 @@ export type Journal = { id: string; periodId: string; sourceType: string; source
 export type Settlement = { id: string; settlementRef: string; date?: string; direction: "money_in" | "money_out"; amount: string; allocated: string; unmatchedAmount: string; currency: string; status: string };
 export type Allocation = { id: string; settlementId: string; settlementRef: string; recordId: string; amount: string; currency: string; direction: string; status: string; unmatchedSettlementAmount: string; createdAt: string; reversedAt?: string | null; reversalReason?: string | null };
 export type TrialBalanceRow = { accountId: string; code: string; name: string; accountType: string; totalDebit: string; totalCredit: string; netBalance: string };
+export type AccountClass = "asset" | "liability" | "equity" | "revenue" | "cogs" | "expense";
+export type ChartAccountInput = { code: string; name: string; accountClass: AccountClass; parentId?: string | null };
+export type ChartAccount = ChartAccountInput & { id: string; isActive: boolean };
+type ProfitAndLossTotal = { currency: string; income: string; expenses: string; netProfit: string };
+export type ProfitAndLossDashboard = {
+  basis: "accrual" | "cash";
+  fromDate: string;
+  toDate: string;
+  granularity: "day" | "week" | "month";
+  totals: ProfitAndLossTotal[];
+  periods: Array<ProfitAndLossTotal & { period: string }>;
+  accrualNote: string | null;
+  cashBasisNote: string | null;
+};
+export type JournalPosting = { id: string; status: string; idempotent: boolean };
+
+export const getChartAccounts = (includeInactive = false) =>
+  api<ChartAccount[]>(`/api/chart-of-accounts?includeInactive=${includeInactive}`);
+export const createChartAccount = (input: ChartAccountInput) =>
+  api<ChartAccount>("/api/chart-of-accounts", { method: "POST", body: JSON.stringify(input) });
+export const getProfitAndLossDashboard = (fromDate: string, toDate: string, basis: "accrual" | "cash" = "accrual") =>
+  api<ProfitAndLossDashboard>(`/api/ledger/profit-and-loss?${new URLSearchParams({ fromDate, toDate, basis, granularity: "month" })}`);
+export const createManualJournal = (input: {
+  periodId: string; idempotencyKey: string; journalDate: string; description: string; lines: JournalLineInput[];
+}) => api<JournalPosting>("/api/ledger/journals", {
+  method: "POST", body: JSON.stringify({ ...input, sourceType: "manual" }),
+});
+export const postSupplierPayment = (transactionId: string, input: {
+  periodId: string; payableAccountId: string; bankAccountId: string; journalDate: string;
+}) => api<JournalPosting & { recordId: string | null; settlementId: string; amount: string; currency: string }>(
+  `/api/ledger/journals/from-supplier-payment/${encodeURIComponent(transactionId)}`,
+  { method: "POST", body: JSON.stringify(input) },
+);
 
 export const getLedgerAccounts = () => api<LedgerAccount[]>("/api/ledger/accounts");
 export const getAccountingPeriods = () => api<AccountingPeriod[]>("/api/ledger/periods");

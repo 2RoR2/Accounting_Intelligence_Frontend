@@ -167,6 +167,8 @@ export function statusTone(status: string | null | undefined): "green" | "red" |
 
 const DOCUMENT_KINDS: Record<string, string> = {
   INVOICE: "Invoice", BILL: "Bill", RECEIPT: "Receipt", CREDIT_NOTE: "Credit note", DEBIT_NOTE: "Debit note",
+  // Uploaded without a type (Inbox) and not detected yet, or the reader could not tell.
+  AUTO: "Type not detected",
 };
 /** "CREDIT_NOTE" -> "Credit note". Unknown kinds are tidied, never blank. */
 export function documentKindLabel(kind: string | null | undefined) {

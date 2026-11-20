@@ -6593,6 +6593,28 @@ dialog {
 .upload-queue-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; color: #27394b; font-size: 13px; }
 .upload-queue-header span { color: #718399; }
 
+/* Inbox (upload many files): rows reuse .selected-file and .badge; only layout is added here. */
+.inbox-summary { display: grid; gap: 10px; }
+.inbox-summary .upload-queue-header { gap: 12px; flex-wrap: wrap; }
+.inbox-summary-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inbox-list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.inbox-list .inbox-row { gap: 12px; margin-top: 0; padding: 12px 14px; }
+.inbox-row > svg { flex: none; color: #2f6fbd; }
+.inbox-row-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.inbox-row-main strong { overflow: hidden; color: #27394b; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row-main small { color: #718399; font-size: 12px; }
+.inbox-row-main .inbox-row-note { color: #556885; }
+.inbox-row-actions { display: flex; flex: none; gap: 12px; align-items: center; }
+.inbox-row-actions .text-link { display: inline-flex; gap: 4px; align-items: center; border: 0; background: transparent; cursor: pointer; font-size: 12px; }
+.inbox-type-needed { flex-wrap: wrap; }
+.inbox-type-needed select { padding: 6px 10px; border: 1px solid #dce4ed; border-radius: 8px; background: #fff; }
+.inbox-skipped { margin: 12px 0 0; color: #718399; font-size: 12px; }
+@media (max-width: 560px) {
+  .inbox-list .inbox-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .inbox-row > .badge, .inbox-row-actions { grid-column: 2; }
+  .inbox-row-actions { flex-wrap: wrap; }
+}
+
 .scan-panel {
   display: grid;
   gap: 12px;

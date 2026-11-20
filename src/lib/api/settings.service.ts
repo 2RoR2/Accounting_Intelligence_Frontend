@@ -1,6 +1,15 @@
 import type { User } from "@/types";
 import { api, get } from "./client";
 import { requireRole } from "../permissions";
+
+export type CompanyProfile = {
+  companyCode: string; name: string; registrationNumber: string; adminEmail: string;
+  reportingCurrency: string; observedCurrencies: string[];
+};
+
+export const getCompanyProfile = () => get<CompanyProfile>("/api/settings/company-profile");
+export const updateCompanyProfile = (name: string) =>
+  api<{ name: string }>("/api/settings/company-profile", { method: "PATCH", body: JSON.stringify({ name }) });
 export async function getSettings(user: User) {
   void user;
   return get<{

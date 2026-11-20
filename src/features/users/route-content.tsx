@@ -30,7 +30,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   if (page === "money-in" || page === "money-out") {
     return <MoneyFlowPage user={user} direction={page === "money-in" ? "money_in" : "money_out"} />;
   }
-  if (page === "ledger") return <LedgerPage />;
+  if (page === "ledger") return <LedgerPage canPost={false} />;
   if (page === "reconciliation") return <ReconciliationPage user={user} />;
   if (page === "users") return <UserManagement user={user} />;
   if (page === "settings") return <SettingsPage user={user} />;

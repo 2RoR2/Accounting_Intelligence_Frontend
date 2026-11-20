@@ -57,8 +57,8 @@ export async function decideMatch(
   decision: "confirm" | "reject",
   expectedRevision: number,
   reason?: string,
-): Promise<BankMoneyTransactionDetail> {
-  const row = await api<BankTransactionResponse>(`/api/bank/reconciliation/candidates/${encodeURIComponent(candidateId)}/decision`, {
+): Promise<{ id: string; candidateId: string; decision: string; settlementId: string | null }> {
+  return api(`/api/bank/reconciliation/candidates/${encodeURIComponent(candidateId)}/decision`, {
     method: "POST",
     body: JSON.stringify({
       candidateId,
@@ -67,7 +67,6 @@ export async function decideMatch(
       ...(reason?.trim() ? { reason: reason.trim() } : {}),
     }),
   });
-  return mapTransaction(row);
 }
 
 export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string };
