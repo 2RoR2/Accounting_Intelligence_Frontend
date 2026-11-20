@@ -197,11 +197,39 @@ export function settleDraft(draft: string, stored: string | null | undefined, no
 }
 
 /**
- * Unsaved fields (by label) that the submit would leave behind: anything still unsaved other than what this submit just
- * saved. Line items are saved on their own, so one edited during the save must stop the submit.
+ * Unsaved fields (by label) that the submit would leave behind. Header fields are compared by value: a draft counts
+ * as saved only if this submit sent exactly that value, so a newer value typed into a field that was also sent still
+ * stops the submit. Other unsaved labels (line items, saved on their own) always stop it.
  */
-export const unsavedOutside = (unsavedLabels: readonly string[], savedLabels: ReadonlySet<string>) =>
-  unsavedLabels.filter(label => !savedLabels.has(label));
+export function unsavedOutside(input: {
+  unsavedLabels: readonly string[];
+  /** Header field key -> label as shown. */
+  headerLabels: ReadonlyMap<string, string>;
+  /** Header drafts still pending now (key -> value). */
+  pending: ReadonlyMap<string, string>;
+  /** What this submit saved (key -> value). */
+  sent: ReadonlyMap<string, string>;
+}): string[] {
+  const header = new Set(input.headerLabels.values());
+  const changed = [...input.pending].filter(([key, value]) => input.sent.get(key) !== value)
+    .map(([key]) => input.headerLabels.get(key) ?? key);
+  const others = input.unsavedLabels.filter(label => !header.has(label));
+  return [...new Set([...changed, ...others])];
+}
+
+/** Alt+arrows and the Previous / Next buttons: the document to open, or null while a save or submit is running. */
+export function documentTarget(queue: readonly string[], currentId: string, direction: 1 | -1, busy: boolean): string | null {
+  return busy ? null : neighbourDocument(queue, currentId, direction);
+}
+
+/** The line above the original document saying where the selected field was read. A missing page is said, not assumed. */
+export function evidenceCaption(selected: { label: string; evidence: SourceEvidence[] } | undefined, placeShown: boolean): string {
+  if (!selected) return "Select a field to see where it was read.";
+  const first = selected.evidence[0];
+  if (!first) return `${selected.label}: where it was read is not recorded.`;
+  const where = first.page != null ? `read on page ${first.page}` : "read on the document (page not recorded)";
+  return `${selected.label}: ${where}${first.text ? `, "${first.text}"` : ""}.` + (placeShown ? "" : " Its place on the page is not recorded.");
+}
 
 /* ---------- Next document in the same lane ---------- */
 

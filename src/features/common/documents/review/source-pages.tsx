@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import type { Extraction, SourceEvidence } from "@/types";
 import { DocumentViewer } from "@/components/common/documents/document-viewer";
-import { evidenceBox } from "./review-logic";
+import { evidenceBox, evidenceCaption } from "./review-logic";
 
 /** A field whose boxes may be drawn. The selected one is drawn strongly, the others faintly. */
 export interface FieldEvidence { key: string; label: string; evidence: SourceEvidence[] }
@@ -133,11 +133,7 @@ export function ReviewSource({ documentId, name, mimeType, extraction, fields, s
     return items;
   };
   const drawnSelected = pages.some(page => boxesFor(page).some(box => box.selected));
-  const first = selectedEvidence[0];
-  const caption = !selected ? "Select a field to see where it was read."
-    : !selectedEvidence.length ? `${selected.label}: where it was read is not recorded.`
-      : `${selected.label}: read on page ${first?.page ?? 1}${first?.text ? `, "${first.text}"` : ""}.`
-        + (drawnSelected || !pages.length ? "" : " Its place on the page is not recorded.");
+  const caption = evidenceCaption(selected, drawnSelected || !pages.length);
   const width = zoom ? `${ZOOMS[zoom] * 100}%` : "100%";
 
   return <div className="doc-viewer review-source">

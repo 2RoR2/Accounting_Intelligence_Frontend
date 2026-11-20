@@ -60,7 +60,7 @@ import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
 import { useReviewQueue } from "./review/use-review-queue";
-import { SIGNAL_TEXT, enterAction, failedCheckNames, isToCheck, neighbourDocument, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
+import { SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -169,7 +169,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     if (dirty && result.settled) setDirty(false);
   }, [dirty, value, field.value, savedDraft]);
   /** Fills the input only. Nothing is stored until the reviewer presses Save. */
-  const fillFromCandidate = (candidate: string) => { setValue(candidate); setDirty(true); setConflict(false); setError(""); };
+  const fillFromCandidate = (candidate: string) => { if (locked) return; setValue(candidate); setDirty(true); setConflict(false); setError(""); };
   const save = async (next: string) => {
     setSaving(true); setError("");
     try { await onSave(next); setDirty(false); return true; }
@@ -207,16 +207,16 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     </details>
     {!field.correctedBy && candidates.source.length > 0 && <div className="shoebox-field-candidates"><small>Printed in source, not selected:</small>
       <ul>{candidates.source.map((item, index) => <li key={index}>{candidateText(item)}
-        {!readonly && item.value != null && readings.length === 0 && <button type="button" className="text-link" onClick={() => fillFromCandidate(item.value!)}>Use this value</button>}</li>)}</ul></div>}
+        {!readonly && item.value != null && readings.length === 0 && <button type="button" className="text-link" disabled={locked} onClick={() => fillFromCandidate(item.value!)}>Use this value</button>}</li>)}</ul></div>}
     {!field.correctedBy && candidates.model.length > 0 && <div className="shoebox-field-candidates"><small>Model suggestion, not verified as an accounting fact. Not applied:</small>
       <ul>{candidates.model.map((item, index) => <li key={index}>{candidateText(item)}
-        {!readonly && item.value != null && <button type="button" className="text-link" onClick={() => fillFromCandidate(item.value!)}>Use this value</button>}</li>)}</ul>
+        {!readonly && item.value != null && <button type="button" className="text-link" disabled={locked} onClick={() => fillFromCandidate(item.value!)}>Use this value</button>}</li>)}</ul>
       {field.value != null && <small>Parser value: {field.value}. The parser value is kept unless you change it.</small>}</div>}
     {!readonly && readings.length > 0 && <div className="shoebox-field-candidates"><small>Day and month order is not clear. Check the document, then choose:</small>
-      <ul>{readings.map(item => <li key={item.value}>{item.label}: {item.value} <button type="button" className="text-link" onClick={() => fillFromCandidate(item.value)}>Use this reading</button></li>)}</ul></div>}
-    {currencyReview && <CurrencyReviewPanel review={currencyReview} readonly={readonly} saving={saving} onConfirm={code => void save(code)} />}
+      <ul>{readings.map(item => <li key={item.value}>{item.label}: {item.value} <button type="button" className="text-link" disabled={locked} onClick={() => fillFromCandidate(item.value)}>Use this reading</button></li>)}</ul></div>}
+    {currencyReview && <CurrencyReviewPanel review={currencyReview} readonly={readonly} saving={saving || !!locked} onConfirm={code => void save(code)} />}
     {!readonly && currencies.length > 0 && <div className="shoebox-field-candidates"><small>&quot;$&quot; does not name a currency. If the document or supplier shows which one, choose:</small>
-      <ul>{currencies.map(code => <li key={code}><button type="button" className="text-link" onClick={() => fillFromCandidate(code)}>{code}</button></li>)}</ul></div>}
+      <ul>{currencies.map(code => <li key={code}><button type="button" className="text-link" disabled={locked} onClick={() => fillFromCandidate(code)}>{code}</button></li>)}</ul></div>}
     {field.confirmationRequired && field.evidenceStatus !== "source_backed" && <small>Accountant confirmation required</small>}
     {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
       {warning.reviewed ? "Reviewed" : "Please check"}: {warning.message}
@@ -453,9 +453,11 @@ function DocumentReviewPage({
 
   /* ---------- Next document and Ctrl+Enter (task B4b) ---------- */
   const queueIndex = queue.indexOf(documentId);
-  const previousId = neighbourDocument(queue, documentId, -1);
-  const nextId = neighbourDocument(queue, documentId, 1);
+  // No other document opens while a save or submit runs: its continuation would act on a page the accountant left.
+  const previousId = documentTarget(queue, documentId, -1, busy);
+  const nextId = documentTarget(queue, documentId, 1, busy);
   const openDocument = (id: string) => {
+    if (busy) return;
     if (unsaved.length && !window.confirm(`Leave this document without saving ${unsaved.length} change${unsaved.length === 1 ? "" : "s"}?`)) return;
     router.push(`${base}/documents/${encodeURIComponent(id)}`);
   };
@@ -498,8 +500,9 @@ function DocumentReviewPage({
         return;
       }
       // Every field is locked while this runs; still, never submit past a change that was not saved (a line item, say).
-      const sentLabels = new Set([...sent.keys()].map(key => fieldLabel(kind, key, extraction.fields[key]?.label)));
-      const left = unsavedOutside(unsavedNow.current, sentLabels);
+      // Compared by value: a field this submit saved still counts as unsaved if its draft now differs from what was sent.
+      const headerLabels = new Map(Object.keys(extraction.fields).map(key => [key, fieldLabel(kind, key, extraction.fields[key]?.label)]));
+      const left = unsavedOutside({ unsavedLabels: unsavedNow.current, headerLabels, pending: pendingValues.current, sent });
       if (left.length) {
         await refresh();
         setFailure(`Not submitted: ${left.join(", ")} ${left.length === 1 ? "has" : "have"} unsaved changes. Save, then press Ctrl+Enter again.`);

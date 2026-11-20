@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SIGNAL_TEXT, evidenceBox, fieldSignal, isToCheck, laneQueue, neighbourDocument, nextAfterSubmit, notFoundEntries, reviewOrder,
-  reviewShortcut, stepField, suggestedValue, visibleEntries, revisionToSubmit, settleDraft, stableOrder, enterAction, findLane, laneIds, unsavedOutside,
+  reviewShortcut, stepField, suggestedValue, visibleEntries, revisionToSubmit, settleDraft, stableOrder, enterAction, findLane, laneIds, unsavedOutside, documentTarget, evidenceCaption,
 } from "../src/features/common/documents/review/review-logic";
 import { loadReviewQueue, reloadReviewQueue } from "../src/features/common/documents/review/use-review-queue";
 import type { ExtractedField, SourceEvidence } from "../src/types";
@@ -215,10 +215,36 @@ test("P1 (round 2): Enter never puts a machine candidate over a person's correct
 });
 
 test("P1 (round 2): a line item changed during save and submit stops the submit", () => {
-  // Header fields saved by this submit are excluded; a line edited meanwhile is not.
-  assert.deepEqual(unsavedOutside(["Invoice number", "Line 2 Amount"], new Set(["Invoice number"])), ["Line 2 Amount"]);
-  assert.deepEqual(unsavedOutside(["Invoice number"], new Set(["Invoice number"])), []);
-  assert.deepEqual(unsavedOutside([], new Set()), []);
+  const headerLabels = new Map([["invoice", "Invoice number"], ["total", "Total"]]);
+  const sent = new Map([["invoice", "INV-7"]]);
+  // Header drafts this submit saved are excluded; a line edited meanwhile is not.
+  assert.deepEqual(unsavedOutside({ unsavedLabels: ["Invoice number", "Line 2 Amount"], headerLabels, pending: new Map([["invoice", "INV-7"]]), sent }), ["Line 2 Amount"]);
+  assert.deepEqual(unsavedOutside({ unsavedLabels: ["Invoice number"], headerLabels, pending: new Map([["invoice", "INV-7"]]), sent }), []);
+  assert.deepEqual(unsavedOutside({ unsavedLabels: [], headerLabels, pending: new Map(), sent: new Map() }), []);
+});
+
+test("P2 (round 3): a field that was sent but now holds a newer value still stops the submit", () => {
+  const headerLabels = new Map([["invoice", "Invoice number"], ["total", "Total"]]);
+  const sent = new Map([["invoice", "INV-7"]]);
+  assert.deepEqual(unsavedOutside({ unsavedLabels: ["Invoice number"], headerLabels, pending: new Map([["invoice", "INV-8"]]), sent }), ["Invoice number"]);
+  // A header field that was never sent is caught too.
+  assert.deepEqual(unsavedOutside({ unsavedLabels: ["Total"], headerLabels, pending: new Map([["total", "99.00"]]), sent }), ["Total"]);
+});
+
+test("P2 (round 3): no other document opens while a save or submit runs", () => {
+  const queue = ["a", "b", "c"];
+  assert.equal(documentTarget(queue, "b", 1, false), "c");
+  assert.equal(documentTarget(queue, "b", -1, false), "a");
+  assert.equal(documentTarget(queue, "b", 1, true), null);
+  assert.equal(documentTarget(queue, "b", -1, true), null);
+});
+
+test("P2 (round 3): the caption says when the page is not recorded, never assumes page 1", () => {
+  assert.equal(evidenceCaption({ label: "Total", evidence: [{ page: 2, text: "444.54" }] }, true), 'Total: read on page 2, "444.54".');
+  assert.equal(evidenceCaption({ label: "Total", evidence: [{ text: "444.54" }] }, false),
+    'Total: read on the document (page not recorded), "444.54". Its place on the page is not recorded.');
+  assert.equal(evidenceCaption({ label: "Total", evidence: [] }, false), "Total: where it was read is not recorded.");
+  assert.equal(evidenceCaption(undefined, false), "Select a field to see where it was read.");
 });
 
 test("P2: the keyboard order stays as opened, so Enter after the last field goes to submit", () => {
