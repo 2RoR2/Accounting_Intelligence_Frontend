@@ -10,6 +10,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import {
   acceptValidationReview,
   addExtractedLineItem,
+  chooseDocumentKind,
   retryDocumentProcessing,
   getDocument,
   getExceptions,
@@ -36,7 +37,8 @@ import {
   Toast,
   formatDate,
 } from "@/components/common/ui";
-import { evidenceLabel, extractionStateLabel, reviewSignalLabel, ruleCode, ruleSentence } from "@/lib/glossary";
+import { documentKindLabel, evidenceLabel, extractionStateLabel, readingFacts, readingReason, reviewSignalLabel, ruleCode, ruleSentence, typePendingCheck } from "@/lib/glossary";
+import { ChooseTypeControl, DocumentTypeNotice } from "./choose-type";
 import { ApiError } from "@/lib/api/client";
 import { canEditDocument, canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay as money, fieldLabel, reviewableFinding, sourceKind, standardisationAvailable, validationState, validationSummary } from "@/lib/api/document-contract";
@@ -450,6 +452,22 @@ function DocumentReviewPage({
   const failed = data.doc.status === "FAILED";
   const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
   const extracting = data.doc.status === "PROCESSING";
+  // The type: a person's choice for this reading, else what reading found. Unknown, not detected or
+  // disagreeing types block approval (EX-002), so the page says why and offers the choice.
+  const decision = extraction.kindDecision ?? null;
+  const detected = extraction.classification;
+  const typeFinding = validation.some(item => ruleCode(item.rule) === "EX-002" && item.field === "document_type" && item.result === "FAIL");
+  const needsType = !decision && (typeFinding || data.doc.kindDetected === false || String(data.doc.type).toUpperCase() === "AUTO"
+    || (!!detected?.status && detected.status !== "classified"));
+  const disagreement = !decision && detected?.status === "classified" && detected.value && data.doc.type
+    && detected.value.toUpperCase() !== String(data.doc.type).toUpperCase()
+    ? `Reading found the type ${documentKindLabel(detected.value)}, but the document is filed as ${documentKindLabel(data.doc.type)}. Choose the right type.` : null;
+  const typeReason = readingReason(readingFacts(extraction.raw, data.doc.mimeType, extraction.classification, extraction.fields), { typeChosen: !!decision }) ?? disagreement;
+  const typeRevision = data.doc.contentRevision ?? extraction.contentRevision;
+  const canChooseType = canEditDocument(user, data.doc, !!record) && ["EXTRACTED", "CORRECTED", "EXCEPTION"].includes(data.doc.status) && !!typeRevision;
+  const chosenKind = decision?.value?.toUpperCase();
+  const chooseType = (next: string) => run(() => chooseDocumentKind(user, documentId, next, typeRevision!),
+    `Type saved as ${documentKindLabel(next)}. The checks ran again.`);
 
   /* ---------- Next document and Ctrl+Enter (task B4b) ---------- */
   const queueIndex = queue.indexOf(documentId);
@@ -552,7 +570,10 @@ function DocumentReviewPage({
         }
       />
 
-      {failure && <ErrorState message={failure} />}
+      {failure && <ErrorState message={failure} dismissible onClose={() => setFailure("")} />}
+
+      {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType} canChoose={canChooseType}
+        current={chosenKind} busy={busy} onChoose={chooseType} />}
 
       {!failed && !pending && (
         <DocumentDetailPreview doc={data.doc} extraction={extraction} />
@@ -585,7 +606,7 @@ function DocumentReviewPage({
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">
-                  <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : kind[0] + kind.slice(1).toLowerCase() + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}</small></div>
+                  <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : documentKindLabel(kind) + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}</small></div>
                   <div className="review-filter-bar" role="toolbar" aria-label="Field filters">
                     <label className="review-only-toggle"><input type="checkbox" role="switch" checked={onlyToCheck} onChange={event => setOnlyToCheck(event.target.checked)} />
                       Only fields to check <b>{toCheckCount}</b></label>
@@ -607,7 +628,7 @@ function DocumentReviewPage({
                   labelFor={(key) => fieldLabel(kind, key, extraction.fields[key]?.label)}
                   onShowSource={(label, evidence) => { setSelectedLine(undefined); setAssistSource({ label, evidence }); }}
                   onSaved={refresh} />
-                {Object.keys(extraction.fields).length === 0 && <p>No accounting fields available. Review the original source.</p>}
+                {Object.keys(extraction.fields).length === 0 && <p>{needsType ? "No fields yet. Choose the type at the top of the page to get the fields for that type." : "No accounting fields available. Review the original source."}</p>}
                 {Object.keys(extraction.fields).length > 0 && <div role="status" className="review-focus-summary">
                   <strong className="review-summary-title">Review status</strong>
                   <ul className="review-summary-list">
@@ -726,10 +747,11 @@ function DocumentReviewPage({
                 rowKey={(v) => JSON.stringify([v.rule, v.field ?? null, validation.indexOf(v)])}
                 columns={[
                   { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{ruleSentence(v.rule, v.field)}</strong></div> },
-                  { label: "Result", render: (v) => <><StatusBadge status={validationState(v)} />{v.preventsApproval && <small> Must be fixed before approval</small>}</> },
+                  { label: "Result", render: (v) => <><StatusBadge status={validationState(v)} />{v.preventsApproval && !typePendingCheck(v.rule) && <small> Must be fixed before approval</small>}</> },
                   { label: "Field", render: (v) => v.field ? fieldLabel(kind, v.field, extraction.fields[v.field]?.label) : "Whole document" },
                   { label: "Priority", render: (v) => v.severity ? v.severity[0].toUpperCase() + v.severity.slice(1).toLowerCase() : "Normal" },
-                  { label: "What to do", render: (v) => <div><span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{v.message}</span>
+                  { label: "What to do", render: (v) => <div><span className={v.result === "FAIL" ? "validation-message fail-text" : "validation-message"}>{typePendingCheck(v.rule) ? "This check runs once the document type is chosen." : v.message}</span>
+                    {ruleCode(v.rule) === "EX-002" && v.field === "document_type" && canChooseType && <ChooseTypeControl current={chosenKind} busy={busy} onChoose={chooseType} />}
                     <details className="validation-details"><summary>Details</summary><small>Rule {ruleCode(v.rule)}{v.causeLabel ? ` · ${v.causeLabel}` : ""}</small></details>
                     {v.rule === "EX-008" && (v.field === "customer" || receivable) && !readonly && user.role === "LOCAL_ADMIN" && extraction.fields.customer?.value && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createCustomer(extraction.fields.customer!.value!)); await revalidateDocument(user, documentId); }, "Customer added and document revalidated.")}>Add {extraction.fields.customer.value} as a customer</button></p>}
                     {reviewableFinding(v) && !readonly && canRevalidate && extraction.contentRevision && <ValidationReviewForm rule={v.rule} busy={busy} onSubmit={note => run(() => acceptValidationReview(user, documentId, v.rule, note, extraction.contentRevision!), "Review recorded and document revalidated.")} />}
