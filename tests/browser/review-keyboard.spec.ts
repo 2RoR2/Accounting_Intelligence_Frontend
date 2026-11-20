@@ -46,7 +46,8 @@ test("a document with three check fields is completed without the mouse", async 
 
   await page.goto(`/workspace/documents/${documentId}`);
   const fields = page.locator(".review-field-list .shoebox-field");
-  await expect(fields).toHaveCount(3);
+  // The first load can take several seconds on a local backend (the checks endpoint alone took about 6 s here).
+  await expect(fields).toHaveCount(3, { timeout: 30000 });
   await expect(page.getByRole("switch", { name: /Only fields to check/ })).toBeChecked();
   for (let index = 0; index < 3; index++) await expect(fields.nth(index)).toContainText("Please check");
   const inputs = page.locator(".review-field-list .shoebox-field input");
