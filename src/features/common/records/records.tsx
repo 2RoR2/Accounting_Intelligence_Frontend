@@ -29,6 +29,7 @@ import {
   formatDate,
   StatusBadge,
 } from "@/components/common/ui";
+import { isDueWindow, lockedCategory, recordFilterLabel } from "@/lib/today";
 
 export function RecordDetail({
   record,
@@ -92,15 +93,29 @@ export function RecordsPage({
   initialRecordId?: string;
 }) {
   const admin = user.role === "SUPER_ADMIN";
+  // Opened from a Today tile (?due= with ?category=, or ?posting=to-post): the backend applies the tile's rule.
+  const params = useSearchParams();
+  const requestedDue = params.get("due");
+  const requestedAsOf = params.get("asOf");
+  const todayFilter = {
+    category: params.get("category") ?? undefined,
+    due: isDueWindow(requestedDue) ? requestedDue : undefined,
+    posting: params.get("posting") === "to-post" ? "to-post" : undefined,
+    // The Today tile's date (backend sends asOf with the due links); only a plain YYYY-MM-DD is passed on.
+    asOf: requestedAsOf && /^\d{4}-\d{2}-\d{2}$/.test(requestedAsOf) ? requestedAsOf : undefined,
+  };
+  const todayLabel = admin ? null : recordFilterLabel(todayFilter.category ?? null, todayFilter.due ?? null, todayFilter.posting ?? null);
+  // The server already returns only this category: the Categories selector is shown fixed, not filtered locally.
+  const fixedCategory = admin ? null : lockedCategory(todayFilter.category);
   const { data, error, loading, refresh } = useResource(
     async () => ({
       tenants: await getTenants(user),
       docs: await getDocuments(user),
       exceptions: await getExceptions(user),
-      records: admin ? [] : await getStandardisedRecords(user),
+      records: admin ? [] : await getStandardisedRecords(user, todayFilter),
       metadata: admin ? await getRecordMetadata(user, tenantId) : [],
     }),
-    `${user.id}:${tenantId}`,
+    `${user.id}:${tenantId}:${todayFilter.category}:${todayFilter.due}:${todayFilter.posting}:${todayFilter.asOf}`,
   );
   const [selectedTenant, setSelectedTenant] = useState(tenantId ?? "");
   const [search, setSearch] = useState("");
@@ -150,7 +165,7 @@ export function RecordsPage({
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
-      (!category || r.category === category) &&
+      (fixedCategory !== null || !category || r.category === category) &&
       (!date || (r.extraction.fields.date?.value ?? "") === date) &&
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
@@ -303,6 +318,12 @@ export function RecordsPage({
         </Panel>
       ) : (
         <Panel>
+          {(todayLabel || fixedCategory) && (
+            <p className="today-filter-note" role="status">
+              Showing: <strong>{todayLabel ?? (fixedCategory === "ACCOUNTS_RECEIVABLE" ? "Customer invoices only" : "Supplier bills only")}</strong> ({data.records.length}).{" "}
+              <Link href={`/${user.role === "LOCAL_ADMIN" ? "company" : "workspace"}/records`}>Show all approved records</Link>
+            </p>
+          )}
           <div className="filter-bar">
             <SearchInput
               value={search}
@@ -311,9 +332,11 @@ export function RecordsPage({
             />
             <Filter
               label="Categories"
-              value={category}
+              value={fixedCategory ?? category}
               onChange={setCategory}
               options={["ACCOUNTS_RECEIVABLE", "ACCOUNTS_PAYABLE"]}
+              disabled={fixedCategory !== null}
+              title={fixedCategory ? "Fixed by the link you opened. Use \"Show all approved records\" to change it." : undefined}
             />
             <Filter
               label="Suppliers"
