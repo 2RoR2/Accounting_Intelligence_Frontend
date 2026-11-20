@@ -1,5 +1,6 @@
 /**
- * Accountant and local-admin menu, grouped by accounting job (plan v2, task B2).
+ * Accountant and local-admin menu (plan v3, R0): the team's page names, grouped by when an
+ * accountant uses them: the daily work, the bank, and month-end.
  *
  * Every entry reuses an existing page; a query string only pre-filters that page. The super-admin
  * platform menu is separate and unchanged. The menu is defined here, not read from the backend:
@@ -25,37 +26,30 @@ export interface NavSection { label: string; items: NavItem[] }
 const ADMIN_ONLY = new Set(["approvals", "users", "validation-rules", "audit", "system"]);
 
 const SECTIONS: NavSection[] = [
-  { label: "Today", items: [{ label: "Today", page: "today", icon: "today" }] },
-  { label: "Inbox", items: [
+  { label: "Overview", items: [{ label: "Dashboard", page: "dashboard", icon: "today" }] },
+  { label: "Daily work", items: [
     { label: "Upload", page: "upload", icon: "upload" },
-    { label: "To review", page: "documents", icon: "review" },
-    { label: "Needs fixing", page: "exceptions", icon: "fix", count: "exceptions" },
-    { label: "Ready to approve", page: "approvals", icon: "approve", count: "approvals" },
+    { label: "Documents", page: "documents", icon: "review" },
+    { label: "Exceptions", page: "exceptions", icon: "fix", count: "exceptions" },
+    { label: "Approvals", page: "approvals", icon: "approve", count: "approvals" },
   ] },
-  { label: "Purchases", items: [
-    { label: "Supplier bills", page: "documents", query: "tab=purchase-bills", icon: "bill" },
-    { label: "Receipts", page: "documents", query: "tab=receipts", icon: "receipt" },
-    { label: "Approved purchases", page: "records", query: "category=ACCOUNTS_PAYABLE", icon: "records" },
+  { label: "Banking", items: [
+    { label: "Money In", page: "money-in", icon: "money-in" },
+    { label: "Money Out", page: "money-out", icon: "money-out" },
+    { label: "Reconciliation", page: "reconciliation", icon: "reconcile" },
   ] },
-  { label: "Sales", items: [
-    { label: "Customer invoices", page: "documents", query: "tab=sales-invoices", icon: "invoice" },
-    { label: "Approved sales", page: "records", query: "category=ACCOUNTS_RECEIVABLE", icon: "records" },
+  { label: "Month-end", items: [
+    { label: "Standardised Records", page: "records", icon: "records" },
+    { label: "Ledger", page: "ledger", icon: "accounts" },
+    { label: "Summary", page: "reports", icon: "reports" },
   ] },
-  { label: "Bank", items: [
-    { label: "Money in", page: "money-in", icon: "money-in" },
-    { label: "Money out", page: "money-out", icon: "money-out" },
-    { label: "Reconcile", page: "reconciliation", icon: "reconcile" },
-  ] },
-  { label: "Contacts", items: [{ label: "Contacts", page: "contacts", icon: "contacts" }] },
-  { label: "Accounts", items: [{ label: "Accounts", page: "ledger", icon: "accounts" }] },
-  { label: "Reports", items: [{ label: "Reports", page: "reports", icon: "reports" }] },
-  { label: "Settings", items: [
+  { label: "Workspace", items: [
+    { label: "Contacts", page: "contacts", icon: "contacts" },
     { label: "Settings", page: "settings", icon: "settings" },
     { label: "Users", page: "users", icon: "users" },
     { label: "Check rules", page: "validation-rules", icon: "rules" },
     { label: "Audit trail", page: "audit", icon: "audit" },
     { label: "System", page: "system", icon: "system" },
-    { label: "Profile", page: "profile", icon: "profile" },
   ] },
 ];
 
@@ -70,12 +64,12 @@ export const navHref = (prefix: string, item: NavItem) => `/${prefix}/${item.pag
 
 /**
  * The entry for the current page. An entry with a query wins when the URL carries that query;
- * otherwise the plain entry for the page ("To review" for /documents and /documents/<id>).
+ * otherwise the plain entry for the page ("Documents" for /documents and /documents/<id>).
  */
 export function activeNavItem(sections: NavSection[], page: string, search: URLSearchParams | string = ""): NavItem | undefined {
   const params = typeof search === "string" ? new URLSearchParams(search) : search;
-  // The old "dashboard" URL redirects to "today"; while it does, it highlights Today.
-  const items = sections.flatMap((section) => section.items).filter((item) => item.page === page || (page === "dashboard" && item.page === "today"));
+  // /today (B3's URL, still linked from older pages) redirects to the Dashboard; while it does, it highlights Dashboard.
+  const items = sections.flatMap((section) => section.items).filter((item) => item.page === page || (page === "today" && item.page === "dashboard"));
   const matches = (item: NavItem) => [...new URLSearchParams(item.query ?? "")].every(([key, value]) => params.get(key) === value);
   return items.find((item) => item.query && matches(item)) ?? items.find((item) => !item.query);
 }

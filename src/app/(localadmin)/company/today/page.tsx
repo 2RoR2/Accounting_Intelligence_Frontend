@@ -1,6 +1,6 @@
-import { Application } from "@/features/application";
+import { redirect } from "next/navigation";
 
-// "Today" is the home page. It shows the existing dashboard until task B3 rebuilds it.
+// B3 called the home page "Today"; old links and bookmarks land on the Dashboard.
 export default function Page() {
-  return <Application path={["company", "today"]} />;
+  redirect("/company/dashboard");
 }

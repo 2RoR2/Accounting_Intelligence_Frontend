@@ -20,6 +20,8 @@ export type DocumentSearch = {
   date?: string;
   amount?: string;
   business?: string;
+  /** A Today list (backend lane): to-review, ready, needs-fixing or waiting-approval. */
+  lane?: string;
 };
 export type DemoCatalogDocument = Document & { demoCode: string; sampleId: string; benchmarkRevision: string; sourceSha256: string; goldManifestSha256: string };
 export type DemoAccuracyPreview = { datasetId: string; status: "NOT_RUN" | string; documentCount: number; accuracy: number | null; recall: number | null; precision: number | null; coverage: number | null; breakdown: unknown[] };
