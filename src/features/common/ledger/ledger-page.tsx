@@ -1,14 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { DataTable, ErrorState, LoadingState, PageHeader, Panel, StatCard } from "@/components/common/ui";
 import { getLedgerJournals, getSettlements, getAllocations, getTrialBalance } from "@/lib/api/ledger.service";
 import { ChartAccounts } from "./chart-accounts";
 import { JournalPostingForm } from "./journal-posting-form";
 import { currencyTotals } from "@/lib/api/document-contract";
+import { MonthlyFinance } from "@/features/common/today/monthly-finance";
 
 const sections = [
+  ["monthly", "Monthly ledger"],
   ["trial", "Trial balance"],
   ["journals", "Journal history"],
   ["allocations", "Settlement allocations"],
@@ -21,7 +24,15 @@ function amountKey(value: string) {
 }
 
 export function LedgerPage({ canPost }: { canPost: boolean }) {
-  const [section, setSection] = useState<(typeof sections)[number][0]>("trial");
+  // The open section is in the URL (?section=), so the sidebar's Accounting entries open it and stay highlighted.
+  type Section = (typeof sections)[number][0];
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requested = searchParams.get("section");
+  const section: Section = sections.find(([key]) => key === requested)?.[0] ?? "trial";
+  const setSection = (key: Section) => router.replace(`${pathname}?section=${key}`, { scroll: false });
+  const base = pathname.split("/").slice(0, 2).join("/");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [source, setSource] = useState("");
@@ -76,6 +87,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
           <input aria-label="Journal month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
         </div>}
       </section>
+      {section === "monthly" && <MonthlyFinance asOf={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date())} base={base} userId="ledger" />}
       {section === "trial" && <Panel title="Trial balance">
         <DataTable rows={data.trialBalance} rowKey={(r) => r.accountId} columns={[
           { label: "Account", render: (r) => `${r.code} · ${r.name}` }, { label: "Type", render: (r) => r.accountType },

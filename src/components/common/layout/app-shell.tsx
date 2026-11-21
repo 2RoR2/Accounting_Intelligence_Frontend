@@ -34,7 +34,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { activeNavItem, jobNavigation, navHref, type NavIcon, type NavSection } from "./navigation";
+import { activeNavItem, jobNavigation, navHref, navParent, type NavIcon, type NavSection } from "./navigation";
 import { ruleSentence } from "@/lib/glossary";
 import type { User } from "@/types";
 import { logout } from "@/lib/api/auth.service";
@@ -75,12 +75,12 @@ const NAV_ICONS: Record<NavIcon, LucideIcon> = {
   bill: ArrowUpFromLine, receipt: FileCheck2, invoice: ArrowDownToLine, records: FileCheck2,
   "money-in": ArrowDownToLine, "money-out": ArrowUpFromLine, reconcile: ClipboardCheck, contacts: Users,
   accounts: BookOpen, reports: ChartNoAxesCombined, settings: Settings2, users: Users, rules: ClipboardCheck,
-  audit: Activity, system: ScanLine, profile: UserRound,
+  audit: Activity, system: ScanLine, profile: UserRound, bank: Building2,
 };
 // Pages reachable from inside other pages, not from the menu: their breadcrumb title.
 const PAGE_TITLES: Record<string, string> = {
   records: "Approved records", "validation-overview": "Checks overview", evaluation: "Reading accuracy",
-  performance: "Processing performance", help: "Help",
+  performance: "Processing performance", help: "Help", ledger: "Accounting",
 };
 
 export function AppShell({
@@ -101,6 +101,8 @@ export function AppShell({
   const [helpOpen, setHelpOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [navScrolling, setNavScrolling] = useState(false);
+  // Menu groups start open, as in the team's layout; a click closes one.
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [themePreference, setThemePreference] = useState<"light" | "dark" | "system">("system");
   const [darkMode, setDarkMode] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -251,6 +253,7 @@ export function AppShell({
   const notificationHref = `/${prefix}/${isAdmin ? "audit" : "exceptions"}`;
   const currentPage = pathname.split("/")[2] ?? "";
   const activeItem = activeNavItem(sections, currentPage, searchParams?.toString() ?? "");
+  const activeParent = navParent(sections, activeItem);
 
   const openExceptions = (data.data?.exceptions ?? []).filter(
     (e) => e.status !== "RESOLVED",
@@ -337,17 +340,44 @@ export function AppShell({
           </div>
         </button>
         <nav className={navScrolling ? "is-scrolling" : ""} onScroll={handleNavScroll}>
-          {sections.map((section) => <div className="nav-group" key={section.label}>
-            {/* A job with one page is a plain link; a job with several pages gets a heading. */}
-            {section.items.length > 1 && <div className="nav-group-heading">{section.label}</div>}
+          {sections.map((section) => <div className="nav-group" key={section.label || "menu"}>
+            {section.label && section.items.length > 1 && <div className="nav-group-heading">{section.label}</div>}
             {section.items.map((item) => {
               const Icon = isAdmin ? adminIcon(item.page) : NAV_ICONS[item.icon];
-              const active = activeItem === item;
-              const count = item.count === "exceptions" || (isAdmin && item.page === "exceptions")
+              const countFor = (entry: typeof item) => entry.count === "exceptions" || (isAdmin && entry.page === "exceptions")
                 ? (openExceptions.length > 0 ? openExceptions.length : undefined)
-                : (item.count === "approvals" || (isAdmin && item.page === "approvals")) && (data.data?.pending ?? 0) > 0
+                : (entry.count === "approvals" || (isAdmin && entry.page === "approvals")) && (data.data?.pending ?? 0) > 0
                   ? data.data?.pending
                   : undefined;
+              if (item.children) {
+                // A group (Sales, Bank, …): the heading toggles; the group holding the open page stays open.
+                const holdsActive = activeParent === item;
+                const expanded = holdsActive || expandedMenus[item.label] !== false;
+                const submenuId = `nav-sub-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+                // The group name opens its first page; the chevron opens or closes the group (the team's layout).
+                return <div className="nav-tree-item" key={`${section.label}-${item.label}`}>
+                  <div className={`nav-item-row ${holdsActive ? "active" : ""}`}>
+                    <Link href={navHref(prefix, item.children[0])} onClick={() => setOpen(false)} className={`nav-item ${holdsActive ? "active" : ""}`} title={item.label}>
+                      <Icon size={18} /><span>{item.label}</span>
+                    </Link>
+                    <button type="button" className="nav-chevron-button" aria-expanded={expanded} aria-controls={submenuId} aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label}`}
+                      onClick={() => setExpandedMenus((current) => ({ ...current, [item.label]: !expanded }))}>
+                      <ChevronDown size={15} className={`nav-chevron ${expanded ? "expanded" : ""}`} aria-hidden="true" />
+                    </button>
+                  </div>
+                  {expanded && <div className="nav-submenu" id={submenuId} aria-label={`${item.label} submenu`}>
+                    {item.children.map((child) => {
+                      const active = activeItem === child;
+                      const count = countFor(child);
+                      return <Link key={child.label} href={navHref(prefix, child)} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-subitem ${active ? "active" : ""}`}>
+                        <span>{child.label}</span>{count !== undefined && <span className="nav-count">{count}</span>}
+                      </Link>;
+                    })}
+                  </div>}
+                </div>;
+              }
+              const active = activeItem === item;
+              const count = countFor(item);
               return <Link key={`${section.label}-${item.label}`} href={navHref(prefix, item)} aria-current={active ? "page" : undefined} onClick={() => setOpen(false)} className={`nav-item ${active ? "active" : ""}`} title={item.label}>
                 <Icon size={18} /><span>{item.label}</span>{count !== undefined && <span className="nav-count">{count}</span>}
               </Link>;
@@ -409,6 +439,7 @@ export function AppShell({
               {isAdmin ? "AccordAI Platform" : (user.tenantName || tenant?.name)}
             </Link>
             <span className="crumb-divider">/</span>
+            {activeParent && <><span>{activeParent.label}</span><span className="crumb-divider">/</span></>}
             <strong>
               {activeItem?.label ?? PAGE_TITLES[currentPage] ?? (isAdmin ? "Overview" : "Dashboard")}
             </strong>

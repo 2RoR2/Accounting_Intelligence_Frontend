@@ -12,18 +12,11 @@ import { WorkspaceSectionPage } from "@/features/common/workspace/workspace-sect
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import { LedgerPage } from "@/features/common/ledger/ledger-page";
 import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
+import { BankAccountsPage } from "@/features/common/money/bank-accounts";
+import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { UserManagement } from "@/features/common/users/user-management";
 import { HelpCenter } from "@/features/common/help/help-center";
 import type { User } from "@/types";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-
-function RedirectTo({ href }: { href: string }) {
-  const router = useRouter();
-  useEffect(() => { router.replace(href); }, [href, router]);
-  return <p className="empty-state">This page has moved to <a href={href}>Reports</a>.</p>;
-}
-
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
   // Money pages must win even if the sidebar still appends /view-money-in
@@ -32,6 +25,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   }
   if (page === "ledger") return <LedgerPage canPost={false} />;
   if (page === "reconciliation") return <ReconciliationPage user={user} />;
+  if (page === "bank-accounts") return <BankAccountsPage user={user} />;
   if (page === "users") return <UserManagement user={user} />;
   if (page === "settings") return <SettingsPage user={user} />;
   if (page === "help") return <HelpCenter />;
@@ -50,8 +44,8 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "contacts": return <ContactsPage user={user} />;
     case "records": return <RecordsPage user={user} initialRecordId={id} />;
     case "reports": return <AccountingReportsPage user={user} />;
-    // Evaluation now lives inside Summary; old links land there. The effort study keeps its own URL.
-    case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <RedirectTo href="/workspace/reports" />;
+    // Reports › Performance Evaluation; the effort study keeps its own URL.
+    case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "profile": return <ProfilePage user={user} />;
     default: return <WorkspaceSectionPage user={user} section={page ?? "workspace"} />;
   }
