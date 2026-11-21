@@ -156,6 +156,13 @@ export type MissingLineInput = { description: string; quantity: string | null; u
 export async function addExtractedLineItem(documentId: string, input: MissingLineInput) {
   return api<{ id: string; contentRevision: number }>(`/api/documents/${documentId}/line-items`, { method: "POST", body: JSON.stringify(input) });
 }
+/** A person chooses the type when reading could not settle it. The backend records it, adds empty fields for that type and runs the checks again. */
+export async function chooseDocumentKind(user: User, documentId: string, kind: string, expectedContentRevision: number) {
+  requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
+  if (!Number.isInteger(expectedContentRevision) || expectedContentRevision < 1) throw new Error("Refresh the document to obtain its current revision.");
+  return api<{ documentId: string; kind: string; code: string; kindDetected: boolean; previousKind: string; contentRevision: number; fieldsAdded: number; validation: RevalidationResponse }>(
+    "/api/documents/" + documentId + "/kind", { method: "PATCH", body: JSON.stringify({ kind: kind.toLowerCase(), expectedContentRevision }) });
+}
 export async function revalidateDocument(user: User, documentId: string, note = "") {
   void note;
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
