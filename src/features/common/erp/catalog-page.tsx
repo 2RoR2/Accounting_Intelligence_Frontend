@@ -1,5 +1,5 @@
 "use client";
-import { useState, type CSSProperties } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { User } from "@/types";
@@ -11,10 +11,11 @@ import {
 } from "@/lib/api/erp.service";
 import { getLedgerAccounts, type LedgerAccount } from "@/lib/api/ledger.service";
 import {
-  CATALOG_LABELS, CATALOG_SINGULAR, CATALOG_TABS, CUSTOM_FIELD_LABELS, CUSTOM_FIELD_TYPES, PAYMENT_METHOD_LABELS,
+  CATALOG_LABELS, CATALOG_SINGULAR, CATALOG_TABS, COMPANY_CURRENCY, CUSTOM_FIELD_LABELS, CUSTOM_FIELD_TYPES, PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_TYPES, accountLabel, accountsOfType, documentTypeLabel, entryToForm, errorMessage, formToInput, isCompanyAdmin,
   numberPreview, parseCatalogTab, removesPermanently, validateCatalogForm, type CatalogForm, type VisibleCatalogKind,
 } from "./catalog-logic";
+import { effectiveRate, MAX_RATE_PERIODS, normaliseRate, readRatePeriods, validateRatePeriods, type RatePeriod } from "./currency-rates";
 import { ProductsPanel } from "./products-panel";
 import { PostingAccountsPanel } from "./posting-accounts-panel";
 
@@ -121,12 +122,16 @@ function kindColumns(kind: VisibleCatalogKind): Column<CatalogEntry>[] {
     case "payment-method": return [name, {
       label: "Type", render: (row) => PAYMENT_METHOD_LABELS[row.data.type as keyof typeof PAYMENT_METHOD_LABELS] ?? dash(row.data.type),
     }];
-    case "currency": return [
-      { label: "Code", render: (row) => <strong>{dash(row.code)}</strong> }, { label: "Name", render: (row) => row.name },
-      { label: "Symbol", render: (row) => dash(row.data.symbol) },
-      { label: "Rate (MYR per unit)", render: (row) => dash(row.data.rate) },
-      { label: "Rate date", render: (row) => dash(row.data.rateDate) },
-    ];
+    case "currency": {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
+      return [
+        { label: "Code", render: (row) => <strong>{dash(row.code)}</strong> }, { label: "Name", render: (row) => row.name },
+        { label: "Symbol", render: (row) => dash(row.data.symbol) },
+        { label: "Default rate (MYR per unit)", render: (row) => dash(row.data.rate) },
+        { label: "Rate date", render: (row) => dash(row.data.rateDate) },
+        { label: "Rate today", render: (row) => row.code?.toUpperCase() === COMPANY_CURRENCY ? "1" : dash(effectiveRate(row.data, today)) },
+      ];
+    }
     case "bank-account": return [name, code, { label: "Ledger account", render: (row) => dash(row.ledgerAccountCode) },
       { label: "Account number", render: (row) => dash(row.data.accountNumber) },
       { label: "Bank", render: (row) => dash(row.data.bankName) }];
@@ -153,6 +158,18 @@ function CatalogEntryModal({ kind, entry, accounts, onClose, onSaved }: {
   const [form, setForm] = useState<CatalogForm>(() => entryToForm(kind, entry));
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ratePeriods, setRatePeriods] = useState(() => kind === "currency"
+    ? readRatePeriods(entry?.data ?? {}).map((period, id) => ({ ...period, id })) : []);
+  const nextRatePeriodId = useRef(ratePeriods.length);
+  const currencyErrorId = useId();
+  const isCompanyCurrency = form.code.trim().toUpperCase() === COMPANY_CURRENCY;
+  const updateRatePeriod = (id: number, changes: Partial<RatePeriod>) => setRatePeriods((current) =>
+    current.map((period) => period.id === id ? { ...period, ...changes } : period),
+  );
+  const addRatePeriod = () => {
+    const id = nextRatePeriodId.current++;
+    setRatePeriods((current) => [...current, { id, startDate: "", endDate: null, rate: "" }]);
+  };
   const set = <K extends keyof CatalogForm>(key: K, value: CatalogForm[K]) => setForm((current) => ({ ...current, [key]: value }));
   const input = (key: "name" | "code" | "description" | "symbol" | "rate" | "accountNumber" | "bankName" | "prefix" | "padding" | "days" | "options", extra: Record<string, unknown> = {}) =>
     <input value={form[key]} onChange={(e) => set(key, e.target.value)} {...extra} />;
@@ -161,9 +178,19 @@ function CatalogEntryModal({ kind, entry, accounts, onClose, onSaved }: {
   const save = async () => {
     const problem = validateCatalogForm(kind, form);
     if (problem) { setFailure(problem); return; }
+    const customRates = kind === "currency" ? ratePeriods.map(({ startDate, endDate, rate }) => ({
+      startDate, endDate, rate: normaliseRate(rate) ?? "",
+    })) : null;
+    if (customRates) {
+      const rateProblem = isCompanyCurrency && customRates.length
+        ? "MYR cannot have rate periods. Its rate is always 1."
+        : validateRatePeriods(customRates);
+      if (rateProblem) { setFailure(rateProblem); return; }
+    }
     setBusy(true); setFailure("");
     try {
       const body = formToInput(kind, form);
+      if (customRates) body.data = { ...body.data, customRates };
       if (entry) await updateCatalogEntry(kind, entry.id, body);
       else await createCatalogEntry(kind, body);
       onSaved();
@@ -194,9 +221,31 @@ function CatalogEntryModal({ kind, entry, accounts, onClose, onSaved }: {
           <input value={form.code} maxLength={3} onChange={(e) => set("code", e.target.value.toUpperCase())} /></Field>
         {nameField}
         <Field label="Symbol">{input("symbol", { maxLength: 10 })}</Field>
-        <Field label="Rate (MYR per 1 unit)" hint="Optional. For reference only.">{input("rate", { inputMode: "decimal", placeholder: "4.470000" })}</Field>
+        <Field label="Default rate (MYR per 1 unit)" hint="Optional. Used when no rate period covers the date.">{input("rate", { inputMode: "decimal", placeholder: "4.470000" })}</Field>
         <Field label={form.rate.trim() ? "Rate date *" : "Rate date"}>
           <input type="date" value={form.rateDate} onChange={(e) => set("rateDate", e.target.value)} /></Field>
+        <fieldset disabled={busy} style={{ minWidth: 0, display: "grid", gap: 12 }}>
+          <legend>Rate periods</legend>
+          {isCompanyCurrency ? <small>MYR is always 1.</small> : <small>Leave the end date blank for an ongoing rate.</small>}
+          {ratePeriods.map((period, index) => <fieldset key={period.id} style={{ minWidth: 0 }}>
+            <legend>Rate period {index + 1}</legend>
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))" }}>
+              <Field label="Start date *">
+                <input type="date" aria-required="true" value={period.startDate} onChange={(e) => updateRatePeriod(period.id, { startDate: e.target.value })} />
+              </Field>
+              <Field label="End date">
+                <input type="date" value={period.endDate ?? ""} onChange={(e) => updateRatePeriod(period.id, { endDate: e.target.value || null })} />
+              </Field>
+              <Field label="Rate (MYR per unit) *">
+                <input inputMode="decimal" aria-required="true" value={period.rate} onChange={(e) => updateRatePeriod(period.id, { rate: e.target.value })} />
+              </Field>
+            </div>
+            <button type="button" className="btn small" aria-label={`Remove rate period ${index + 1}`}
+              onClick={() => setRatePeriods((current) => current.filter((row) => row.id !== period.id))}>Remove</button>
+          </fieldset>)}
+          <div><button type="button" className="btn small" onClick={addRatePeriod}
+            disabled={isCompanyCurrency || ratePeriods.length >= MAX_RATE_PERIODS}>Add rate period</button></div>
+        </fieldset>
       </>;
       break;
     case "bank-account":
@@ -247,14 +296,15 @@ function CatalogEntryModal({ kind, entry, accounts, onClose, onSaved }: {
 
   const singular = CATALOG_SINGULAR[kind];
   return <Modal title={entry ? `Edit ${singular}` : `New ${singular}`} onClose={onClose}>
-    <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
+    <form aria-describedby={kind === "currency" && failure ? currencyErrorId : undefined} onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <div className="panel-body" style={{ maxHeight: "70vh", overflowY: "auto", display: "grid", gap: 12 }}>
-        {failure && <div className="notice danger" role="alert">{failure}</div>}
+        {failure && kind !== "currency" && <div className="notice danger" role="alert">{failure}</div>}
         {fields}
         {entry && !entry.isActive && !removesPermanently(kind) && <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
           <input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} /> Active
         </label>}
       </div>
+      {failure && kind === "currency" && <div id={currencyErrorId} className="notice danger" role="alert">{failure}</div>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
         <button type="submit" className="btn primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
