@@ -273,8 +273,8 @@ const DOCUMENT_KINDS: Record<string, string> = {
   // Uploaded without a type (Inbox) and not detected yet, or the reader could not tell.
   AUTO: "Type not detected",
 };
-/** The types a person can choose for a document, in menu order. */
-export const CHOOSABLE_DOCUMENT_KINDS = Object.keys(DOCUMENT_KINDS).filter(kind => kind !== "AUTO");
+/** The types a person can choose for a document, in menu order. AUTO is a state ("not detected yet"), not a type: the backend refuses it. */
+export const CHOOSABLE_DOCUMENT_KINDS = Object.keys(DOCUMENT_KINDS).filter((kind) => kind !== "AUTO");
 /** "CREDIT_NOTE" -> "Credit note". Unknown kinds are tidied, never blank. */
 export function documentKindLabel(kind: string | null | undefined) {
   const key = String(kind ?? "").toUpperCase();

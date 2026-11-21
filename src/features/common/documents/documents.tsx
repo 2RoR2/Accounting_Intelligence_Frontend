@@ -1,5 +1,4 @@
 "use client";
-import { InboxPage } from "./inbox/inbox-page";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -189,18 +188,6 @@ export function DocumentList({ user }: { user: User }) {
   );
 }
 export function UploadPage({ user }: { user: User }) {
-  const [batch, setBatch] = useState(false);
-  return <>
-    <div className="upload-sources">
-      <button className="btn" type="button" aria-pressed={batch} onClick={() => setBatch(!batch)}>
-        {batch ? "Use individual upload" : "Batch upload with automatic detection"}
-      </button>
-    </div>
-    {batch ? <InboxPage user={user} /> : <IndividualUploadPage user={user} />}
-  </>;
-}
-
-function IndividualUploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);

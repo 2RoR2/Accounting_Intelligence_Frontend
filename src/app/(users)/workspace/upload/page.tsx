@@ -1,5 +1,5 @@
-import { Application } from "@/features/application";
+import { InboxRoute } from "@/features/common/documents/inbox/inbox-route";
 
 export default function Page() {
-  return <Application path={["workspace","upload"]} />;
+  return <InboxRoute area="workspace" />;
 }

@@ -258,7 +258,8 @@ export function InboxPage({ user }: { user: User }) {
                       <Link className="text-link" href={`${base}/documents/${item.documentId}`}>{item.state === "ready" ? "Check" : "Fix"}</Link>
                     )}
                     {item.state === "duplicate" && item.existing && (
-                      <Link className="text-link" href={`${base}/documents/${item.existing.id}`}>Open {item.existing.code ?? "earlier copy"}</Link>
+                      // A DOC_ code is the earlier copy's code before its type was detected; it changes, so do not show it.
+                      <Link className="text-link" href={`${base}/documents/${item.existing.id}`}>Open {item.existing.code && !item.existing.code.startsWith(PENDING_CODE_PREFIX) ? item.existing.code : "earlier copy"}</Link>
                     )}
                     {item.state === "failed" && item.retry && !item.retrying && (
                       <button type="button" className="text-link" onClick={() => void queue.retry(item.key)}>

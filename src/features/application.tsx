@@ -13,7 +13,10 @@ import { ForcePasswordChange } from "@/features/users/force-password";
 import { LocalAdminRoutes } from "@/features/localadmin/route-content";
 import { SuperAdminRoutes } from "@/features/superadmin/route-content";
 import { AlertTriangle, LogIn } from "lucide-react";
-export function Application({ path }: { path: string[] }) {
+import type { ReactNode } from "react";
+import type { User } from "@/types";
+/** `page`, when given, replaces the role's route content inside the same sign-in checks and shell. */
+export function Application({ path, page }: { path: string[]; page?: (user: User) => ReactNode }) {
   const publicRoute = isPublicRoute(path);
   const {
     data: user,
@@ -50,7 +53,7 @@ export function Application({ path }: { path: string[] }) {
     return <ForcePasswordChange user={user} />;
   return (
     <AppShell user={user}>
-      {user.role === "SUPER_ADMIN" ? (
+      {page ? page(user) : user.role === "SUPER_ADMIN" ? (
         <SuperAdminRoutes path={path} user={user} />
       ) : user.role === "LOCAL_ADMIN" ? (
         <LocalAdminRoutes path={path} user={user} />
