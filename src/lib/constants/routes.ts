@@ -11,7 +11,7 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   "approvals", "contacts", "reconciliation",
   "records", "users", "validation-overview", "validation-rules", "reports", "audit", "evaluation",
   "settings", "profile", "money-in", "money-out", "ledger", "bank-accounts",
-  "sales", "purchases", "bank-entries", "catalog"
+  "sales", "purchases", "bank-entries", "catalog", "myinvois"
 ]),
   workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger", "bank-accounts", "sales", "purchases", "bank-entries", "catalog"]),
 };

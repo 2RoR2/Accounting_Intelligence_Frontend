@@ -20,6 +20,7 @@ import {
   acceptsScannedAllocations, allocationCandidates, amountInCents, decimalAmount, documentActions, documentGroup, documentHref,
   documentTotals, hasOutstanding, type DocumentAction, type DocumentGroup,
 } from "./document-logic";
+import { ShareLinksPanel } from "./share-links";
 
 type FormProps = { base: string; group: DocumentGroup; type: DocumentType; role: User["role"] };
 type DraftLine = { key: number; value: DocumentLine };
@@ -333,6 +334,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
         </dl>
       </Panel>
     </form>
+    {document && <ShareLinksPanel user={{ role }} type={type} document={document} />}
     {document && <HistoryPanel key={`${document.id}:${document.updatedAt}`} base={base} document={document} />}
     {confirmation && <Modal title={confirmation === "delete" ? "Delete draft" : "Void document"} onClose={() => setConfirmation(null)}>
       <form onSubmit={(event) => {

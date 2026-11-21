@@ -8,7 +8,7 @@ import {
 } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  DOCUMENT_LABELS, SCANNED_LIST_TYPES, listDocuments, postScannedRecord,
+  DOCUMENT_LABELS, SCANNED_LIST_TYPES, getSharingStatus, listDocuments, postScannedRecord,
   type DocumentType, type ErpDocument,
 } from "@/lib/api/erp.service";
 import { DOCUMENT_STATUSES, documentHref, hasOutstanding, type DocumentGroup } from "./document-logic";
@@ -34,7 +34,10 @@ export function DocumentList({ base, group, type, canPost }: DocumentListProps) 
   const filter = (changes: Partial<Filters>) => setFilters((current) => ({ ...current, ...changes, page: 1 }));
 
   return <>
-    <PageHeader title={title} actions={<Link className="btn primary" href={documentHref(base, group, type, "new")}>New</Link>} />
+    <PageHeader title={title} actions={<>
+      {type === "invoice" && canPost && <MyInvoisLink base={base} />}
+      <Link className="btn primary" href={documentHref(base, group, type, "new")}>New</Link>
+    </>} />
     {showsScanned && <p className="notice info mb-4">Approved scanned documents appear here too; each posts once whichever way it is posted.</p>}
     <Panel>
       <div className="filter-bar">
@@ -58,6 +61,11 @@ export function DocumentList({ base, group, type, canPost }: DocumentListProps) 
         onPage={(page) => setFilters((current) => ({ ...current, page }))} />
     </Panel>
   </>;
+}
+
+function MyInvoisLink({ base }: { base: string }) {
+  const { data } = useResource(getSharingStatus, "myinvois-link");
+  return data?.myinvoisPrep ? <Link className="btn" href={`${base}/myinvois`}>MyInvois (prepared)</Link> : null;
 }
 
 function DocumentResults({ base, group, type, canPost, filters, onPage }: DocumentListProps & {
