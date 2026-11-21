@@ -255,8 +255,8 @@ export function DashboardPage({ user }: { user: User }) {
             const total = Math.max(1, rows.reduce((sum, item) => sum + Number(item.amount), 0));
             return <section key={panel.id} className="dashboard-reference-panel">
               <div className="dashboard-reference-panel-heading"><h2>{panel.title}</h2><Link href={panel.href} title="Lists every approved record on this side; the bar counts unpaid balances only.">View records <ArrowRight size={13} /></Link></div>
-              <div className="dashboard-aging-bar">{rows.map((item, index) => <span key={item.bucket} className={`aging-segment aging-${index % 5}`}
-                style={{ width: `${Math.max(1, (Number(item.amount) / total) * 100)}%` }} title={`${AGE_LABEL[item.bucket] ?? item.bucket}: ${rm(item.amount, item.currency)} (${item.itemCount})`} />)}</div>
+              {rows.length > 0 && <div className="dashboard-aging-bar">{rows.map((item, index) => <span key={item.bucket} className={`aging-segment aging-${index % 5}`}
+                style={{ width: `${Math.max(1, (Number(item.amount) / total) * 100)}%` }} title={`${AGE_LABEL[item.bucket] ?? item.bucket}: ${rm(item.amount, item.currency)} (${item.itemCount})`} />)}</div>}
               <div className="dashboard-aging-legend">
                 {rows.map((item, index) => <span key={item.bucket}><i className={`aging-dot aging-${index % 5}`} />{AGE_LABEL[item.bucket] ?? item.bucket} · {rm(item.amount, item.currency)}</span>)}
                 {!rows.length && <span>{!report ? `— ${reportHint}` : (() => {

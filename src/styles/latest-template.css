@@ -186,9 +186,6 @@
     transform: none !important;
   }
 }
-.dashboard-page:has(.workspace-dashboard-header) > .dashboard-daily-work { order: 2; }
-.dashboard-page:has(.workspace-dashboard-header) > .dashboard-accounting-summary { order: 3; }
-.dashboard-page:has(.workspace-dashboard-header) > .dashboard-reference-overview { order: 4; }
 .dashboard-daily-work { display:grid; gap:14px; }
 .dashboard-shared-filters { display:flex; gap:12px; flex-wrap:wrap; padding:14px 16px; border:1px solid var(--dash-line); border-radius:16px; background:var(--dash-card); }
 .dashboard-shared-filters label { display:grid; gap:5px; min-width:170px; color:var(--dash-muted); font-size:11px; font-weight:750; }
