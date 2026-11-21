@@ -23,7 +23,8 @@ function defaultStore(): KeyStore {
     const storage = globalThis.sessionStorage;
     if (storage) {
       return {
-        get: (name) => { try { return storage.getItem(name); } catch { return memory.get(name) ?? null; } },
+        // A key written to memory (while storage was full or blocked) is still found here.
+        get: (name) => { try { return storage.getItem(name) ?? memory.get(name) ?? null; } catch { return memory.get(name) ?? null; } },
         set: (name, value) => { try { storage.setItem(name, value); } catch { memory.set(name, value); } },
         remove: (name) => { try { storage.removeItem(name); } catch { /* ignore */ } memory.delete(name); },
       };
@@ -32,9 +33,19 @@ function defaultStore(): KeyStore {
   return { get: (name) => memory.get(name) ?? null, set: (name, value) => { memory.set(name, value); }, remove: (name) => { memory.delete(name); } };
 }
 
-/** A stable text for the submitted content: amounts are normalised so "10" and "10.00" are the same entry. */
+/** The exact decimal written, without float rounding: "10", "10.0" and "010.00" are one amount; "10.005" is not "10.01". */
+export function canonicalAmount(value?: string): string {
+  const text = (value ?? "").trim();
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!match) return text;
+  const whole = match[2].replace(/^0+(?=\d)/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  return `${match[1]}${whole}${fraction ? "." + fraction : ""}`;
+}
+
+/** A stable text for the submitted content. */
 export function journalFingerprint(content: JournalAttemptContent): string {
-  const amount = (value?: string) => (value == null || value === "" ? "" : Number(value).toFixed(2));
+  const amount = canonicalAmount;
   return JSON.stringify([content.periodId, content.journalDate, content.description.trim(),
     content.lines.map((line) => [line.accountId, amount(line.debit), amount(line.credit)])]);
 }
@@ -48,6 +59,14 @@ export function journalAttemptKey(content: JournalAttemptContent, store: KeyStor
   const key = newKey();
   store.set(name, key);
   return key;
+}
+
+/**
+ * A post for this content succeeded. Forget its key only when the person saw the result (the form was still open);
+ * otherwise keep it, so retrying the same entry after reopening returns the recorded journal instead of a duplicate.
+ */
+export function journalPostFinished(content: JournalAttemptContent, resultShown: boolean, store: KeyStore = defaultStore()): void {
+  if (resultShown) settleJournalAttempt(content, store);
 }
 
 /** Forget the key once the server has answered for this content (posted or already recorded). */

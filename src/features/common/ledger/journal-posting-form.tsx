@@ -1,14 +1,16 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ErrorState, Field, LoadingState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { createManualJournal, getAccountingPeriods, getLedgerAccounts, postSupplierPayment } from "@/lib/api/ledger.service";
-import { journalAttemptKey, settleJournalAttempt, type JournalAttemptContent } from "@/lib/api/journal-attempts";
+import { journalAttemptKey, journalPostFinished, type JournalAttemptContent } from "@/lib/api/journal-attempts";
+
+type PaymentContext = { transactionId: string; postedDate: string | null; payableAccountId?: string | null };
 
 export function JournalPostingForm({ onPosted, payment }: {
   onPosted: () => void | Promise<void>;
-  payment?: { transactionId: string; postedDate: string | null };
+  payment?: PaymentContext;
 }) {
   const [hasOpened, setHasOpened] = useState(false);
   return <details className="panel-body" onToggle={(event) => {
@@ -23,13 +25,17 @@ export function JournalPostingForm({ onPosted, payment }: {
 
 function JournalInputs({ onPosted, payment }: {
   onPosted: () => void | Promise<void>;
-  payment?: { transactionId: string; postedDate: string | null };
+  payment?: PaymentContext;
 }) {
   const { data, loading, error, refresh } = useResource(async () => {
     const [periods, accounts] = await Promise.all([getAccountingPeriods(), getLedgerAccounts()]);
     return { periods: periods.filter((period) => period.status === "open"), accounts };
   }, "journal-posting-options");
   const submitting = useRef(false);
+  // A post can finish after the form unmounted (tab switch). Its key is then kept, so retrying the same entry
+  // returns the recorded journal ("already recorded") instead of posting it twice.
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [failure, setFailure] = useState("");
@@ -64,7 +70,7 @@ function JournalInputs({ onPosted, payment }: {
       const result = payment
         ? await postSupplierPayment(payment.transactionId, { periodId, payableAccountId: debit, bankAccountId: credit, journalDate })
         : await createManualJournal({ ...content, idempotencyKey: journalAttemptKey(content) });
-      if (!payment) settleJournalAttempt(content);
+      if (!payment) journalPostFinished(content, mounted.current);
       element.reset();
       setNotice(result.idempotent ? "Journal was already recorded." : "Journal posted.");
       void onPosted();
@@ -79,12 +85,13 @@ function JournalInputs({ onPosted, payment }: {
   return <>
     {failure && <ErrorState message={failure} />}
     {notice && <p role="status">{notice}</p>}
-    <form className="ledger-filter-bar journal-posting-form" onSubmit={submit}>
+    <form className="ledger-filter-bar ledger-wrap-form journal-posting-form" onSubmit={submit}>
       <Field label="Open period"><select name="period" required><option value="">Choose period</option>
         {data.periods.map((period) => <option key={period.id} value={period.id}>{period.periodCode}</option>)}
       </select></Field>
       <Field label="Journal date"><input type="date" name="date" required defaultValue={payment?.postedDate ?? ""} /></Field>
-      <Field label={payment ? "Payable account" : "Debit account"}><select name="debit" required><option value="">Choose account</option>
+      <Field label={payment ? "Payable account" : "Debit account"}><select name="debit" required defaultValue={payment?.payableAccountId ?? ""}>
+        <option value="">Choose account</option>
         {debitAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} {account.name}</option>)}
       </select></Field>
       <Field label={payment ? "Bank account" : "Credit account"}><select name="credit" required><option value="">Choose account</option>

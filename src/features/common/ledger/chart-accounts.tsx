@@ -43,7 +43,7 @@ export function ChartAccounts({ canEdit }: { canEdit: boolean }) {
     {canEdit && <div className="panel-body">
       {failure && <ErrorState message={failure} />}
       {message && <p role="status">{message}</p>}
-      <form className="ledger-filter-bar" onSubmit={save}>
+      <form className="ledger-filter-bar ledger-wrap-form" onSubmit={save}>
         <Field label="Account code"><input name="code" required maxLength={50} /></Field>
         <Field label="Account name"><input name="name" required maxLength={200} /></Field>
         <Field label="Account class"><select name="accountClass">{classes.map((item) => <option key={item}>{item}</option>)}</select></Field>

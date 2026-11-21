@@ -78,6 +78,8 @@ export interface BankMoneyTransaction {
   codingDecision?: string | null;
   codingReason?: string | null;
   anomaly?: BankTransactionAnomaly | null;
+  /** The payable account the matched bill was posted to; the supplier payment must debit it. */
+  billPayableAccountId?: string | null;
 }
 
 export interface BankMoneyTransactionDetail extends BankMoneyTransaction {

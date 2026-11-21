@@ -47,8 +47,9 @@ export async function getMoneyTransactionDetail(
   _user: User,
   id: string,
 ): Promise<BankMoneyTransactionDetail | undefined> {
-  const row = await get<BankTransactionResponse>(`/api/bank/transactions/${encodeURIComponent(id)}`);
-  return mapTransaction(row);
+  const row = await get<BankTransactionResponse & { billPayableAccountId?: string | null }>(`/api/bank/transactions/${encodeURIComponent(id)}`);
+  const mapped = mapTransaction(row);
+  return mapped && { ...mapped, billPayableAccountId: row.billPayableAccountId ?? null };
 }
 
 export async function decideMatch(

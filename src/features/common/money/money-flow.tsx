@@ -749,7 +749,7 @@ export function MoneyFlowPage({
               </button>
             </div>
             {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" && (
-              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate }} onPosted={reload} />
+              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
             )}
           </div>
         </Modal>
