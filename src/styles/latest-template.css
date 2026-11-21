@@ -246,3 +246,9 @@
   text-decoration: none !important;
 }
 .app-shell:not(.theme-dark) .sidebar .nav-subitem:hover { color: #5d51c8 !important; }
+/* Review fixes: cashflow bars stay inside the panel; submenu text stays readable on the dark theme's sidebar. */
+.dashboard-cashflow-chart { overflow-x: auto; overflow-y: hidden; }
+.app-shell.theme-dark .sidebar .nav-subitem:not(.active) { color: rgba(226, 236, 248, .86) !important; }
+.app-shell.theme-dark .sidebar .nav-subitem:not(.active):hover,
+.app-shell.theme-dark .sidebar .nav-subitem:not(.active):focus-visible { color: #fff !important; background: rgba(255, 255, 255, .1) !important; }
+.app-shell.theme-dark .nav-chevron-button { color: rgba(226, 236, 248, .86); }

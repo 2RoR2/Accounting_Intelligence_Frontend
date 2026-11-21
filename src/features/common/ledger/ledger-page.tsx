@@ -87,7 +87,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
           <input aria-label="Journal month" type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
         </div>}
       </section>
-      {section === "monthly" && <MonthlyFinance asOf={new Date().toISOString().slice(0, 10)} base={base} userId="ledger" />}
+      {section === "monthly" && <MonthlyFinance asOf={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date())} base={base} userId="ledger" />}
       {section === "trial" && <Panel title="Trial balance">
         <DataTable rows={data.trialBalance} rowKey={(r) => r.accountId} columns={[
           { label: "Account", render: (r) => `${r.code} · ${r.name}` }, { label: "Type", render: (r) => r.accountType },

@@ -105,10 +105,11 @@ export function DashboardPage({ user }: { user: User }) {
     .then(([moneyIn, moneyOut]) => [...moneyIn, ...moneyOut]).catch(() => null), `dashboard-bank:${user.id}`);
   const recent = useResource(() => getDocuments(user).catch(() => []), `dashboard-docs:${user.id}`);
   const toReview = useResource(() => getDocuments(user, { lane: "to-review" }).catch(() => null), `dashboard-review:${user.id}`);
-  const { refresh: r1 } = summary, { refresh: r2 } = pnl, { refresh: r3 } = monthly, { refresh: r4 } = bank, { refresh: r5 } = recent, { refresh: r6 } = toReview;
+  const { refresh: r1 } = summary, { refresh: r2 } = pnl, { refresh: r3 } = monthly, { refresh: r5 } = recent, { refresh: r6 } = toReview;
   // An open Dashboard stays current: refresh every 30 s while the tab is visible, and on return to it.
-  useEffect(() => pollWhileVisible(() => { [r1, r2, r3, r4, r5, r6].forEach((refresh) => void refresh()); }, DASHBOARD_REFRESH_MS, document),
-    [r1, r2, r3, r4, r5, r6]);
+  // Bank lines load once: that list is the whole imported history, too heavy to poll.
+  useEffect(() => pollWhileVisible(() => { [r1, r2, r3, r5, r6].forEach((refresh) => void refresh()); }, DASHBOARD_REFRESH_MS, document),
+    [r1, r2, r3, r5, r6]);
   const bankRows = useMemo(() => bank.data ?? [], [bank.data]);
   const bankAccounts = useMemo(() => [...new Set(bankRows.map((row) => row.bankAccountRef).filter((ref): ref is string => !!ref))].sort(), [bankRows]);
 
@@ -119,16 +120,31 @@ export function DashboardPage({ user }: { user: User }) {
   const month = monthEndView(summary.data, role);
   const hour = Number(new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", hour12: false }).format(new Date()));
   const company = (user.tenantName || "").split("—")[0].trim();
-  const report = pnl.data;
-  const reportHint = pnl.loading ? "Loading…" : "The profit-and-loss report could not be loaded.";
+  // Only the report for the selected dates: the previous period's figures are not shown while the new one loads.
+  const report = pnl.data && pnl.data.fromDate === range.fromDate && pnl.data.toDate === range.toDate && pnl.data.granularity === range.granularity ? pnl.data : null;
+  const reportHint = pnl.loading || (pnl.data && !report) ? "Loading…" : "The profit-and-loss report could not be loaded.";
+  const home = (value: string | null | undefined) => (value ?? currency).toUpperCase() === currency.toUpperCase();
+  const others = (values: Array<string | null | undefined>) => [...new Set(values.filter((value) => !home(value)).map((value) => value ?? "unspecified"))];
+  const noJournals = (rows: Array<{ currency: string }> | undefined) => {
+    const elsewhere = others((rows ?? []).map((row) => row.currency));
+    return elsewhere.length ? `No posted ${currency} journals in this period; activity in ${elsewhere.join(", ")} is not shown here.` : NO_JOURNALS;
+  };
   const aging = agingFigures(report?.aging, currency);
   const totals = postedTotals(report, currency);
   const periods = periodRows(report, currency);
   const year = periodRows(monthly.data, currency);
-  const cashflow = bankRows
-    .filter((row) => row.postedDate >= range.fromDate && row.postedDate <= range.toDate && (bankAccount === "all" || row.bankAccountRef === bankAccount))
-    .sort((a, b) => a.postedDate.localeCompare(b.postedDate));
-  const maxCash = Math.max(1, ...cashflow.map((row) => Math.abs(Number(row.amount) || 0)));
+  // One bar per day (per month for long periods), net of money in and out, in the home currency only.
+  const inPeriod = bankRows.filter((row) => row.postedDate >= range.fromDate && row.postedDate <= range.toDate && (bankAccount === "all" || row.bankAccountRef === bankAccount));
+  const cashOther = others(inPeriod.map((row) => row.currency));
+  const buckets = new Map<string, { moneyIn: number; moneyOut: number }>();
+  for (const row of inPeriod.filter((item) => home(item.currency))) {
+    const key = range.granularity === "month" ? row.postedDate.slice(0, 7) : row.postedDate;
+    const bucket = buckets.get(key) ?? { moneyIn: 0, moneyOut: 0 };
+    bucket[row.direction === "money_out" ? "moneyOut" : "moneyIn"] += Math.abs(Number(row.amount) || 0);
+    buckets.set(key, bucket);
+  }
+  const cashflow = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => ({ key, ...value, net: value.moneyIn - value.moneyOut }));
+  const maxCash = Math.max(1, ...cashflow.map((row) => Math.abs(row.net)));
   const reviewDocs = (toReview.data ?? []).slice(0, 5);
   const docs = (recent.data ?? []).slice(0, 6);
   const periodLabel = (value: string) => (range.granularity === "month" ? value.slice(0, 7) : value);
@@ -206,7 +222,7 @@ export function DashboardPage({ user }: { user: User }) {
             <div><span>Net result</span><strong className={(year.net ?? "").startsWith("-") ? "negative-value" : "positive-value"}>{rm(year.net, currency)}</strong></div>
             <div><span>Months with activity</span><strong>{year.rows.length || "—"}</strong></div>
           </div>
-          {!year.rows.length && <p className="widget-empty">{monthly.loading ? "Loading…" : monthly.data ? NO_JOURNALS : "— The monthly report could not be loaded."}</p>}
+          {!year.rows.length && <p className="widget-empty">{monthly.loading ? "Loading…" : monthly.data ? noJournals(monthly.data.periods) : "— The monthly report could not be loaded."}</p>}
         </section>
         <section className="dashboard-reference-panel monthly-ledger-panel">
           <div className="dashboard-reference-panel-heading">
@@ -238,12 +254,15 @@ export function DashboardPage({ user }: { user: User }) {
               .sort((a, b) => AGE_ORDER.indexOf(a.bucket) - AGE_ORDER.indexOf(b.bucket));
             const total = Math.max(1, rows.reduce((sum, item) => sum + Number(item.amount), 0));
             return <section key={panel.id} className="dashboard-reference-panel">
-              <div className="dashboard-reference-panel-heading"><h2>{panel.title}</h2><Link href={panel.href}>View details <ArrowRight size={13} /></Link></div>
+              <div className="dashboard-reference-panel-heading"><h2>{panel.title}</h2><Link href={panel.href} title="Lists every approved record on this side; the bar counts unpaid balances only.">View records <ArrowRight size={13} /></Link></div>
               <div className="dashboard-aging-bar">{rows.map((item, index) => <span key={item.bucket} className={`aging-segment aging-${index % 5}`}
                 style={{ width: `${Math.max(1, (Number(item.amount) / total) * 100)}%` }} title={`${AGE_LABEL[item.bucket] ?? item.bucket}: ${rm(item.amount, item.currency)} (${item.itemCount})`} />)}</div>
               <div className="dashboard-aging-legend">
                 {rows.map((item, index) => <span key={item.bucket}><i className={`aging-dot aging-${index % 5}`} />{AGE_LABEL[item.bucket] ?? item.bucket} · {rm(item.amount, item.currency)}</span>)}
-                {!rows.length && <span>{report ? "Nothing approved is unpaid." : `— ${reportHint}`}</span>}
+                {!rows.length && <span>{!report ? `— ${reportHint}` : (() => {
+                  const elsewhere = others(report.aging.filter((item) => panel.receivable === (item.category === "accounts_receivable")).map((item) => item.currency));
+                  return elsewhere.length ? `No unpaid ${currency} balance; balances in ${elsewhere.join(", ")} are not shown here.` : "Nothing approved is unpaid.";
+                })()}</span>}
               </div>
             </section>;
           })}
@@ -254,7 +273,7 @@ export function DashboardPage({ user }: { user: User }) {
               <Link href={`${base}/ledger?section=monthly`}>Details <ArrowRight size={13} /></Link></div>
             {periods.rows.length
               ? <Bars label="Income by period" values={periods.rows.map((row) => ({ key: row.period, value: Number(row.income), title: `${periodLabel(row.period)}: ${rm(row.income, currency)}` }))} />
-              : <div className="widget-empty">{report ? NO_JOURNALS : `— ${reportHint}`}</div>}
+              : <div className="widget-empty">{report ? noJournals(report.periods) : `— ${reportHint}`}</div>}
           </section>
           <section className="dashboard-reference-panel dashboard-chart-panel">
             <div className="dashboard-reference-panel-heading"><div><h2>Profit &amp; Loss</h2><strong>{rm(totals?.netProfit, currency)}</strong></div>
@@ -262,25 +281,25 @@ export function DashboardPage({ user }: { user: User }) {
             {periods.rows.length
               ? <Bars label="Net profit by period" tone={(value) => (value < 0 ? "negative" : "positive")}
                   values={periods.rows.map((row) => ({ key: row.period, value: Number(row.netProfit), title: `${periodLabel(row.period)}: ${rm(row.netProfit, currency)}` }))} />
-              : <div className="widget-empty">{report ? NO_JOURNALS : `— ${reportHint}`}</div>}
+              : <div className="widget-empty">{report ? noJournals(report.periods) : `— ${reportHint}`}</div>}
           </section>
         </div>
         <div className="dashboard-reference-two-column">
           <section className="dashboard-reference-panel dashboard-chart-panel">
             <div className="dashboard-reference-panel-heading"><h2>Cashflow trend</h2><Link href={`${base}/money-in`}>Review bank <ArrowRight size={13} /></Link></div>
             <div className="dashboard-cashflow-chart">
-              {cashflow.map((row) => <span key={row.id} className={row.direction === "money_out" ? "out" : "in"}
-                style={{ height: `${Math.max(5, (Math.abs(Number(row.amount) || 0) / maxCash) * 100)}%` }} title={`${row.postedDate}: ${row.currency ?? ""} ${row.amount ?? "—"}`} />)}
-              {!cashflow.length && <div className="widget-empty">{bank.data === null ? "— Bank lines could not be loaded." : "No imported bank lines in this period."}</div>}
+              {cashflow.map((row) => <span key={row.key} className={row.net < 0 ? "out" : "in"}
+                style={{ height: `${Math.max(5, (Math.abs(row.net) / maxCash) * 100)}%` }} title={`${row.key}: in ${rm(row.moneyIn.toFixed(2), currency)}, out ${rm(row.moneyOut.toFixed(2), currency)}`} />)}
+              {!cashflow.length && <div className="widget-empty">{bank.data === null || bank.error ? "— Bank lines could not be loaded." : bank.loading ? "Loading…" : cashOther.length ? `No ${currency} bank lines in this period; lines in ${cashOther.join(", ")} are not shown.` : "No imported bank lines in this period."}</div>}
             </div>
-            <small className="dashboard-chart-note">Imported bank statement lines only (money in and money out).</small>
+            <small className="dashboard-chart-note">Imported bank lines in {currency}, net per {range.granularity === "month" ? "month" : "day"}{cashOther.length ? `; ${cashOther.join(", ")} lines not shown` : ""}.</small>
           </section>
           <section className="dashboard-reference-panel dashboard-list-panel">
             <div className="dashboard-reference-panel-heading"><h2>Documents needing review</h2><Link href={`${base}/documents?lane=to-review`}>View all <ArrowRight size={13} /></Link></div>
             {reviewDocs.map((doc) => <Link className="dashboard-reference-list-row" href={`${base}/documents/${doc.id}`} key={doc.id}>
               <span>{formatDate(doc.createdAt)}</span><strong>{doc.name}</strong><StatusBadge status={doc.status} />
             </Link>)}
-            {!reviewDocs.length && <div className="widget-empty">{toReview.loading ? "Loading…" : toReview.data === null ? "— The review list could not be loaded." : "No documents need review."}</div>}
+            {!reviewDocs.length && <div className="widget-empty">{toReview.loading ? "Loading…" : toReview.data === null || toReview.error ? "— The review list could not be loaded." : "No documents need review."}</div>}
           </section>
         </div>
       </section>
