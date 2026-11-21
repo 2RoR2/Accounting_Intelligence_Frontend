@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { ErrorState, Field, LoadingState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { createManualJournal, getAccountingPeriods, getLedgerAccounts, postSupplierPayment } from "@/lib/api/ledger.service";
+import { journalAttemptKey, settleJournalAttempt, type JournalAttemptContent } from "@/lib/api/journal-attempts";
 
 export function JournalPostingForm({ onPosted, payment }: {
   onPosted: () => void | Promise<void>;
@@ -28,7 +29,6 @@ function JournalInputs({ onPosted, payment }: {
     const [periods, accounts] = await Promise.all([getAccountingPeriods(), getLedgerAccounts()]);
     return { periods: periods.filter((period) => period.status === "open"), accounts };
   }, "journal-posting-options");
-  const key = useRef<string | null>(null);
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -55,15 +55,16 @@ function JournalInputs({ onPosted, payment }: {
     setBusy(true);
     setFailure("");
     setNotice("");
+    // The key follows the content and survives the form unmounting (see journal-attempts).
+    const content: JournalAttemptContent = {
+      periodId, journalDate, description: String(input.get("description") ?? "").trim(),
+      lines: [{ accountId: debit, debit: String(input.get("amount")) }, { accountId: credit, credit: String(input.get("amount")) }],
+    };
     try {
       const result = payment
         ? await postSupplierPayment(payment.transactionId, { periodId, payableAccountId: debit, bankAccountId: credit, journalDate })
-        : await createManualJournal({
-          periodId, journalDate, idempotencyKey: key.current ??= crypto.randomUUID(),
-          description: String(input.get("description") ?? "").trim(),
-          lines: [{ accountId: debit, debit: String(input.get("amount")) }, { accountId: credit, credit: String(input.get("amount")) }],
-        });
-      key.current = null;
+        : await createManualJournal({ ...content, idempotencyKey: journalAttemptKey(content) });
+      if (!payment) settleJournalAttempt(content);
       element.reset();
       setNotice(result.idempotent ? "Journal was already recorded." : "Journal posted.");
       void onPosted();
@@ -78,7 +79,7 @@ function JournalInputs({ onPosted, payment }: {
   return <>
     {failure && <ErrorState message={failure} />}
     {notice && <p role="status">{notice}</p>}
-    <form className="ledger-filter-bar" onSubmit={submit}>
+    <form className="ledger-filter-bar journal-posting-form" onSubmit={submit}>
       <Field label="Open period"><select name="period" required><option value="">Choose period</option>
         {data.periods.map((period) => <option key={period.id} value={period.id}>{period.periodCode}</option>)}
       </select></Field>

@@ -224,10 +224,15 @@ export function MoneyFlowPage({
     try {
       await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
       const updated = await getMoneyTransactionDetail(user, detail.id).catch(() => undefined);
-      setDetail(updated ?? null);
-      setSelectedCandidateId(updated?.candidateId ?? "");
       setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
+      if (updated) {
+        setDetail(updated);
+        setSelectedCandidateId(updated.candidateId ?? "");
+      } else {
+        // The decision is saved; keep the dialog open so the next step (posting the payment) is not lost.
+        setActionError("The decision was saved, but these details could not be refreshed. Close and reopen the transaction to continue.");
+      }
       reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The reconciliation decision was not saved.");

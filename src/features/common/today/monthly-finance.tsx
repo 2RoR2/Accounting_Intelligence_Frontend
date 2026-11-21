@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DataTable, ErrorState } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getProfitAndLossDashboard } from "@/lib/api/ledger.service";
+import { DASHBOARD_REFRESH_MS, pollWhileVisible } from "@/lib/dashboard";
 
 export function MonthlyFinance({ asOf, base, userId }: { asOf: string; base: string; userId: string }) {
   const [months, setMonths] = useState(12);
@@ -47,6 +48,8 @@ function MonthlyResults({ asOf, months, basis }: { asOf: string; months: number;
     () => getProfitAndLossDashboard(from, asOf, basis),
     `${from}:${asOf}:${basis}`,
   );
+  // Same 30 s visible refresh as the rest of the Dashboard, so journals posted meanwhile appear.
+  useEffect(() => pollWhileVisible(() => { void refresh(); }, DASHBOARD_REFRESH_MS, document), [refresh]);
   if (loading) return <p className="dash-muted" role="status">Loading monthly finances.</p>;
   if (!data) return <ErrorState message={error || "Monthly finances are unavailable."} retry={refresh} />;
   if (!data.periods.length) return <p className="dash-muted">

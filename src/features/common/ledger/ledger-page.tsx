@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { DataTable, ErrorState, LoadingState, PageHeader, Panel, StatCard } from "@/components/common/ui";
 import { getLedgerJournals, getSettlements, getAllocations, getTrialBalance } from "@/lib/api/ledger.service";
@@ -33,12 +33,14 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
     ]);
     return { journals, settlements, allocations, trialBalance };
   }, "internal-ledger");
+  const settlements = data?.settlements;
+  // Only when the settlements change, not on every search keystroke.
+  const unmatched = useMemo(() => currencyTotals((settlements ?? []).map((settlement) => ({
+    currency: settlement.currency, total: settlement.unmatchedAmount,
+  }))), [settlements]);
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const posted = data.journals.filter((journal) => journal.status === "posted").length;
-  const unmatched = currencyTotals(data.settlements.map((settlement) => ({
-    currency: settlement.currency, total: settlement.unmatchedAmount,
-  })));
   const query = search.trim().toLowerCase();
   const requestedAmount = amountKey(amount);
   const journalRows = data.journals.filter((journal) => (

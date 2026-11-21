@@ -10277,3 +10277,10 @@ a.today-tile-main:focus-visible { outline: 2px solid #3c92f7; outline-offset: -2
 .app-shell.theme-dark .today-tile-value { color: #ecf5ff; }
 .app-shell.theme-dark a.today-tile-main:hover { background: rgba(60,146,247,.16); }
 .app-shell.theme-dark .today-filter-note, .app-shell.theme-dark .today-all-clear { background: rgba(60,146,247,.16); color: #ecf5ff; }
+
+/* Journal posting form: wraps by its own width (it also sits in the 560 px Money Out dialog), and its date
+   field uses the same field colours as the selects in light and dark mode. */
+.ledger-filter-bar.journal-posting-form{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
+.journal-posting-form input[type=date]{height:46px;border:1px solid rgba(157,202,255,.55);border-radius:10px;background:#173f6e;color:#ecf5ff;color-scheme:dark}
+.ledger-page .journal-posting-form input[type=date]{background:#fff;color:#1d3553;border-color:#c8d7e7;color-scheme:light}
+.app-shell.theme-dark .ledger-page .journal-posting-form input[type=date]{background:#173f6e!important;color:#ecf5ff!important;border-color:rgba(157,202,255,.55)!important;color-scheme:dark}
