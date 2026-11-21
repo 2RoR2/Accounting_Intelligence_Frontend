@@ -131,7 +131,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
           { label: "Debit", render: (r) => r.totalDebit }, { label: "Credit", render: (r) => r.totalCredit }, { label: "Status", render: (r) => r.status },
           ...(canPost ? [{ label: "Actions", render: (journal: Journal) => {
             if (journal.sourceType === "erp_document") return "Void the document instead";
-            if (journal.sourceType === "document") return "Posted from a scanned document";
+            if (journal.sourceType === "document" || journal.sourceType === "adjustment") return "Posted from a scanned document";
             if (journal.status !== "posted" || journal.sourceType === "reversal" || reversedIds.has(journal.id)) return null;
             return <button type="button" className="btn small" disabled={reversing} onClick={() => {
               setReverseError("");
