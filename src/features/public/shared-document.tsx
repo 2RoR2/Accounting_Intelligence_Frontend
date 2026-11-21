@@ -59,7 +59,7 @@ function DocumentContent({ document }: { document: SharedDocument }) {
       {rows.length ? <DataTable rows={rows} rowKey={(row) => String(row.index)} columns={[
         { label: "Description", render: (row) => row.description || "—" },
         { label: "Quantity", render: (row) => row.quantity },
-        { label: "Unit price", render: (row) => amount(row.unitPrice) },
+        { label: "Unit price", render: (row) => unitPrice(row.unitPrice, currency) },
         { label: "Discount", render: (row) => amount(row.discount) },
         { label: "Tax", render: (row) => amount(row.tax) },
       ]} /> : <EmptyState message="This document has no line items." />}
@@ -73,4 +73,12 @@ function DocumentContent({ document }: { document: SharedDocument }) {
     </Panel>
     <p>Link expires {formatDate(document.expiresAt.replace(" ", "T"))}</p>
   </>;
+}
+
+/** Unit prices are stored with up to four decimals; show them as stored (totals stay at two). */
+export function unitPrice(value: string, currency: string): string {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  const text = number.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return `${currency === "MYR" ? "RM" : currency} ${text}`;
 }

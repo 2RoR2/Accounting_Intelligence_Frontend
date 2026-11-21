@@ -46,7 +46,7 @@ function EnabledShareLinks({ type, id }: { type: DocumentType; id: string }) {
     setActionError("");
     try {
       const { url, ...share } = await createDocumentShare(type, id, { expiresInDays, recipient: recipient.trim() || undefined });
-      setNewUrl(url);
+      setNewUrl(shareUrlForThisSite(url, window.location.origin));
       setRecipient("");
       setData((rows) => [share, ...(rows ?? []).filter((row) => row.id !== share.id)]);
       await refresh();
@@ -129,4 +129,15 @@ function NewShareLink({ url, onClose }: { url: string; onClose: () => void }) {
       <button type="button" className="btn primary" onClick={() => void copy()}>Copy</button>
     </div>
   </Modal>;
+}
+
+/** The backend builds the link from its own setting; keep only its /share/<token> path and use this site's address,
+ *  so a hosted copy never hands out a loopback (127.0.0.1) link. */
+export function shareUrlForThisSite(url: string, origin: string): string {
+  try {
+    const { pathname } = new URL(url);
+    return pathname.startsWith("/share/") ? new URL(pathname, origin).toString() : url;
+  } catch {
+    return url;
+  }
 }

@@ -487,10 +487,13 @@ export const formatDate = (date?: string | null) => {
   if (!date || date === "—" || date === "â€”") return "—";
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return "—";
+  // A date-only value ("2026-09-01") is a calendar day: format it in UTC so it never shifts a day west of UTC.
+  const calendarDay = /^\d{4}-\d{2}-\d{2}$/.test(date);
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    ...(calendarDay ? { timeZone: "UTC" } : {}),
   }).format(parsed);
 };
 export const money = (value: string | number) =>

@@ -113,7 +113,8 @@ function EnabledMyInvois({ note }: { note: string }) {
               onChange={(event) => changeDate("dateTo", event.target.value)} />
           </Field>
         </div>
-        {validRange ? <InvoiceOptions key={`${range.dateFrom}:${range.dateTo}:${page}`} {...{ range, page, selected, busy }}
+        {validRange ? <InvoiceOptions key={`${range.dateFrom}:${range.dateTo}:${page}:${records.data?.length ?? 0}`}
+          {...{ range, page, selected, busy }} prepared={preparedInvoiceIds(records.data ?? [])}
           onSelect={select} onPage={setPage} /> : <p className="px-5">
           {range.dateFrom && range.dateTo ? "Date to must be on or after Date from." : "Choose a date range to find ready invoices."}
         </p>}
@@ -143,8 +144,8 @@ function EnabledMyInvois({ note }: { note: string }) {
   </>;
 }
 
-function InvoiceOptions({ range, page, selected, busy, onSelect, onPage }: {
-  range: DateRange; page: number; selected: string[]; busy: boolean;
+function InvoiceOptions({ range, page, selected, busy, prepared, onSelect, onPage }: {
+  range: DateRange; page: number; selected: string[]; busy: boolean; prepared: ReadonlySet<string>;
   onSelect: (id: string, checked: boolean) => void; onPage: (page: number) => void;
 }) {
   const { data, error, loading, refresh } = useResource(
@@ -152,7 +153,7 @@ function InvoiceOptions({ range, page, selected, busy, onSelect, onPage }: {
   );
   if (loading) return <LoadingState variant="table" />;
   if (!data) return <LoadError message={error || "Unable to load ready invoices."} retry={refresh} />;
-  const invoices = readyInvoicesInRange(data.items, range);
+  const invoices = readyInvoicesInRange(data.items, range).filter((invoice) => !prepared.has(invoice.id));
 
   return <>
     {invoices.length ? <div className="table-scroll" role="region" aria-label="Ready invoices" tabIndex={0}>
@@ -189,4 +190,9 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
     <p>{message}</p>
     <button type="button" className="btn small" onClick={retry}>Try again</button>
   </div>;
+}
+
+/** Ids of invoices that are already in a prepared consolidated record (the backend refuses them again). */
+export function preparedInvoiceIds(records: readonly { documentIds?: string[] }[]): ReadonlySet<string> {
+  return new Set(records.flatMap((record) => record.documentIds ?? []));
 }

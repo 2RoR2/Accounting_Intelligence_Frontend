@@ -198,7 +198,7 @@ export type ConsolidationInput = {
 export type PreparedConsolidation = {
   id: string; documentType: DocumentType; status: "prepared"; documentCount: number; totalAmount: string; note: string;
 };
-export type ConsolidationRecord = PreparedConsolidation & { dateFrom: string; dateTo: string; createdAt: string };
+export type ConsolidationRecord = PreparedConsolidation & { dateFrom: string; dateTo: string; createdAt: string; documentIds?: string[] };
 
 export const getSharingStatus = () => get<SharingStatus>("/api/erp/sharing-status");
 const sharesPath = (type: DocumentType, id: string) => `/api/erp/documents/${seg(type)}/${seg(id)}/shares`;
