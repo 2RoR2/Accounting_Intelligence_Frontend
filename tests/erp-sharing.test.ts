@@ -35,3 +35,18 @@ test("public share failures explain invalid and withdrawn links", () => {
   assert.equal(publicShareErrorText(503), "Unable to open this shared document. Please try again.");
   assert.equal(publicShareErrorText(), publicShareErrorText(503));
 });
+
+test("share links use this site's address and keep only the share path", async () => {
+  const { shareUrlForThisSite } = await import("../src/features/common/erp/share-links");
+  assert.equal(shareUrlForThisSite("http://127.0.0.1:3000/share/abcDEF_123", "https://app.example.test"),
+    "https://app.example.test/share/abcDEF_123");
+  assert.equal(shareUrlForThisSite("not a url", "https://app.example.test"), "not a url");
+});
+
+test("unit prices keep four decimals and prepared invoices are excluded", async () => {
+  const { unitPrice } = await import("../src/features/public/shared-document");
+  const { preparedInvoiceIds } = await import("../src/features/common/erp/myinvois-page");
+  assert.equal(unitPrice("0.0125", "MYR"), "RM 0.0125");
+  assert.equal(unitPrice("12.5", "USD"), "USD 12.50");
+  assert.deepEqual([...preparedInvoiceIds([{ documentIds: ["a", "b"] }, {}])], ["a", "b"]);
+});
