@@ -12,14 +12,16 @@ test("the menu follows the team's latest_update layout", () => {
   for (const role of ["ACCOUNTANT", "LOCAL_ADMIN"] as const) {
     assert.deepEqual(labels(role), ["Dashboard", "Sales", "Purchases", "Receipts", "Documents", "Review & Exceptions",
       "Standardised Records", "Bank", "Contacts", "Reports", "Accounting", "Control Panel"]);
-    assert.deepEqual(children(role, "Sales"), ["Invoices", "Credit Notes", "Debit Notes"]);
-    assert.deepEqual(children(role, "Purchases"), ["Bills", "Supplier Credit Notes", "Supplier Debit Notes"]);
-    // Transfers is left out: there is no transfer data on this branch (latest_update's page is ERP-only).
-    assert.deepEqual(children(role, "Bank"), ["Money In", "Money Out", "Accounts", "Reconciliation"]);
+    // Plan L4/L5: typed and approved scanned documents in one list per type; debit notes stay scanned-only.
+    assert.deepEqual(children(role, "Sales"), ["Quotations", "Invoices", "Credit Notes", "Debit Notes", "Customer Payments", "Customer Refunds"]);
+    assert.deepEqual(children(role, "Purchases"), ["Bills", "Supplier Credit Notes", "Supplier Debit Notes", "Supplier Payments", "Supplier Refunds"]);
+    // Transfers between own bank accounts now post through the document module (Plan L6).
+    assert.deepEqual(children(role, "Bank"), ["Money In", "Money Out", "Transfers", "Accounts", "Reconciliation"]);
     assert.deepEqual(children(role, "Reports"), ["All Reports", "Performance Evaluation"]);
     assert.deepEqual(children(role, "Accounting"), ["Monthly Ledger", "Journal Entries", "Chart of Accounts", "Trial Balance"]);
   }
-  assert.deepEqual(children("ACCOUNTANT", "Control Panel"), ["Settings"]);
+  assert.deepEqual(children("ACCOUNTANT", "Control Panel"), ["Settings", "Catalog", "Products & Services"]);
+  assert.ok(children("LOCAL_ADMIN", "Control Panel")?.includes("Posting accounts"));
 });
 
 test("every menu entry opens a page that role may open", () => {
@@ -52,8 +54,9 @@ test("the highlighted entry follows the page", () => {
   assert.equal(activeNavItem(menu, "documents")?.label, "All Documents");
   assert.equal(activeNavItem(menu, "documents", "lane=needs-fixing")?.label, "Needs fixing");
   assert.equal(activeNavItem(menu, "documents", "lane=waiting-approval")?.label, "All Documents");
-  assert.equal(activeNavItem(menu, "documents", "tab=supplier-credit-notes")?.label, "Supplier Credit Notes");
-  assert.equal(navParent(menu, activeNavItem(menu, "documents", "tab=sales-invoices"))?.label, "Sales");
+  assert.equal(activeNavItem(menu, "purchases", "type=purchase-credit-note")?.label, "Supplier Credit Notes");
+  assert.equal(activeNavItem(menu, "documents", "tab=supplier-debit-notes")?.label, "Supplier Debit Notes");
+  assert.equal(navParent(menu, activeNavItem(menu, "sales", "type=invoice"))?.label, "Sales");
   assert.equal(activeNavItem(menu, "records", "category=ACCOUNTS_RECEIVABLE")?.label, "Standardised Records");
   assert.equal(activeNavItem(menu, "reports")?.label, "All Reports");
   assert.equal(activeNavItem(menu, "ledger")?.label, "Monthly Ledger");
