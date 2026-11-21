@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck, FileSearch, Files, HandCoins,
   Landmark, Plus, Receipt, Search, ShieldAlert, Send, type LucideIcon,
@@ -11,17 +11,27 @@ import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-nig
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getHomeSummary } from "@/lib/api/home.service";
 import { getDocuments } from "@/lib/api/document.service";
+import { getMoneyTransactions } from "@/lib/api/money.service";
+import { getProfitAndLossDashboard } from "@/lib/api/ledger.service";
 import { DASHBOARD_REFRESH_MS, dashboardView, firstName, greetingFor, pollWhileVisible } from "@/lib/dashboard";
 import { documentKindLabel } from "@/lib/glossary";
 import { areaFor, monthEndView, type TileId, type TodayRole, type TodayTileView } from "@/lib/today";
+import {
+  DASH_PERIODS, agingFigures, periodRange, periodRows, postedTotals, rm, type DashPeriod, type MoneyFigure,
+} from "@/lib/template-dashboard";
 import type { User } from "@/types";
-import { MonthlyFinance } from "@/features/common/today/monthly-finance";
 
 const ICONS: Record<TileId, LucideIcon> = {
   toReview: FileSearch, needsFixing: ShieldAlert, readyToApprove: ClipboardCheck, waitingApproval: Send,
   bankToMatch: Landmark, billsDueSoon: CalendarClock, billsOverdue: AlertTriangle, invoicesOverdue: HandCoins,
   journalsToPost: Receipt,
 };
+const AGE_LABEL: Record<string, string> = {
+  not_due: "Not due", no_due_date: "No due date", "1_30_days": "1–30 days", "31_60_days": "31–60 days",
+  "61_90_days": "61–90 days", over_90_days: "Over 90 days",
+};
+const AGE_ORDER = ["not_due", "no_due_date", "1_30_days", "31_60_days", "61_90_days", "over_90_days"];
+const NO_JOURNALS = "No posted journals in this period. Approved documents count once they are posted.";
 
 const documentAction = (status: string) => {
   if (status === "FAILED") return "See problem";
@@ -30,22 +40,20 @@ const documentAction = (status: string) => {
   return "View record";
 };
 
-/** A headline number: the whole card opens the list it counts. */
-function Kpi({ tile }: { tile: TodayTileView }) {
-  const Icon = ICONS[tile.id];
+/** One of the four tiles under the filters: the count, or "—" with the reason when the backend cannot give it. */
+function WorkTile({ tile }: { tile: TodayTileView }) {
   const unavailable = tile.tone === "unavailable";
   const body = <>
-    <span className="dash-kpi-icon" aria-hidden><Icon size={18} /></span>
-    <span className="dash-kpi-label">{tile.title}</span>
-    <strong className="dash-kpi-value">{unavailable ? "–" : tile.value}</strong>
-    <small className="dash-kpi-caption">{unavailable ? tile.value : tile.caption || tile.nextStep}</small>
+    <strong>{unavailable ? "—" : tile.value}</strong>
+    <span>{tile.title}</span>
+    <small className="dash-tile-hint">{unavailable ? tile.details[0] ?? tile.value : tile.caption || tile.nextStep}</small>
+    <ArrowRight size={14} aria-hidden />
   </>;
   return tile.href && !unavailable
-    ? <Link className={`dash-kpi dash-tone-${tile.tone}`} href={tile.href} aria-label={`${tile.title}: ${tile.value}`}>{body}</Link>
-    : <div className={`dash-kpi dash-tone-${tile.tone}`}>{body}</div>;
+    ? <Link href={tile.href} aria-label={`${tile.title}: ${tile.value}`}>{body}</Link>
+    : <div title={tile.details.join(" ")}>{body}</div>;
 }
 
-/** One row of "Attention needed", in the team's style: icon, what it is, what to do, arrow. */
 function AttentionRow({ tile }: { tile: TodayTileView }) {
   const Icon = ICONS[tile.id];
   const unavailable = tile.tone === "unavailable";
@@ -59,35 +67,51 @@ function AttentionRow({ tile }: { tile: TodayTileView }) {
     </span>
     <ArrowRight size={18} aria-hidden className="dash-row-arrow" />
   </>;
-  return tile.href
-    ? <Link className="dash-attention-row" href={tile.href}>{content}</Link>
-    : <div className="dash-attention-row">{content}</div>;
+  return tile.href ? <Link className="dash-attention-row" href={tile.href}>{content}</Link> : <div className="dash-attention-row">{content}</div>;
 }
 
-function MoneyCard({ tile }: { tile: TodayTileView }) {
-  const Icon = ICONS[tile.id];
-  const inner = <>
-    <span className={`dash-money-icon dash-tone-${tile.tone}`} aria-hidden><Icon size={16} /></span>
-    <span className="dash-money-label">{tile.title}</span>
-    <strong className="dash-money-value">{tile.value}</strong>
-    <small>{tile.caption || tile.nextStep}</small>
-  </>;
-  return tile.href && tile.tone === "attention"
-    ? <Link className="dash-money" href={tile.href} title={tile.details.join(" ")}>{inner}</Link>
-    : <div className="dash-money" title={tile.details.join(" ")}>{inner}</div>;
+/** "INVOICES · RM 1,200.00 · Outstanding": the whole tile opens the matching approved records. */
+function MoneyKpi({ kind, label, figure, currency, href, hint }: { kind: "invoice" | "bill"; label: string; figure: MoneyFigure; currency: string; href: string; hint: string }) {
+  const note = figure.amount === null ? hint
+    : figure.otherCurrencies ? `${label} · plus ${figure.otherCurrencies} other currenc${figure.otherCurrencies === 1 ? "y" : "ies"}` : label;
+  return <Link href={href} className={`dashboard-reference-kpi kpi-${kind}`} title={figure.amount === null ? hint : undefined}>
+    <span>{kind === "invoice" ? "INVOICES" : "BILLS"}</span><strong>{rm(figure.amount, currency)}</strong><small>{note}</small><b>{kind === "invoice" ? "＋" : "−"}</b>
+  </Link>;
 }
 
-/** The Dashboard: the team's greeting banner and layout, with Today's figures (B3) and month-end progress. */
+function Bars({ values, label, tone }: { values: Array<{ key: string; value: number; title: string }>; label: string; tone?: (value: number) => string }) {
+  const max = Math.max(1, ...values.map((item) => Math.abs(item.value)));
+  return <div className={`dashboard-mini-chart${tone ? " pnl-chart" : ""}`} role="img" aria-label={label}>
+    {values.map((item) => <span key={item.key} className={tone?.(item.value)} title={item.title} style={{ height: `${Math.max(4, (Math.abs(item.value) / max) * 100)}%` }} />)}
+  </div>;
+}
+
+/** The Dashboard: the team's `latest_update` layout with live figures; "—" marks a figure the data cannot give yet. */
 export function DashboardPage({ user }: { user: User }) {
   const role: TodayRole = user.role === "LOCAL_ADMIN" ? "LOCAL_ADMIN" : "ACCOUNTANT";
   const base = `/${areaFor(role)}`;
+  const [period, setPeriod] = useState<DashPeriod>("12m");
+  const [bankAccount, setBankAccount] = useState("all");
   const summary = useResource(() => getHomeSummary(user), `dashboard:${user.id}`);
+  const asOf = summary.data?.asOf ?? new Date().toISOString().slice(0, 10);
+  const currency = summary.data?.currency ?? "MYR";
+  const range = periodRange(period, asOf);
+  const months = periodRange("12m", asOf);
+  const pnl = useResource(() => getProfitAndLossDashboard(range.fromDate, range.toDate, "accrual", range.granularity).catch(() => null),
+    `dashboard-pnl:${user.id}:${range.fromDate}:${range.toDate}:${range.granularity}`);
+  const monthly = useResource(() => getProfitAndLossDashboard(months.fromDate, months.toDate, "accrual", "month").catch(() => null),
+    `dashboard-monthly:${user.id}:${months.fromDate}:${months.toDate}`);
+  const bank = useResource(() => Promise.all([getMoneyTransactions(user, "money_in"), getMoneyTransactions(user, "money_out")])
+    .then(([moneyIn, moneyOut]) => [...moneyIn, ...moneyOut]).catch(() => null), `dashboard-bank:${user.id}`);
   const recent = useResource(() => getDocuments(user).catch(() => []), `dashboard-docs:${user.id}`);
-  const refreshSummary = summary.refresh;
-  const refreshRecent = recent.refresh;
+  const toReview = useResource(() => getDocuments(user, { lane: "to-review" }).catch(() => null), `dashboard-review:${user.id}`);
+  const { refresh: r1 } = summary, { refresh: r2 } = pnl, { refresh: r3 } = monthly, { refresh: r4 } = bank, { refresh: r5 } = recent, { refresh: r6 } = toReview;
   // An open Dashboard stays current: refresh every 30 s while the tab is visible, and on return to it.
-  useEffect(() => pollWhileVisible(() => { void refreshSummary(); void refreshRecent(); }, DASHBOARD_REFRESH_MS, document),
-    [refreshSummary, refreshRecent]);
+  useEffect(() => pollWhileVisible(() => { [r1, r2, r3, r4, r5, r6].forEach((refresh) => void refresh()); }, DASHBOARD_REFRESH_MS, document),
+    [r1, r2, r3, r4, r5, r6]);
+  const bankRows = useMemo(() => bank.data ?? [], [bank.data]);
+  const bankAccounts = useMemo(() => [...new Set(bankRows.map((row) => row.bankAccountRef).filter((ref): ref is string => !!ref))].sort(), [bankRows]);
+
   if (summary.loading) return <LoadingState variant="dashboard" />;
   if (summary.error || !summary.data) return <ErrorState message={summary.error} retry={summary.refresh} />;
 
@@ -95,7 +119,23 @@ export function DashboardPage({ user }: { user: User }) {
   const month = monthEndView(summary.data, role);
   const hour = Number(new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "numeric", hour12: false }).format(new Date()));
   const company = (user.tenantName || "").split("—")[0].trim();
+  const report = pnl.data;
+  const reportHint = pnl.loading ? "Loading…" : "The profit-and-loss report could not be loaded.";
+  const aging = agingFigures(report?.aging, currency);
+  const totals = postedTotals(report, currency);
+  const periods = periodRows(report, currency);
+  const year = periodRows(monthly.data, currency);
+  const cashflow = bankRows
+    .filter((row) => row.postedDate >= range.fromDate && row.postedDate <= range.toDate && (bankAccount === "all" || row.bankAccountRef === bankAccount))
+    .sort((a, b) => a.postedDate.localeCompare(b.postedDate));
+  const maxCash = Math.max(1, ...cashflow.map((row) => Math.abs(Number(row.amount) || 0)));
+  const reviewDocs = (toReview.data ?? []).slice(0, 5);
   const docs = (recent.data ?? []).slice(0, 6);
+  const periodLabel = (value: string) => (range.granularity === "month" ? value.slice(0, 7) : value);
+  const outstanding = [
+    { id: "invoices", title: "Outstanding invoices", receivable: true, href: `${base}/records?category=ACCOUNTS_RECEIVABLE` },
+    { id: "bills", title: "Outstanding bills", receivable: false, href: `${base}/records?category=ACCOUNTS_PAYABLE` },
+  ];
 
   return (
     <div className="dashboard-page dash-home">
@@ -112,23 +152,31 @@ export function DashboardPage({ user }: { user: User }) {
         </div>
       </header>
 
-      <section className="dash-kpis" aria-label="Today in numbers">
-        {view.kpis.map((tile) => <Kpi key={tile.id} tile={tile} />)}
+      <section className="dashboard-daily-work" aria-label="Dashboard filters and today's work">
+        <div className="dashboard-shared-filters">
+          <label>Period<select value={period} onChange={(event) => setPeriod(event.target.value as DashPeriod)}>
+            {DASH_PERIODS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select></label>
+          <label>Bank account<select value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} disabled={!bankAccounts.length}
+            title={bankAccounts.length ? undefined : "No bank statements imported yet."}>
+            <option value="all">All bank accounts</option>
+            {bankAccounts.map((account) => <option value={account} key={account}>{account}</option>)}
+          </select></label>
+          <label>Cost centre<select value="all" disabled title="Cost centres are not recorded on documents yet.">
+            <option value="all">All cost centres</option>
+          </select></label>
+        </div>
+        <div className="dashboard-daily-work-grid">{view.kpis.map((tile) => <WorkTile key={tile.id} tile={tile} />)}</div>
       </section>
 
       <div className="dash-columns">
         <section className="dash-card" aria-labelledby="dash-attention-title">
-          <div className="dash-card-head">
-            <div><h2 id="dash-attention-title">Attention needed</h2><p>Your work for today, in the order to do it.</p></div>
-          </div>
+          <div className="dash-card-head"><div><h2 id="dash-attention-title">Attention needed</h2><p>Your work for today, in the order to do it.</p></div></div>
           {view.attention.length > 0 && <div className="dash-attention-list">{view.attention.map((tile) => <AttentionRow key={tile.id} tile={tile} />)}</div>}
           {view.allClear && <p className="dash-all-clear"><CheckCircle2 size={18} aria-hidden /> Nothing needs you right now.</p>}
         </section>
-
         <section className="dash-card" aria-labelledby="dash-month-title">
-          <div className="dash-card-head">
-            <div><h2 id="dash-month-title">{month.title}</h2><p>Month-end progress for the whole company.</p></div>
-          </div>
+          <div className="dash-card-head"><div><h2 id="dash-month-title">{month.title}</h2><p>Month-end progress for the whole company.</p></div></div>
           {month.available ? (
             <ol className="dash-month">
               {month.steps.map((step) => (
@@ -138,25 +186,104 @@ export function DashboardPage({ user }: { user: User }) {
                     <strong>{step.complete ? <><CheckCircle2 size={14} aria-hidden /> Done</> : step.value}</strong>
                   </div>
                   <div className={`dash-progress${step.percent === null ? " dash-progress-none" : ""}`} role="progressbar" aria-label={step.label}
-                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={step.percent ?? 0}>
-                    <span style={{ width: `${step.percent ?? 0}%` }} />
-                  </div>
+                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={step.percent ?? 0}><span style={{ width: `${step.percent ?? 0}%` }} /></div>
                 </li>
               ))}
             </ol>
-          ) : <p className="dash-muted" title={month.details.join(" ")}>Month-end figures are not available yet.</p>}
+          ) : <p className="dash-muted" title={month.details.join(" ")}>— Month-end figures are not available yet.</p>}
         </section>
       </div>
 
-      <section className="dash-card" aria-labelledby="dash-money-title">
-        <div className="dash-card-head">
-          <div><h2 id="dash-money-title">Money due</h2><p>Unpaid amounts from approved bills and invoices.</p></div>
-          <Link className="btn" href={`${base}/records`}>Standardised Records <ArrowRight size={14} aria-hidden /></Link>
-        </div>
-        <div className="dash-money-grid">{view.money.map((tile) => <MoneyCard key={tile.id} tile={tile} />)}</div>
+      <section className="dashboard-accounting-summary" aria-label="Monthly accounting summary">
+        <section className="dashboard-reference-panel monthly-summary-panel">
+          <div className="dashboard-reference-panel-heading">
+            <div><h2>Monthly summary</h2><p className="dashboard-panel-help">Posted income and expenses over the last 12 months.</p></div>
+            <Link href={`${base}/ledger?section=monthly`}>Open ledger <ArrowRight size={13} /></Link>
+          </div>
+          <div className="monthly-summary-grid">
+            <div><span>Income</span><strong>{rm(year.income, currency)}</strong></div>
+            <div><span>Expenses</span><strong>{rm(year.expenses, currency)}</strong></div>
+            <div><span>Net result</span><strong className={(year.net ?? "").startsWith("-") ? "negative-value" : "positive-value"}>{rm(year.net, currency)}</strong></div>
+            <div><span>Months with activity</span><strong>{year.rows.length || "—"}</strong></div>
+          </div>
+          {!year.rows.length && <p className="widget-empty">{monthly.loading ? "Loading…" : monthly.data ? NO_JOURNALS : "— The monthly report could not be loaded."}</p>}
+        </section>
+        <section className="dashboard-reference-panel monthly-ledger-panel">
+          <div className="dashboard-reference-panel-heading">
+            <div><h2>Monthly ledger</h2><p className="dashboard-panel-help">Income, expenses and net result by month.</p></div>
+            <Link href={`${base}/ledger?section=journals`}>View journals <ArrowRight size={13} /></Link>
+          </div>
+          <div className="monthly-ledger-table">
+            <div className="monthly-ledger-head"><span>Month</span><span>Income</span><span>Expenses</span><span>Net</span></div>
+            {[...year.rows].reverse().map((row) => <Link href={`${base}/ledger?section=journals`} className="monthly-ledger-row" key={row.period}>
+              <span>{row.period.slice(0, 7)}</span><strong>{rm(row.income, currency)}</strong><strong>{rm(row.expenses, currency)}</strong>
+              <strong className={row.netProfit.startsWith("-") ? "negative-value" : "positive-value"}>{rm(row.netProfit, currency)}</strong>
+            </Link>)}
+            {!year.rows.length && <div className="widget-empty">Months appear here once journals are posted.</div>}
+          </div>
+        </section>
       </section>
 
-      <MonthlyFinance asOf={summary.data.asOf} base={base} userId={user.id} />
+      <section className="dashboard-reference-overview" aria-label="Financial overview">
+        <div className="dashboard-reference-kpis">
+          <MoneyKpi kind="invoice" label="Outstanding" figure={aging.invoicesOutstanding} currency={currency} href={`${base}/records?category=ACCOUNTS_RECEIVABLE`} hint={reportHint} />
+          <MoneyKpi kind="invoice" label="Overdue" figure={aging.invoicesOverdue} currency={currency} href={`${base}/records?category=ACCOUNTS_RECEIVABLE&due=overdue`} hint={reportHint} />
+          <MoneyKpi kind="bill" label="Outstanding" figure={aging.billsOutstanding} currency={currency} href={`${base}/records?category=ACCOUNTS_PAYABLE`} hint={reportHint} />
+          <MoneyKpi kind="bill" label="Overdue" figure={aging.billsOverdue} currency={currency} href={`${base}/records?category=ACCOUNTS_PAYABLE&due=overdue`} hint={reportHint} />
+        </div>
+        <div className="dashboard-reference-two-column">
+          {outstanding.map((panel) => {
+            const rows = (report?.aging ?? [])
+              .filter((item) => panel.receivable === (item.category === "accounts_receivable") && item.currency.toUpperCase() === currency.toUpperCase())
+              .sort((a, b) => AGE_ORDER.indexOf(a.bucket) - AGE_ORDER.indexOf(b.bucket));
+            const total = Math.max(1, rows.reduce((sum, item) => sum + Number(item.amount), 0));
+            return <section key={panel.id} className="dashboard-reference-panel">
+              <div className="dashboard-reference-panel-heading"><h2>{panel.title}</h2><Link href={panel.href}>View details <ArrowRight size={13} /></Link></div>
+              <div className="dashboard-aging-bar">{rows.map((item, index) => <span key={item.bucket} className={`aging-segment aging-${index % 5}`}
+                style={{ width: `${Math.max(1, (Number(item.amount) / total) * 100)}%` }} title={`${AGE_LABEL[item.bucket] ?? item.bucket}: ${rm(item.amount, item.currency)} (${item.itemCount})`} />)}</div>
+              <div className="dashboard-aging-legend">
+                {rows.map((item, index) => <span key={item.bucket}><i className={`aging-dot aging-${index % 5}`} />{AGE_LABEL[item.bucket] ?? item.bucket} · {rm(item.amount, item.currency)}</span>)}
+                {!rows.length && <span>{report ? "Nothing approved is unpaid." : `— ${reportHint}`}</span>}
+              </div>
+            </section>;
+          })}
+        </div>
+        <div className="dashboard-reference-two-column">
+          <section className="dashboard-reference-panel dashboard-chart-panel">
+            <div className="dashboard-reference-panel-heading"><div><h2>Income</h2><strong>{rm(totals?.income, currency)}</strong></div>
+              <Link href={`${base}/ledger?section=monthly`}>Details <ArrowRight size={13} /></Link></div>
+            {periods.rows.length
+              ? <Bars label="Income by period" values={periods.rows.map((row) => ({ key: row.period, value: Number(row.income), title: `${periodLabel(row.period)}: ${rm(row.income, currency)}` }))} />
+              : <div className="widget-empty">{report ? NO_JOURNALS : `— ${reportHint}`}</div>}
+          </section>
+          <section className="dashboard-reference-panel dashboard-chart-panel">
+            <div className="dashboard-reference-panel-heading"><div><h2>Profit &amp; Loss</h2><strong>{rm(totals?.netProfit, currency)}</strong></div>
+              <Link href={`${base}/ledger?section=trial`}>Open ledger <ArrowRight size={13} /></Link></div>
+            {periods.rows.length
+              ? <Bars label="Net profit by period" tone={(value) => (value < 0 ? "negative" : "positive")}
+                  values={periods.rows.map((row) => ({ key: row.period, value: Number(row.netProfit), title: `${periodLabel(row.period)}: ${rm(row.netProfit, currency)}` }))} />
+              : <div className="widget-empty">{report ? NO_JOURNALS : `— ${reportHint}`}</div>}
+          </section>
+        </div>
+        <div className="dashboard-reference-two-column">
+          <section className="dashboard-reference-panel dashboard-chart-panel">
+            <div className="dashboard-reference-panel-heading"><h2>Cashflow trend</h2><Link href={`${base}/money-in`}>Review bank <ArrowRight size={13} /></Link></div>
+            <div className="dashboard-cashflow-chart">
+              {cashflow.map((row) => <span key={row.id} className={row.direction === "money_out" ? "out" : "in"}
+                style={{ height: `${Math.max(5, (Math.abs(Number(row.amount) || 0) / maxCash) * 100)}%` }} title={`${row.postedDate}: ${row.currency ?? ""} ${row.amount ?? "—"}`} />)}
+              {!cashflow.length && <div className="widget-empty">{bank.data === null ? "— Bank lines could not be loaded." : "No imported bank lines in this period."}</div>}
+            </div>
+            <small className="dashboard-chart-note">Imported bank statement lines only (money in and money out).</small>
+          </section>
+          <section className="dashboard-reference-panel dashboard-list-panel">
+            <div className="dashboard-reference-panel-heading"><h2>Documents needing review</h2><Link href={`${base}/documents?lane=to-review`}>View all <ArrowRight size={13} /></Link></div>
+            {reviewDocs.map((doc) => <Link className="dashboard-reference-list-row" href={`${base}/documents/${doc.id}`} key={doc.id}>
+              <span>{formatDate(doc.createdAt)}</span><strong>{doc.name}</strong><StatusBadge status={doc.status} />
+            </Link>)}
+            {!reviewDocs.length && <div className="widget-empty">{toReview.loading ? "Loading…" : toReview.data === null ? "— The review list could not be loaded." : "No documents need review."}</div>}
+          </section>
+        </div>
+      </section>
 
       <section className="dash-card workspace-documents-card" aria-labelledby="dash-recent-title">
         <div className="dash-card-head">
