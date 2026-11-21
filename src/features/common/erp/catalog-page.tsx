@@ -15,7 +15,7 @@ import {
   PAYMENT_METHOD_TYPES, accountLabel, accountsOfType, documentTypeLabel, entryToForm, errorMessage, formToInput, isCompanyAdmin,
   numberPreview, parseCatalogTab, removesPermanently, validateCatalogForm, type CatalogForm, type VisibleCatalogKind,
 } from "./catalog-logic";
-import { effectiveRate, MAX_RATE_PERIODS, normaliseRate, readRatePeriods, validateRatePeriods, type RatePeriod } from "./currency-rates";
+import { effectiveRate, isoDateIn, MAX_RATE_PERIODS, normaliseRate, readRatePeriods, validateRatePeriods, type RatePeriod } from "./currency-rates";
 import { ProductsPanel } from "./products-panel";
 import { PostingAccountsPanel } from "./posting-accounts-panel";
 
@@ -123,7 +123,7 @@ function kindColumns(kind: VisibleCatalogKind): Column<CatalogEntry>[] {
       label: "Type", render: (row) => PAYMENT_METHOD_LABELS[row.data.type as keyof typeof PAYMENT_METHOD_LABELS] ?? dash(row.data.type),
     }];
     case "currency": {
-      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
+      const today = isoDateIn("Asia/Kuala_Lumpur");
       return [
         { label: "Code", render: (row) => <strong>{dash(row.code)}</strong> }, { label: "Name", render: (row) => row.name },
         { label: "Symbol", render: (row) => dash(row.data.symbol) },

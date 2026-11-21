@@ -52,3 +52,10 @@ export function effectiveRate(data: Record<string, unknown>, isoDate: string): s
   );
   return period?.rate ?? normaliseRate(typeof data.rate === "number" ? String(data.rate) : data.rate);
 }
+
+/** Today's calendar date in a time zone as YYYY-MM-DD (built from parts, not from a locale's date layout). */
+export function isoDateIn(timeZone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}

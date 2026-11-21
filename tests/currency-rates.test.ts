@@ -61,3 +61,10 @@ test("a currency can have up to fifty rate periods", () => {
   assert.equal(validateRatePeriods(periods), null);
   assert.match(validateRatePeriods([...periods, november]) ?? "", /at most 50/);
 });
+
+test("today's date in Kuala Lumpur is built as YYYY-MM-DD", async () => {
+  const { isoDateIn } = await import("../src/features/common/erp/currency-rates");
+  // 2026-11-21 17:30 UTC is already 22 Nov in Kuala Lumpur (UTC+8).
+  assert.equal(isoDateIn("Asia/Kuala_Lumpur", new Date(Date.UTC(2026, 10, 21, 17, 30))), "2026-11-22");
+  assert.equal(isoDateIn("UTC", new Date(Date.UTC(2026, 0, 5))), "2026-01-05");
+});
