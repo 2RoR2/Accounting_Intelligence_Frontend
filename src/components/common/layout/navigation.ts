@@ -33,15 +33,21 @@ const leaf = (label: string, page: string, query?: string, extra: Partial<NavIte
 const SECTIONS: NavSection[] = [
   { label: "", items: [
     { label: "Dashboard", page: "dashboard", icon: "today" },
-    { label: "Sales", page: "documents", icon: "invoice", children: [
-      leaf("Invoices", "documents", "tab=sales-invoices"),
-      leaf("Credit Notes", "documents", "tab=sales-credit-notes"),
+    // Plan L4/L5: typed documents and approved scanned ones in one list per type (sales/purchases pages).
+    { label: "Sales", page: "sales", icon: "invoice", children: [
+      leaf("Quotations", "sales", "type=quotation"),
+      leaf("Invoices", "sales", "type=invoice"),
+      leaf("Credit Notes", "sales", "type=credit-note"),
       leaf("Debit Notes", "documents", "tab=sales-debit-notes"),
+      leaf("Customer Payments", "sales", "type=payment"),
+      leaf("Customer Refunds", "sales", "type=refund"),
     ] },
-    { label: "Purchases", page: "documents", icon: "bill", children: [
-      leaf("Bills", "documents", "tab=purchase-bills"),
-      leaf("Supplier Credit Notes", "documents", "tab=supplier-credit-notes"),
+    { label: "Purchases", page: "purchases", icon: "bill", children: [
+      leaf("Bills", "purchases", "type=bill"),
+      leaf("Supplier Credit Notes", "purchases", "type=purchase-credit-note"),
       leaf("Supplier Debit Notes", "documents", "tab=supplier-debit-notes"),
+      leaf("Supplier Payments", "purchases", "type=purchase-payment"),
+      leaf("Supplier Refunds", "purchases", "type=purchase-refund"),
     ] },
     { label: "Receipts", page: "documents", query: "tab=receipts", icon: "receipt" },
     { label: "Documents", page: "documents", icon: "review", children: [
@@ -59,6 +65,7 @@ const SECTIONS: NavSection[] = [
     { label: "Bank", page: "money-in", icon: "bank", children: [
       leaf("Money In", "money-in"),
       leaf("Money Out", "money-out"),
+      leaf("Transfers", "bank-entries", "type=bank-transfer"),
       leaf("Accounts", "bank-accounts"),
       leaf("Reconciliation", "reconciliation"),
     ] },
@@ -75,6 +82,9 @@ const SECTIONS: NavSection[] = [
     ] },
     { label: "Control Panel", page: "settings", icon: "settings", children: [
       leaf("Settings", "settings"),
+      leaf("Catalog", "catalog"),
+      leaf("Products & Services", "catalog", "kind=products"),
+      leaf("Posting accounts", "catalog", "kind=posting-accounts", { adminOnly: true }),
       leaf("Users", "users", undefined, { adminOnly: true }),
       leaf("Check rules", "validation-rules", undefined, { adminOnly: true }),
       leaf("Audit trail", "audit", undefined, { adminOnly: true }),

@@ -10,6 +10,8 @@ import { RulesPage, SettingsPage } from "@/features/common/settings/settings";
 import { ProfilePage } from "@/features/common/settings/profile-page";
 import { UserManagement } from "@/features/common/users/user-management";
 import { ContactsPage } from "@/features/common/contacts/contacts";
+import { ErpDocumentsPage } from "@/features/common/erp/documents-page";
+import { CatalogPage } from "@/features/common/erp/catalog-page";
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
 import { BankAccountsPage } from "@/features/common/money/bank-accounts";
@@ -32,7 +34,12 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;
-    case "contacts": return <ContactsPage user={user} />;
+    case "contacts": return <ContactsPage user={user} contactId={id} />;
+    // Plan L: sales/purchases documents (typed + approved scanned), bank entries and the catalog.
+    case "sales":
+    case "purchases":
+    case "bank-entries": return <ErpDocumentsPage user={user} group={page} documentId={id} />;
+    case "catalog": return <CatalogPage user={user} />;
     case "records": return <RecordsPage user={user} />;
     case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
     case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;

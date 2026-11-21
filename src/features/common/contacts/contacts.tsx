@@ -16,7 +16,7 @@ type Contact = {
   type: "Customer" | "Supplier";
 };
 
-export function ContactsPage({ user }: { user: User }) {
+export function ContactsPage({ user }: { user: User; contactId?: string }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [error, setError] = useState("");

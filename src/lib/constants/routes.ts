@@ -10,11 +10,12 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
   "records", "users", "validation-overview", "validation-rules", "reports", "audit", "evaluation",
-  "settings", "profile", "money-in", "money-out", "ledger", "bank-accounts"
+  "settings", "profile", "money-in", "money-out", "ledger", "bank-accounts",
+  "sales", "purchases", "bank-entries", "catalog"
 ]),
-  workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger", "bank-accounts"]),
+  workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger", "bank-accounts", "sales", "purchases", "bank-entries", "catalog"]),
 };
-const DETAIL_PAGES = new Set(["documents", "records", "tenants"]);
+const DETAIL_PAGES = new Set(["documents", "records", "tenants", "contacts", "sales", "purchases", "bank-entries"]);
 export const isPublicRoute = (path: string[]) => path.length === 1 && PUBLIC_ROUTES.has(path[0]);
 export function isAllowedWorkspaceRoute(path: string[], role: Role) {
   const [area, page, id] = path;
