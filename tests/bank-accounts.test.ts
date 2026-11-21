@@ -68,3 +68,15 @@ test("calculates the posted balance as debits minus credits", () => {
   assert.equal(postedBankBalance({ totalDebit: "10", totalCredit: "10.00" }), "0.00");
   assert.equal(postedBankBalance(), "0.00");
 });
+
+test("keeps letters in account numbers and leaves ambiguous references unlinked", () => {
+  const card = { id: "card", code: null, name: "Card", data: { accountNumber: "AB-1234" } };
+  assert.equal(matchesBankAccount("ab 1234", card), true);
+  assert.equal(matchesBankAccount("CD1234", card), false);
+  assert.equal(matchesBankAccount("Card ending 1234", { ...card, name: "Other", data: { accountNumber: "1234" } }), false);
+  const first = { id: "a", code: "OPS", name: "First", data: {} };
+  const second = { id: "b", code: "OPS", name: "Second", data: {} };
+  const { linked, unlinked } = summarizeBankImports([first, second], [bankLine("9", "OPS", "2026-11-01")]);
+  assert.equal(linked.size, 0);
+  assert.deepEqual(unlinked.map((row) => row.ref), ["OPS"]);
+});

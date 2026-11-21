@@ -16,14 +16,15 @@ type ImportedLineSummary = { lines: number; lastDate: string };
 
 const catalogText = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const normalizedRef = (value?: string | null) => value?.trim().toLowerCase() ?? "";
-const digitsOnly = (value: string) => value.replace(/\D/g, "");
+/** Account numbers: drop spaces, dashes and dots only, keep letters, compare case-insensitively. */
+const accountNumberKey = (value: string) => value.replace(/[\s.-]/g, "").toLowerCase();
 
 export function matchesBankAccount(ref: string | null | undefined, account: BankAccountIdentity): boolean {
   const normalized = normalizedRef(ref);
   if (!normalized) return false;
   if (normalized === normalizedRef(account.code) || normalized === normalizedRef(account.name)) return true;
-  const accountNumber = digitsOnly(catalogText(account.data.accountNumber));
-  return accountNumber !== "" && digitsOnly(normalized) === accountNumber;
+  const accountNumber = accountNumberKey(catalogText(account.data.accountNumber));
+  return accountNumber !== "" && accountNumberKey(normalized) === accountNumber;
 }
 
 export function summarizeBankImports(
@@ -34,7 +35,8 @@ export function summarizeBankImports(
   const unlinked: BankMoneyTransaction[] = [];
   for (const row of rows) {
     const matches = accounts.filter((account) => matchesBankAccount(row.bankAccountRef, account));
-    if (!matches.length) unlinked.push(row);
+    // A reference that fits two bank accounts stays unlinked so someone can sort it out.
+    if (matches.length !== 1) { unlinked.push(row); continue; }
     for (const account of matches) {
       const summary = linked.get(account.id) ?? { lines: 0, lastDate: "" };
       summary.lines += 1;
@@ -108,9 +110,11 @@ export function BankAccountsPage({ user }: { user: User }) {
       getMoneyTransactions(user, "money_out"),
     ]);
     const imports = summarizeBankImports(accounts, [...moneyIn, ...moneyOut]);
-    const [ledgerAccounts, trialBalance] = accounts.length
-      ? await Promise.all([getLedgerAccounts(), getTrialBalance()])
-      : [[], []];
+    // Ledger details are extra: if they fail, keep the accounts and imported statements; balances show "—".
+    const ledger = accounts.length
+      ? await Promise.all([getLedgerAccounts(), getTrialBalance()]).catch(() => null)
+      : null;
+    const [ledgerAccounts, trialBalance] = ledger ?? [[], []];
     const ledgerById = new Map(ledgerAccounts.map((account) => [account.id, account]));
     const trialBalanceById = new Map(trialBalance.map((row) => [row.accountId, row]));
     return {
@@ -124,7 +128,7 @@ export function BankAccountsPage({ user }: { user: User }) {
           bank: catalogText(account.data.bankName),
           accountNumber: catalogText(account.data.accountNumber),
           ledgerAccount: [account.ledgerAccountCode || ledger?.code, ledger?.name].filter(Boolean).join(" · "),
-          balance: ledgerId ? postedBankBalance(trialBalanceById.get(ledgerId)) : null,
+          balance: ledgerId && ledger ? postedBankBalance(trialBalanceById.get(ledgerId)) : null,
           imports: imports.linked.get(account.id),
         };
       }),
