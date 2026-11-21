@@ -44,13 +44,15 @@ export async function openSupportView(
     throw new Error("Provide a support reason of at least 5 characters.");
   return mapSupportView(await api<SupportViewResponse>(`/api/records/${recordId}/support-view`, { method: "POST", body: JSON.stringify({ reason }) }));
 }
+// A plain number such as -150.00 stays numeric in spreadsheets; anything else starting with a formula character is escaped.
+const isNumericLiteral = (value: string) => /^-?\d+(\.\d+)?$/.test(value.trim());
 export function downloadCsv(filename: string, rows: string[][]) {
   const csv = rows
     .map((row) =>
       row
         .map(
           (value) =>
-            `"${(/^[=+@\-\t\r]/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`,
+            `"${(!isNumericLiteral(value) && /^[=+@\-\t\r]/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`,
         )
         .join(","),
     )

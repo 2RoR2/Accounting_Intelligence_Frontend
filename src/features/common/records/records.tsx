@@ -70,7 +70,7 @@ export function RecordDetail({
         </div>
         <DataTable
           rows={record.extraction.lineItems}
-          rowKey={(r) => r.id ?? r.description ?? "line"}
+          rowKey={(r) => `${r.id ?? ""}|${r.description ?? ""}|${r.quantity ?? ""}|${r.amount ?? ""}`}
           columns={[
             { label: "Description", render: (r) => r.description },
             { label: "Quantity", render: (r) => r.quantity },

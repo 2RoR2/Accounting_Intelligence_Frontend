@@ -15,6 +15,7 @@ import { DASHBOARD_REFRESH_MS, dashboardView, firstName, greetingFor, pollWhileV
 import { documentKindLabel } from "@/lib/glossary";
 import { areaFor, monthEndView, type TileId, type TodayRole, type TodayTileView } from "@/lib/today";
 import type { User } from "@/types";
+import { MonthlyFinance } from "@/features/common/today/monthly-finance";
 
 const ICONS: Record<TileId, LucideIcon> = {
   toReview: FileSearch, needsFixing: ShieldAlert, readyToApprove: ClipboardCheck, waitingApproval: Send,
@@ -154,6 +155,8 @@ export function DashboardPage({ user }: { user: User }) {
         </div>
         <div className="dash-money-grid">{view.money.map((tile) => <MoneyCard key={tile.id} tile={tile} />)}</div>
       </section>
+
+      <MonthlyFinance asOf={summary.data.asOf} base={base} userId={user.id} />
 
       <section className="dash-card workspace-documents-card" aria-labelledby="dash-recent-title">
         <div className="dash-card-head">

@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/document.service";
 import { getSettings, saveSettings } from "@/lib/api/settings.service";
 import { resetPassword } from "@/lib/api/auth.service";
+import { CompanyProfile } from "./company-profile";
 import {
   ErrorState,
   Field,
@@ -124,6 +125,7 @@ export function SettingsPage({
         }
         description="Manage workspace behaviour, notifications, and document intake preferences."
       />
+      {!profile && user.role === "LOCAL_ADMIN" && <CompanyProfile key={user.id} />}
       <div className="two-col">
         <Panel title="Account overview" subtitle="Your signed-in workspace identity">
           <div className="panel-body detail-list">

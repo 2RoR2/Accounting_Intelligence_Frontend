@@ -1,4 +1,5 @@
 "use client";
+import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -221,11 +222,17 @@ export function MoneyFlowPage({
     setBusy(true);
     setActionError("");
     try {
-      const updated = await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
-      setDetail(updated);
-      setSelectedCandidateId(updated.candidateId ?? "");
+      await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
+      const updated = await getMoneyTransactionDetail(user, detail.id).catch(() => undefined);
       setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
+      if (updated) {
+        setDetail(updated);
+        setSelectedCandidateId(updated.candidateId ?? "");
+      } else {
+        // The decision is saved; keep the dialog open so the next step (posting the payment) is not lost.
+        setActionError("The decision was saved, but these details could not be refreshed. Close and reopen the transaction to continue.");
+      }
       reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The reconciliation decision was not saved.");
@@ -741,6 +748,9 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
+            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" && (
+              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
+            )}
           </div>
         </Modal>
       )}

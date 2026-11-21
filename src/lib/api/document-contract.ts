@@ -373,22 +373,27 @@ export function isPlainNumber(value: string): boolean {
 }
 
 export function currencyTotals(records: Array<{ currency?: string | null; total?: string | null }>): CurrencyTotal[] {
-  const groups = new Map<string | null, string[]>();
-  for (const { currency, total } of records) {
-    if (total == null || !/^-?[0-9]+(?:\.[0-9]+)?$/.test(total)) continue;
-    groups.set(currency ?? null, [...(groups.get(currency ?? null) ?? []), total]);
+  // One pass with exact decimals: each currency keeps a running sum in units of 10^-scale, rescaled when a value
+  // has more decimal places than seen so far.
+  const groups = new Map<string | null, { sum: bigint; scale: number; records: number }>();
+  for (const { currency, total: value } of records) {
+    if (value == null || !/^-?[0-9]+(?:\.[0-9]+)?$/.test(value)) continue;
+    const group = groups.get(currency ?? null) ?? { sum: 0n, scale: 2, records: 0 };
+    const negative = value.startsWith("-");
+    const [whole, fraction = ""] = value.replace("-", "").split(".");
+    if (fraction.length > group.scale) {
+      group.sum *= 10n ** BigInt(fraction.length - group.scale);
+      group.scale = fraction.length;
+    }
+    const units = BigInt(whole + fraction.padEnd(group.scale, "0"));
+    group.sum += negative ? -units : units;
+    group.records += 1;
+    groups.set(currency ?? null, group);
   }
-  return [...groups.entries()].map(([currency, totals]) => {
-    const scale = Math.max(2, ...totals.map(value => value.split(".")[1]?.length ?? 0));
-    const sum = totals.reduce((acc, value) => {
-      const negative = value.startsWith("-");
-      const [whole, fraction = ""] = value.replace("-", "").split(".");
-      const units = BigInt(whole + fraction.padEnd(scale, "0"));
-      return acc + (negative ? -units : units);
-    }, 0n);
+  return [...groups.entries()].map(([currency, { sum, scale, records: count }]) => {
     const digits = (sum < 0n ? -sum : sum).toString().padStart(scale + 1, "0");
     const total = (sum < 0n ? "-" : "") + digits.slice(0, -scale) + "." + digits.slice(-scale);
-    return { currency, total, records: totals.length };
+    return { currency, total, records: count };
   }).sort((a, b) => (a.currency ?? "").localeCompare(b.currency ?? ""));
 }
 export function standardisationAvailable(status: string, kind: string, report: ValidationReport | null): boolean {

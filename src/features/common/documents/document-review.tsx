@@ -570,7 +570,7 @@ function DocumentReviewPage({
         }
       />
 
-      {failure && <ErrorState message={failure} />}
+      {failure && <ErrorState message={failure} dismissible onClose={() => setFailure("")} />}
 
       {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType} canChoose={canChooseType}
         current={chosenKind} busy={busy} onChoose={chooseType} />}
