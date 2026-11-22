@@ -18,7 +18,7 @@ test("the menu follows the team's latest_update layout", () => {
     // Transfers between own bank accounts now post through the document module (Plan L6).
     assert.deepEqual(children(role, "Bank"), ["Money In", "Money Out", "Transfers", "Accounts", "Reconciliation"]);
     assert.deepEqual(children(role, "Reports"), ["All Reports", "Performance Evaluation"]);
-    assert.deepEqual(children(role, "Accounting"), ["Monthly Ledger", "Journal Entries", "Chart of Accounts", "Trial Balance"]);
+    assert.deepEqual(children(role, "Accounting"), ["Monthly Ledger", "Journal Entries", "Periods", "Chart of Accounts", "Trial Balance"]);
   }
   assert.deepEqual(children("ACCOUNTANT", "Control Panel"), ["Settings", "Catalog", "Products & Services"]);
   assert.ok(children("LOCAL_ADMIN", "Control Panel")?.includes("Posting accounts"));
@@ -61,6 +61,7 @@ test("the highlighted entry follows the page", () => {
   assert.equal(activeNavItem(menu, "reports")?.label, "All Reports");
   assert.equal(activeNavItem(menu, "ledger")?.label, "Monthly Ledger");
   assert.equal(activeNavItem(menu, "ledger", "section=trial")?.label, "Trial Balance");
+  assert.equal(activeNavItem(menu, "ledger", "section=periods")?.label, "Periods");
   assert.equal(activeNavItem(menu, "today")?.label, "Dashboard");
   assert.equal(activeNavItem(menu, "dashboard")?.label, "Dashboard");
   const receipts = navLeaves(menu).find((item) => item.label === "Receipts");

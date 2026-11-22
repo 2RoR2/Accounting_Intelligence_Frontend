@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, type SyntheticEvent } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { DataTable, ErrorState, LoadingState, Modal, PageHeader, Panel, StatCard } from "@/components/common/ui";
 import { ApiError } from "@/lib/api/client";
@@ -10,14 +10,17 @@ import { ChartAccounts } from "./chart-accounts";
 import { JournalPostingForm } from "./journal-posting-form";
 import { currencyTotals } from "@/lib/api/document-contract";
 import { MonthlyFinance } from "@/features/common/today/monthly-finance";
+import { Periods } from "./periods";
 
 const sections = [
   ["monthly", "Monthly ledger"],
   ["trial", "Trial balance"],
   ["journals", "Journal history"],
+  ["periods", "Periods"],
   ["allocations", "Settlement allocations"],
   ["accounts", "Chart of accounts"],
 ] as const;
+type Section = (typeof sections)[number][0];
 
 function amountKey(value: string) {
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
@@ -28,14 +31,33 @@ type HistoryJournal = Journal & { reversedJournalId?: string | null };
 
 export function LedgerPage({ canPost }: { canPost: boolean }) {
   // The open section is in the URL (?section=), so the sidebar's Accounting entries open it and stay highlighted.
-  type Section = (typeof sections)[number][0];
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const requested = searchParams.get("section");
   const section: Section = sections.find(([key]) => key === requested)?.[0] ?? "trial";
-  const setSection = (key: Section) => router.replace(`${pathname}?section=${key}`, { scroll: false });
-  const base = pathname.split("/").slice(0, 2).join("/");
+  const base = canPost ? "/company" : "/workspace";
+  const setSection = (key: Section) => router.replace(`${base}/ledger?section=${key}`, { scroll: false });
+  const tabs = <nav className="ledger-tabs" aria-label="Ledger sections">
+    {sections.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => setSection(key)}>{label}</button>)}
+  </nav>;
+
+  return <div className="ledger-page">
+    <PageHeader title="General Ledger" description="Review journals, periods, settlements, and reconciliation allocations." />
+    {section === "periods"
+      ? <div className="ledger-surface">
+        <section className="ledger-browser" aria-label="Ledger sections">{tabs}</section>
+        <Periods canManage={canPost} />
+      </div>
+      : <LedgerActivity base={base} canPost={canPost} section={section} tabs={tabs} />}
+  </div>;
+}
+
+function LedgerActivity({ base, canPost, section, tabs }: {
+  base: string;
+  canPost: boolean;
+  section: Exclude<Section, "periods">;
+  tabs: ReactNode;
+}) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [source, setSource] = useState("");
@@ -55,8 +77,10 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
   const unmatched = useMemo(() => currencyTotals((settlements ?? []).map((settlement) => ({
     currency: settlement.currency, total: settlement.unmatchedAmount,
   }))), [settlements]);
-  if (loading) return <LoadingState />;
-  if (error || !data) return <ErrorState message={error} retry={refresh} />;
+  if (loading || error || !data) return <>
+    <section className="ledger-browser" aria-label="Ledger sections">{tabs}</section>
+    {loading ? <LoadingState /> : <ErrorState message={error} retry={refresh} />}
+  </>;
   const posted = data.journals.filter((journal) => journal.status === "posted").length;
   const reversedIds = new Set(data.journals.map((journal: HistoryJournal) =>
     // The current list API exposes the original journal as the source of a reversal.
@@ -92,8 +116,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
     }
   };
 
-  return <div className="ledger-page">
-    <PageHeader title="General Ledger" description="Review journals, settlements, and reconciliation allocations." />
+  return <>
     <div className="stats-grid">
       <StatCard label="Posted journals" value={posted} detail="General ledger" />
       <StatCard label="Settlements" value={data.settlements.length} detail="Recorded payments only" />
@@ -102,9 +125,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
     </div>
     <div className="ledger-surface">
       <section className="ledger-browser" aria-label="Ledger sections and filters">
-        <nav className="ledger-tabs" aria-label="Ledger sections">
-          {sections.map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} className={section === key ? "active" : ""} onClick={() => setSection(key)}>{label}</button>)}
-        </nav>
+        {tabs}
         {section === "journals" && <div className="ledger-filter-bar">
           <input aria-label="Search ledger" placeholder="Search journals" value={search} onChange={(event) => setSearch(event.target.value)} />
           <select aria-label="Journal status" value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -165,5 +186,5 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
       </Panel>}
       {section === "accounts" && <ChartAccounts canEdit={canPost} />}
     </div>
-  </div>;
+  </>;
 }

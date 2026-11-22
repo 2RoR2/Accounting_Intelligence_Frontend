@@ -6900,8 +6900,8 @@ dialog {
 
 .reports-page .report-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
 }
 .reports-page .report-tabs button {
   padding: 8px 16px;
@@ -6916,6 +6916,27 @@ dialog {
   background: var(--color-0);
   color: var(--color-4);
   border-color: var(--color-0);
+}
+
+.reports-page .processing-summary {
+  display: grid;
+  gap: 20px;
+}
+.reports-page .report-date-filters {
+  align-items: flex-end;
+}
+.reports-page .report-date-filters .field,
+.reports-page .report-result-toolbar p {
+  margin: 0;
+}
+.reports-page .report-result-toolbar {
+  justify-content: space-between;
+}
+.reports-page .report-total td {
+  font-weight: 700;
+}
+.reports-page .financial-ledger > section + section {
+  border-top: 1px solid var(--dash-line);
 }
 
 .coa-list {

@@ -77,6 +77,7 @@ const SECTIONS: NavSection[] = [
     { label: "Accounting", page: "ledger", icon: "accounts", children: [
       leaf("Monthly Ledger", "ledger", "section=monthly"),
       leaf("Journal Entries", "ledger", "section=journals"),
+      leaf("Periods", "ledger", "section=periods"),
       leaf("Chart of Accounts", "ledger", "section=accounts"),
       leaf("Trial Balance", "ledger", "section=trial"),
     ] },
