@@ -73,6 +73,23 @@ test("editing the form updates its own fields keys only", () => {
   assert.equal(original.fields.remarks, "Pays late");
 });
 
+test("a supplier default expense account can be set or cleared through the contact input", () => {
+  const original = contact({
+    defaultExpenseAccountId: "expense",
+    defaultExpenseAccountCode: "6000",
+    defaultExpenseAccountName: "Utilities",
+  });
+  const form = contactToForm(original);
+  const input = buildContactInput(form, original.fields);
+  assert.equal(form.defaultExpenseAccountId, "expense");
+  assert.equal(input.defaultExpenseAccountId, "expense");
+  assert.ok(!("defaultExpenseAccountCode" in input));
+  assert.ok(!("defaultExpenseAccountName" in input));
+  assert.equal(buildContactInput({ ...form, defaultExpenseAccountId: "" }).defaultExpenseAccountId, null);
+  assert.ok(!("defaultExpenseAccountId" in buildContactInput({ ...form, defaultExpenseAccountId: undefined })));
+  assert.ok(!("defaultExpenseAccountId" in buildContactInput({ ...form, kind: "customer" })));
+});
+
 test("a new contact form builds a minimal input", () => {
   const input = buildContactInput({ ...emptyContactForm("employee"), legalName: " Ali bin Abu " });
   assert.deepEqual(input, {

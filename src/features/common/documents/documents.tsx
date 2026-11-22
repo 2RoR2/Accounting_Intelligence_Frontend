@@ -16,6 +16,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import {
   getDocuments,
   getDocument,
+  getSuggestedFixes,
   uploadDocument,
 } from "@/lib/api/document.service";
 import { getProcessingJob } from "@/lib/api/processing.service";
@@ -35,7 +36,24 @@ import {
 import { documentKindLabel, statusLabel } from "@/lib/glossary";
 import { DOCUMENT_LANES, isDocumentLane } from "@/lib/today";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
-import { cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
+import { bulkSubmitReviews, cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
+import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
+import { bulkResultSummary, hasContentRevision } from "@/features/common/bulk-selection";
+
+function NeedsFixing({ id, revision }: { id: string; revision?: number }) {
+  const { data, error, loading } = useResource(() => getSuggestedFixes(id), `${id}:${revision}`);
+  if (loading) return <small>Loading problems…</small>;
+  if (error) return <small className="notice danger">{error}</small>;
+  if (!data?.length) return <small>No open problems.</small>;
+  const suggestions = data.filter((fix) => fix.suggestedValue !== null).length;
+  return <div>
+    <span>{data[0].reason}{data.length > 1 && ` (+${data.length - 1} more)`}</span>
+    <br /><small>{suggestions} {suggestions === 1 ? "suggestion" : "suggestions"}</small>
+  </div>;
+}
+
+const reviewSelectionKey = (doc: { id: string; contentRevision?: number }) => `${doc.id}:${doc.contentRevision}`;
+
 export function DocumentList({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
@@ -49,13 +67,17 @@ export function DocumentList({ user }: { user: User }) {
   const [amount, setAmount] = useState("");
   const [business, setBusiness] = useState("");
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSummary, setSubmitSummary] = useState("");
+  const queryKey = JSON.stringify([user.id, search, status, date, amount, business, lane]);
   const { data, error, loading, refresh } = useResource(
-    () => getDocuments(user, { q: search, status, date, amount, business, lane }),
-    `${user.id}:${search}:${status}:${date}:${amount}:${business}:${lane}`,
+    async () => ({ queryKey, documents: await getDocuments(user, { q: search, status, date, amount, business, lane }) }),
+    queryKey,
   );
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (data?.some((document) => ["QUEUED", "PROCESSING"].includes(document.status))) refresh();
+      if (data?.documents.some((document) => ["QUEUED", "PROCESSING"].includes(document.status))) refresh();
     }, 5000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
@@ -73,12 +95,38 @@ export function DocumentList({ user }: { user: User }) {
       "supplier-credit-notes": { type: "CREDIT_NOTE", category: "ACCOUNTS_PAYABLE" },
       "supplier-debit-notes": { type: "DEBIT_NOTE", category: "ACCOUNTS_PAYABLE" },
     };
-    const sourceDocuments = data.filter((document) => !/\.json$/i.test(document.name));
+    const sourceDocuments = data.documents.filter((document) => !/\.json$/i.test(document.name));
     const filter = filterByTab[selectedTab];
     return filter
       ? sourceDocuments.filter((document) => document.type === filter.type && (!filter.category || document.category?.toUpperCase() === filter.category))
       : sourceDocuments;
   }, [data, selectedTab]);
+  const canBulkSubmit = lane === "ready" && user.role === "ACCOUNTANT";
+  const eligible = canBulkSubmit && data?.queryKey === queryKey
+    ? visibleDocuments.filter(hasContentRevision)
+    : [];
+  const selection = useBulkSelection(eligible.map(reviewSelectionKey), `${queryKey}:${selectedTab}`);
+
+  async function submitSelected() {
+    const docs = eligible.filter((doc) => selection.checked.has(reviewSelectionKey(doc)));
+    if (!docs.length || submitting || !canBulkSubmit) return;
+    setSubmitting(true);
+    setSubmitError("");
+    setSubmitSummary("");
+    try {
+      const { results } = await bulkSubmitReviews(docs.map((doc) => ({
+        documentId: doc.id, expectedContentRevision: doc.contentRevision,
+      })));
+      const names = new Map(docs.map((doc) => [doc.id, doc.code || doc.name]));
+      setSubmitSummary(bulkResultSummary("submitted", results, (item) => names.get(item.documentId) ?? item.documentId));
+      selection.clear();
+      await refresh();
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Unable to submit the selected documents.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
   const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Sales Credit Notes", "sales-credit-notes"], ["Sales Debit Notes", "sales-debit-notes"], ["Purchase Bills", "purchase-bills"], ["Supplier Credit Notes", "supplier-credit-notes"], ["Supplier Debit Notes", "supplier-debit-notes"], ["Receipts", "receipts"]];
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
@@ -117,6 +165,8 @@ export function DocumentList({ user }: { user: User }) {
         }
       />
       <Panel>
+        {canBulkSubmit && submitSummary && <p className="notice" role="status">{submitSummary}</p>}
+        {canBulkSubmit && submitError && <p className="notice danger" role="alert">{submitError}</p>}
         {lane && (
           <p className="today-filter-note" role="status">
             Showing: <strong>{DOCUMENT_LANES[lane]}</strong> ({visibleDocuments.length}). <Link href={`${base}/documents`}>Show all documents</Link>
@@ -157,10 +207,30 @@ export function DocumentList({ user }: { user: User }) {
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
+        {canBulkSubmit && <BulkControls selection={selection} eligibleCount={eligible.length} busy={submitting}>
+          <button className="btn primary" type="button" disabled={submitting || !selection.ids.length}
+            onClick={() => void submitSelected()}>Submit selected for approval</button>
+        </BulkControls>}
         <DataTable
           rows={visibleDocuments}
           rowKey={(d) => d.id}
           columns={[
+            ...(canBulkSubmit ? [{
+              label: "Select",
+              render: (doc: (typeof visibleDocuments)[number]) => {
+                const key = reviewSelectionKey(doc);
+                const checked = selection.checked.has(key);
+                const hasRevision = hasContentRevision(doc);
+                const hint = hasRevision ? undefined : "Revision unavailable. Open the document to submit it.";
+                return <>
+                  <input type="checkbox" aria-label={`Select ${doc.code || doc.name}`} checked={checked}
+                    aria-describedby={hint ? `revision-hint-${doc.id}` : undefined}
+                    disabled={submitting || data.queryKey !== queryKey || !hasRevision || (selection.atLimit && !checked)}
+                    onChange={() => selection.toggle(key)} />
+                  {hint && <small id={`revision-hint-${doc.id}`}>{hint}</small>}
+                </>;
+              },
+            }] : []),
             {
               label: "Document",
               render: (d) => (
@@ -173,7 +243,7 @@ export function DocumentList({ user }: { user: User }) {
                   </span>
                   <span>
                     <strong>{d.name}</strong>
-                    <small>{d.id}</small>
+                    <small>{d.code || d.id}</small>
                   </span>
                 </Link>
               ),
@@ -181,6 +251,11 @@ export function DocumentList({ user }: { user: User }) {
             { label: "Type", render: (d) => documentKindLabel(d.type) },
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
             { label: "Status", render: (d) => <StatusBadge status={d.status} /> },
+            ...(lane === "needs-fixing" && data.queryKey === queryKey ? [{
+              label: "Needs fixing",
+              render: (doc: (typeof visibleDocuments)[number]) =>
+                <NeedsFixing key={`${doc.id}:${doc.contentRevision}`} id={doc.id} revision={doc.contentRevision} />,
+            }] : []),
             {
               label: "Action",
               render: (d) => (

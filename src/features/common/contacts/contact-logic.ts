@@ -64,6 +64,7 @@ export type ContactForm = {
   postcode: string;
   state: string;
   remarks: string;
+  defaultExpenseAccountId?: string;
 };
 
 /** Keys of `fields` that the form edits; every other key is carried over untouched. */
@@ -92,6 +93,7 @@ export function contactToForm(contact: Contact): ContactForm {
     postcode: text(contact.postcode),
     state: text(contact.state),
     remarks: text(fields.remarks),
+    ...(contact.kind === "supplier" && { defaultExpenseAccountId: contact.defaultExpenseAccountId ?? "" }),
   };
 }
 
@@ -119,6 +121,9 @@ export function buildContactInput(form: ContactForm, existingFields: Record<stri
     city: orNull(form.city),
     postcode: orNull(form.postcode),
     state: orNull(form.state),
+    ...(form.kind === "supplier" && form.defaultExpenseAccountId !== undefined && {
+      defaultExpenseAccountId: orNull(form.defaultExpenseAccountId),
+    }),
     fields,
   };
 }

@@ -116,5 +116,9 @@ export async function download(path: string, filename: string) {
 }
 
 export const get = <T>(path: string) => api<T>(path);
+export const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
 export const post = <T>(path: string, body?: unknown) =>
-  api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+  api<T>(path, json("POST", body));

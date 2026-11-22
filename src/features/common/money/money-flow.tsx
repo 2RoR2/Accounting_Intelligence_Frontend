@@ -1,12 +1,12 @@
 "use client";
-import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
-
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
+import { BankLineActions, BankLineDocumentLink, bankLineMoney } from "./bank-line-actions";
+import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, initialBankCandidateId, isUnallocated } from "./allocation-logic";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -67,13 +67,6 @@ function addDecimalValues(values: Array<string | null | undefined>): string {
   return `${negative ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
 }
 
-const MATCH_LABEL: Record<MatchStatus, string> = {
-  unmatched: "Unmatched",
-  proposed: "Proposed",
-  matched: "Matched",
-  ignored: "Ignored",
-};
-
 export function MoneyFlowPage({
   user,
   direction,
@@ -81,12 +74,15 @@ export function MoneyFlowPage({
   user: User;
   direction: MoneyDirection;
 }) {
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+  const canManageBankLine = user.role === "LOCAL_ADMIN" || user.role === "ACCOUNTANT";
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MatchStatus | "">("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const selectedCandidate = detail?.candidates?.find((candidate) => candidate.id === selectedCandidateId);
   const [decisionReason, setDecisionReason] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -130,8 +126,13 @@ export function MoneyFlowPage({
   );
 
   const reload = () => setRefreshKey((k) => k + 1);
+  const updateDetail = (updated: BankMoneyTransactionDetail) => {
+    setDetail(updated);
+    setSelectedCandidateId(initialBankCandidateId(updated));
+    reload();
+  };
 
-  const openDetail = async (id: string) => {
+  const openDetail = useCallback(async (id: string) => {
     setActionError("");
     setDecisionReason("");
     setDetailLoading(true);
@@ -140,7 +141,7 @@ export function MoneyFlowPage({
       setDetail(d ?? null);
       setSelectedAccountId(d?.accountId ?? "");
       setSelectedCostCentreId(d?.costCentreId ?? "");
-      setSelectedCandidateId(d?.candidateId ?? d?.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
+      setSelectedCandidateId(initialBankCandidateId(d));
       setMatchSearch(""); setMatchResults([]);
       if (!codingAccounts.length) {
         const [accounts, centres] = await Promise.all([getCodingAccounts(), getCodingCostCentres()]);
@@ -152,7 +153,7 @@ export function MoneyFlowPage({
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [codingAccounts.length, user]);
 
   useEffect(() => {
     const transactionId = searchParams.get("transaction");
@@ -161,7 +162,7 @@ export function MoneyFlowPage({
       autoOpenedTransaction.current = transactionId;
       void openDetail(transactionId);
     }
-  }, [rows, searchParams]);
+  }, [openDetail, rows, searchParams]);
 
   const onCode = async () => {
     if (!detail || !selectedAccountId) return;
@@ -207,14 +208,21 @@ export function MoneyFlowPage({
   const onSelectManualMatch = async (recordId: string) => {
     if (!detail) return;
     setBusy(true); setActionError("");
-    try { await createManualMatchCandidate(detail.id, recordId); const updated = await getMoneyTransactionDetail(user, detail.id); setDetail(updated ?? detail); setSelectedCandidateId(updated?.candidateId ?? ""); setNotice("Approved record selected. Confirm the match to save it."); reload(); }
+    try {
+      const created = await createManualMatchCandidate(detail.id, recordId);
+      const updated = await getMoneyTransactionDetail(user, detail.id);
+      if (!updated) throw new Error("Unable to reload the selected record.");
+      updateDetail(updated);
+      if (updated.candidates?.some((candidate) => candidate.id === created.id)) setSelectedCandidateId(created.id);
+      setNotice("Approved record selected. Confirm the match to save it.");
+    }
     catch (error) { setActionError(error instanceof Error ? error.message : "Unable to select the approved record."); }
     finally { setBusy(false); }
   };
 
   const onDecide = async (decision: "confirm" | "reject") => {
-    const candidate = detail?.candidates?.find((item) => item.id === selectedCandidateId);
-    if (!detail || detail.status !== "proposed" || !candidate || candidate.status !== "proposed" || !selectedCandidateId) return;
+    if (busy || !detail || !selectedCandidate || !canReviewBankCandidate(detail, selectedCandidate)) return;
+    if (decision === "confirm" && !isUnallocated(detail)) return;
     if (decision === "reject" && !decisionReason.trim()) {
       setActionError("Enter a reason before rejecting a proposed match.");
       return;
@@ -222,18 +230,17 @@ export function MoneyFlowPage({
     setBusy(true);
     setActionError("");
     try {
-      await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
+      await decideMatch(user, selectedCandidate.id, decision, selectedCandidate.revision, decisionReason);
       const updated = await getMoneyTransactionDetail(user, detail.id).catch(() => undefined);
       setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
       if (updated) {
-        setDetail(updated);
-        setSelectedCandidateId(updated.candidateId ?? "");
+        updateDetail(updated);
       } else {
         // The decision is saved; keep the dialog open so the next step (posting the payment) is not lost.
         setActionError("The decision was saved, but these details could not be refreshed. Close and reopen the transaction to continue.");
+        reload();
       }
-      reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The reconciliation decision was not saved.");
     } finally {
@@ -304,6 +311,7 @@ export function MoneyFlowPage({
       r.reference ?? "",
       r.relatedRecordCode ?? "",
       r.relatedDocumentCode ?? "",
+      r.recordedDocumentNumber ?? "",
       r.bankAccountRef ?? "",
       r.postedDate,
       String(r.amount),
@@ -311,17 +319,18 @@ export function MoneyFlowPage({
       .join(" ")
       .toLowerCase();
     if (q && !searchable.includes(q)) return false;
-    if (statusFilter && r.matchStatus !== statusFilter) return false;
+    if (statusFilter && bankMatchStatus(r) !== statusFilter) return false;
     if (month && !r.postedDate.startsWith(month)) return false;
     return true;
   });
-  const matched = filtered.filter((r) => r.matchStatus === "matched").length;
+  const matched = filtered.filter((r) => bankMatchStatus(r) === "matched").length;
   const pageTotals = Array.from(new Set(filtered.map((row) => row.currency ?? ""))).map((currency) => ({
     currency: currency || "MYR",
     amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
   }));
 
-  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+  const canMatchSingle = !!detail && canManageBankLine && !detail.recordedDocumentId && isUnallocated(detail) &&
+    detail.status !== "matched" && detail.status !== "ignored";
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
@@ -353,7 +362,7 @@ export function MoneyFlowPage({
         </div>
       )}
 
-      {actionError && <p role="alert" className="error-text">{actionError}</p>}
+      {actionError && !detail && !importFile && <p role="alert" className="notice danger">{actionError}</p>}
 
       <Panel className={`cash-summary-panel cash-summary-${direction}`}>
         <div className="cash-summary-inner">
@@ -445,7 +454,7 @@ export function MoneyFlowPage({
                 aria-expanded={statusOpen}
                 style={{ minWidth: 150, justifyContent: "space-between" }}
               >
-                {statusFilter ? MATCH_LABEL[statusFilter as MatchStatus] : "All statuses"}
+                {statusFilter ? BANK_MATCH_LABELS[statusFilter] : "All statuses"}
               </button>
               {statusOpen && (
                 <div
@@ -463,13 +472,7 @@ export function MoneyFlowPage({
                     padding: 4,
                   }}
                 >
-                  {[
-                    ["", "All statuses"],
-                    ["matched", "Matched"],
-                    ["proposed", "Proposed"],
-                    ["unmatched", "Unmatched"],
-                    ["ignored", "Ignored"],
-                  ].map(([value, label]) => (
+                  {(["", "matched", "partially_matched", "proposed", "unmatched", "ignored"] as const).map((value) => (
                     <button
                       key={value || "all"}
                       type="button"
@@ -491,7 +494,7 @@ export function MoneyFlowPage({
                         cursor: "pointer",
                       }}
                     >
-                      {label}
+                      {value ? BANK_MATCH_LABELS[value] : "All statuses"}
                     </button>
                   ))}
                 </div>
@@ -533,7 +536,10 @@ export function MoneyFlowPage({
             },
             {
               label: "Verification",
-              render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
+              render: (r) => <>
+                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(r)]}</Badge>
+                {r.paymentPosted && <> <Badge>Payment posted</Badge></>}
+              </>,
             },
             {
               label: "Anomaly",
@@ -551,9 +557,7 @@ export function MoneyFlowPage({
             },
             {
               label: "Original document",
-              render: (r) => r.relatedDocumentId
-                ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
-                : "—",
+              render: (r) => <BankLineDocumentLink line={r} base={base} />,
             },
             {
               label: "Action",
@@ -614,13 +618,13 @@ export function MoneyFlowPage({
                 <button className="btn primary" type="button" disabled={busy || !importPreview.canConfirm} onClick={() => void finishImport(true)}>{busy ? "Saving…" : "Confirm import"}</button>
               </div>
             </>}
-            {actionError && <p role="alert" className="error-text" style={{ marginTop: 12 }}>{actionError}</p>}
+            {actionError && <p role="alert" className="notice danger" style={{ marginTop: 12 }}>{actionError}</p>}
           </div>
         </Modal>
       )}
 
       {detail && (
-        <Modal title={detail.description} onClose={() => setDetail(null)}>
+        <Modal key={detail.id} title={detail.description} onClose={() => setDetail(null)} closeDisabled={busy}>
           <div
             className="panel-body"
             style={{ maxHeight: "70vh", overflowY: "auto", paddingBottom: 24 }}
@@ -640,7 +644,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Amount</span>
-                <strong>{money(detail.amount, detail.currency)}</strong>
+                <strong>{detail.amount ? bankLineMoney(detail.amount, detail.currency) : "Not provided"}</strong>
               </div>
               <div>
                 <span>Reference</span>
@@ -652,21 +656,23 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Verification</span>
-                <Badge>{MATCH_LABEL[detail.matchStatus] ?? detail.matchStatus}</Badge>
+                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(detail)]}</Badge>
               </div>
               <div>
                 <span>Related record</span>
                 <strong>{detail.relatedRecordCode || "Not matched yet"}</strong>
               </div>
               <div>
-                <span>Related document</span>
-                <strong>{detail.relatedDocumentCode || "—"}</strong>
+                <span>Original document</span>
+                <strong><BankLineDocumentLink line={detail} base={base} /></strong>
               </div>
             </div>
 
             {detail.anomaly && (
               <BankAnomalyChart anomaly={detail.anomaly} direction={detail.direction} />
             )}
+
+            <BankLineActions user={user} line={detail} busy={busy} onBusyChange={setBusy} onLineLoaded={updateDetail} />
 
             <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Code transaction</h3><span>{detail.codingDecision ? "Coding confirmed" : "Ledger posting remains separate"}</span></div>
@@ -691,41 +697,38 @@ export function MoneyFlowPage({
             {(detail.candidates?.length ?? 0) > 0 && <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontWeight: 600 }}>Reconciliation candidate
                 <select value={selectedCandidateId} onChange={(event) => setSelectedCandidateId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
-                  {detail.candidates?.map((candidate) => <option key={candidate.id} value={candidate.id} disabled={candidate.status !== "proposed" || detail.status !== "proposed"}>
+                  {detail.candidates?.map((candidate) => <option key={candidate.id} value={candidate.id}>
                     {candidate.recordCode} — {candidate.category.replace(/_/g, " ")} — {candidate.currency ?? "Unknown currency"} {candidate.amount ?? "amount unavailable"} ({candidate.status})
                   </option>)}
                 </select>
               </label>
-              {(() => {
-                const candidate = detail.candidates?.find((item) => item.id === selectedCandidateId);
-                return candidate ? <div className="detail-list" style={{ marginTop: 10 }}>
-                  <div><span>Record reference</span><strong>{candidate.reference ?? "—"}</strong></div>
-                  <div><span>Party</span><strong>{candidate.party ?? "—"}</strong></div>
-                  <div><span>Candidate amount</span><strong>{money(candidate.amount, candidate.currency)}</strong></div>
-                  <div><span>Amount difference</span><strong>{money(candidate.amountDelta, candidate.currency)}</strong></div>
-                  <div><span>Match evidence</span><strong>{candidate.reasons.join(", ") || "No reason supplied"}</strong></div>
-                  {candidate.dateDeltaDays !== null && <div><span>Date difference</span><strong>{candidate.dateDeltaDays} days</strong></div>}
-                </div> : <p>No proposed candidate is available. This row needs manual review.</p>;
-              })()}
+              {selectedCandidate && <div className="detail-list" style={{ marginTop: 10 }}>
+                <div><span>Record reference</span><strong>{selectedCandidate.reference ?? "—"}</strong></div>
+                <div><span>Party</span><strong>{selectedCandidate.party ?? "—"}</strong></div>
+                <div><span>Candidate amount</span><strong>{money(selectedCandidate.amount, selectedCandidate.currency)}</strong></div>
+                <div><span>Amount difference</span><strong>{money(selectedCandidate.amountDelta, selectedCandidate.currency)}</strong></div>
+                <div><span>Match evidence</span><strong>{selectedCandidate.reasons.join(", ") || "No reason supplied"}</strong></div>
+                {selectedCandidate.dateDeltaDays !== null && <div><span>Date difference</span><strong>{selectedCandidate.dateDeltaDays} days</strong></div>}
+              </div>}
             </div>}
 
-            <section className="transaction-review-section">
+            {canMatchSingle && <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Match existing</h3><span>Approved records only</span></div>
               <p style={{ marginTop: 0, color: "var(--muted)" }}>Search approved standardised records by invoice/reference or counterparty. Remaining amount is shown when prior allocations exist.</p>
-              <div className="transaction-match-search"><input value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
+              <div className="transaction-match-search"><input aria-label="Search for a single approved record" value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
               {matchResults.map((record) => <div key={record.recordId} className="detail-list" style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 8 }}><div><span>Record</span><strong>{record.recordCode}</strong></div><div><span>Party</span><strong>{record.party || "—"}</strong></div><div><span>Total / remaining</span><strong>{record.currency || ""} {record.totalAmount || "—"} / {record.remainingAmount}</strong></div><button className="btn small" type="button" disabled={busy || Number(record.remainingAmount) <= 0} onClick={() => void onSelectManualMatch(record.recordId)}>Select record</button></div>)}
-            </section>
+            </section>}
 
             <label style={{ display: "block", marginTop: 14 }}>Decision note{selectedCandidateId ? " (required when rejecting)" : ""}
               <textarea value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} maxLength={2000} rows={3} style={{ display: "block", width: "100%", marginTop: 4 }} placeholder="Explain the review decision" />
             </label>
-            {actionError && <p role="alert" className="error-text">{actionError}</p>}
+            {actionError && <p role="alert" className="notice danger">{actionError}</p>}
 
             <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 className="btn primary"
                 type="button"
-                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
+                disabled={busy || !canMatchSingle || !canReviewBankCandidate(detail, selectedCandidate)}
                 onClick={() => void onDecide("confirm")}
               >
                 Confirm match
@@ -733,7 +736,7 @@ export function MoneyFlowPage({
               <button
                 className="btn"
                 type="button"
-                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed" || !decisionReason.trim()}
+                disabled={busy || !canReviewBankCandidate(detail, selectedCandidate) || !decisionReason.trim()}
                 onClick={() => void onDecide("reject")}
               >
                 Reject
@@ -748,9 +751,6 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
-            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" && (
-              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
-            )}
           </div>
         </Modal>
       )}
