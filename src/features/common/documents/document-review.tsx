@@ -439,7 +439,6 @@ function DocumentReviewPage({
   // Revalidating resets status to extracted/exception, which would silently undo a submission or approval.
   const canRevalidate = !["IN_REVIEW", "VALIDATED"].includes(data.doc.status);
   const blockingFindings = summary.blocking;
-  const validationStatus = data.validationReport?.validationStatus;
   const viewIssues = () => {
     setPanel("validation");
     window.setTimeout(() => validationHeadingRef.current?.focus(), 0);
