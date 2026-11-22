@@ -19,9 +19,14 @@ function bankLine(id: string, bankAccountRef: string | null, postedDate: string)
     direction: "money_in",
     description: "Statement line",
     amount: "10.00",
+    allocatedAmount: "0.00",
+    remainingAmount: "10.00",
     currency: "MYR",
     status: "imported",
     matchStatus: "unmatched",
+    recordedDocumentId: null,
+    recordedDocumentNumber: null,
+    recordedDocumentType: null,
     createdAt: null,
   };
 }

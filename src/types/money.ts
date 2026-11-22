@@ -1,3 +1,5 @@
+import type { BANK_TYPES } from "@/lib/api/erp.service";
+
 export type MoneyDirection = "money_in" | "money_out";
 
 /** Status of a bank statement row (matches backend bank_transactions.status). */
@@ -5,6 +7,7 @@ export type BankTransactionStatus =
   | "imported"
   | "needs_review"
   | "proposed"
+  | "partially_matched"
   | "matched"
   | "ignored";
 
@@ -28,7 +31,7 @@ export interface BankReconciliationCandidate {
 }
 
 /** Simplified match state for the Money In / Money Out UI. */
-export type MatchStatus = "unmatched" | "proposed" | "matched" | "ignored";
+export type MatchStatus = "unmatched" | "proposed" | "partially_matched" | "matched" | "ignored";
 
 export type BankTransactionAnomalyStatus = "anomaly" | "normal" | "insufficient_baseline";
 
@@ -60,6 +63,8 @@ export interface BankMoneyTransaction {
   description: string;
   reference?: string | null;
   amount: string | null;
+  allocatedAmount: string;
+  remainingAmount: string;
   currency: string | null;
   status: BankTransactionStatus;
   matchStatus: MatchStatus;
@@ -68,6 +73,9 @@ export interface BankMoneyTransaction {
   relatedRecordCode?: string | null;
   relatedDocumentId?: string | null;
   relatedDocumentCode?: string | null;
+  recordedDocumentId: string | null;
+  recordedDocumentNumber: string | null;
+  recordedDocumentType: (typeof BANK_TYPES)[number] | null;
   amountDelta?: string | null;
   createdAt: string | null;
   candidateId?: string | null;

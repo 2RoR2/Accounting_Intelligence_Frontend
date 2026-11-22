@@ -63,7 +63,7 @@ import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
 import { useReviewQueue } from "./review/use-review-queue";
-import { SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
+import { LINE_ITEM_FIELDS, SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -340,6 +340,7 @@ function DocumentReviewPage({
   const [comment, setComment] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
   const [selectedLine, setSelectedLine] = useState<{ index: number; key: string; label: string }>();
+  const [lineItemsOpen, setLineItemsOpen] = useState<boolean>();
   const validationHeadingRef = useRef<HTMLDivElement>(null);
 
   async function run(op: () => Promise<unknown>, message: string, propagate = false) {
@@ -433,11 +434,12 @@ function DocumentReviewPage({
   const visibleKeys = visible.map(entry => entry.key);
   const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
   const toCheckCount = order.filter(entry => isToCheck(entry.signal)).length;
-  const fieldForCheck = (name: string) => Object.hasOwn(extraction.fields, name)
+  const fieldForCheck = (name: string) => Object.hasOwn(extraction.fields, name) || resolveLineItemField(name, extraction.lineItems)
     ? name : Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
   const focusField = (key: string) => {
     setPanel("review");
-    if (!visibleKeys.includes(key)) setOnlyToCheck(false);
+    if (resolveLineItemField(key, extraction.lineItems)) setLineItemsOpen(true);
+    else if (!visibleKeys.includes(key)) setOnlyToCheck(false);
     setFocusRequest(key);
   };
   /** Tab / Shift+Tab move between the fields on screen; Enter saves a change, accepts a suggestion, or confirms and moves on. */
@@ -711,17 +713,22 @@ function DocumentReviewPage({
                         { label: "Amount", render: (r) => money(r.amount, extraction.fields.currency?.value) },
                       ]}
                     />
-                    <details open={kind === "UNKNOWN" || undefined}><summary>{kind === "UNKNOWN" ? "Provisional line candidates" : "Correct line items"}</summary>
+                    <details open={lineItemsOpen ?? kind === "UNKNOWN"} onToggle={(event) => setLineItemsOpen(event.currentTarget.open)}>
+                      <summary>{kind === "UNKNOWN" ? "Provisional line candidates" : "Correct line items"}</summary>
                       <p>{kind === "UNKNOWN" ? "Source candidates are retained for inspection. No line value has been selected while the document type is unresolved." : "Save only values supported by the original document. Missing cells stay empty until confirmed."}</p>
                       {extraction.lineItems.map((line, index) => <div className="shoebox-fields" key={line.id ?? index}>
-                        {([['description', 'description', 'Description'], ['quantity', 'quantity', 'Quantity'], ['unit_price', 'unitPrice', 'Unit price'], ['amount', 'amount', 'Amount']] as const).map(([key, property, label]) => {
+                        {LINE_ITEM_FIELDS.map(([key, property, label]) => {
+                          const path = `line_items.${index}.${key}`;
                           const originalRows = extraction.raw?.line_items as Array<Record<string, {value?: string | null}>> | undefined;
                           const original = originalRows?.[index]?.[key]?.value ?? null;
                           const correction = extraction.lineCorrections?.find(item => item.line_item_id === line.id && item.field_key === key);
                           const guidance = line.guidance?.[key];
                           return <FormField key={key} readonly={readonly || !line.id} locked={busy}
                             selected={selectedLine?.index === index && selectedLine.key === key}
-                            onFocus={() => { setHighlightedField(undefined); setSelectedLine({ index, key, label: `Line ${index + 1} ${label}` }); }}
+                            appliedSuggestion={appliedSuggestion?.field === path ? appliedSuggestion.value : undefined}
+                            onSuggestionFilled={clearAppliedSuggestion}
+                            inputRef={element => { if (element) inputs.current.set(path, element); else inputs.current.delete(path); }}
+                            onFocus={() => { setAssistSource(undefined); setHighlightedField(undefined); setSelectedLine({ index, key, label: `Line ${index + 1} ${label}` }); }}
                             field={{label: `Line ${index + 1} ${label}`, value: line[property] == null ? null : String(line[property]),
                               original, rawValue: line.evidence?.[key]?.map(e => e.text).filter(Boolean).join(" | ") || null,
                               confidence: null, state: line.fieldStates?.[key], evidence: line.evidence?.[key],
@@ -818,7 +825,8 @@ function DocumentReviewPage({
                   </div> },
                   // Task B4b: jump from a failed check to the field it concerns, on the Review tab with its source highlighted.
                   { label: "Fix", render: (v) => { const key = v.result === "FAIL" && v.field ? fieldForCheck(v.field) : undefined;
-                    return key ? <button type="button" className="btn small" onClick={() => focusField(key)} aria-label={`Fix ${fieldLabel(kind, key, extraction.fields[key]?.label)}`}>Fix</button> : null; } },
+                    const label = key && (resolveLineItemField(key, extraction.lineItems)?.label ?? fieldLabel(kind, key, extraction.fields[key]?.label));
+                    return key ? <button type="button" className="btn small" onClick={() => focusField(key)} aria-label={`Fix ${label}`}>Fix</button> : null; } },
                 ]}
               />
               <div className="panel-body actions validation-actions">

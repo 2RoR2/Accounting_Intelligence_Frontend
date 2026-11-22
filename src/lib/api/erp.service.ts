@@ -167,7 +167,7 @@ export const transferDocument = (type: DocumentType, id: string, targetType: Doc
 export const documentHistory = (type: DocumentType, id: string) =>
   get<DocumentHistory>(`/api/erp/documents/${seg(type)}/${seg(id)}/history`);
 /** L5: post an approved scanned invoice/bill/credit note through the same rule (posts once on either path). */
-export const postScannedRecord = (recordId: string, input: { accountId?: string; journalDate?: string } = {}) =>
+export const postScannedRecord = (recordId: string, input: { accountId?: string; journalDate?: string; expectedPlanHash?: string } = {}) =>
   api<{ id: string; status: string; idempotent: boolean; recordId: string }>(`/api/erp/scanned/${seg(recordId)}/post`, json("POST", input));
 export type JournalPreview = {
   recordId: string;
@@ -177,6 +177,8 @@ export type JournalPreview = {
   totalCredit: string;
   balanced: boolean;
   alreadyPosted: boolean;
+  planHash: string;
+  previouslyReversed: boolean;
   problem?: string;
 };
 export const getScannedPostPreview = (recordId: string) =>

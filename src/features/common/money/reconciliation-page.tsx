@@ -11,6 +11,7 @@ import {
   decideMatch,
   discardBankImportPreview,
   inspectBankStatement,
+  getMoneyTransactionDetail,
   getMoneyTransactions,
   previewBankImport,
   getReconciliationPeriods,
@@ -18,8 +19,10 @@ import {
   completeReconciliationPeriod,
   type BankImportPreview,
 } from "@/lib/api/money.service";
-import type { BankReconciliationCandidate, BankMoneyTransaction, User } from "@/types";
+import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } from "@/types";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
+import { BankLineActions, BankLineDocumentLink } from "./bank-line-actions";
+import { BANK_MATCH_LABELS, bankMatchStatus, isUnallocated } from "./allocation-logic";
 
 type ImportColumn = "posted_date" | "value_date" | "description" | "reference" | "debit" | "credit" | "currency";
 const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolean }> = [
@@ -138,11 +141,13 @@ export function ReconciliationPage({ user }: { user: User }) {
   const [transactionView, setTransactionView] = useState<"all" | "money_in" | "money_out">("all");
   const [accountFilter, setAccountFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState("");
-  const [selectedRow, setSelectedRow] = useState<BankMoneyTransaction | null>(null);
-  const [reviewRow, setReviewRow] = useState<BankMoneyTransaction | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [reviewRow, setReviewRow] = useState<BankMoneyTransactionDetail | null>(null);
+  const [openingReview, setOpeningReview] = useState(false);
   // Show every confirmed bank row. Rows without an exact candidate still need
   // to be visible so the user can see what was imported and review it.
   const rows = useMemo(() => (data ?? []).flat(), [data]);
+  const selectedRow = rows.find((row) => row.id === selectedRowId);
   // Opened from Today's "Bank lines to match" tile (?status=unmatched): rows not yet matched or ignored.
   const unmatchedOnly = searchParams.get("status") === "unmatched";
   const visibleRows = useMemo(() => rows.filter((row) => {
@@ -247,14 +252,28 @@ export function ReconciliationPage({ user }: { user: User }) {
     }
   }
 
-  async function decide(row: BankMoneyTransaction, candidate: BankReconciliationCandidate, decision: "confirm" | "reject") {
+  async function openReview(id: string) {
+    setOpeningReview(true);
+    setActionError("");
+    try {
+      const line = await getMoneyTransactionDetail(user, id);
+      if (!line) throw new Error("The bank line could not be found.");
+      setReviewRow(line);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Unable to load the bank line.");
+    } finally {
+      setOpeningReview(false);
+    }
+  }
+
+  async function decide(candidate: BankReconciliationCandidate, decision: "confirm" | "reject") {
     setBusyId(candidate.id); setNotice(""); setActionError("");
     try {
       await decideMatch(user, candidate.id, decision, candidate.revision, decision === "reject" ? "Rejected during reconciliation review" : undefined);
       setNotice(decision === "confirm" ? "Match confirmed." : "Candidate rejected.");
       await refresh();
       setReviewRow(null);
-      setSelectedRow(null);
+      setSelectedRowId(null);
     } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to save reconciliation decision."); }
     finally { setBusyId(null); }
   }
@@ -306,7 +325,27 @@ export function ReconciliationPage({ user }: { user: User }) {
     {activeTab === "transactions" && <Panel title="Transactions" subtitle="Imported from bank statements. Review and reconcile each transaction.">
       {unmatchedOnly && <p className="today-filter-note" role="status">Showing: <strong>bank lines not matched or classified yet</strong>. <Link href={`${base}/reconciliation`}>Show all bank lines</Link></p>}
       <div className="bank-transaction-toolbar"><SearchInput value={transactionSearch} onChange={setTransactionSearch} placeholder="Search transactions" /><div className="bank-transaction-filters">{([['all','All'],['money_in','Money In'],['money_out','Money Out']] as const).map(([value,label]) => <button key={value} className={transactionView === value ? "active" : ""} onClick={() => setTransactionView(value)}>{label}</button>)}</div><span className="bank-transaction-count">{visibleRows.length} transactions</span></div>
-      <div className="bank-transaction-workspace"><div className="bank-transaction-list">{visibleRows.map((row) => <button className={`bank-transaction-row ${selectedRow?.id === row.id ? "selected" : ""}`} key={row.id} onClick={() => setSelectedRow(row)}><span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong><b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b><Badge>{row.status === "needs_review" ? "NEEDS REVIEW" : row.status === "matched" ? "MATCHED" : "UNRECONCILED"}</Badge></button>)}</div><aside className="bank-transaction-detail">{selectedRow ? <><div className="bank-detail-heading"><h3>{selectedRow.description || "Bank transaction"}</h3><Badge>{selectedRow.direction === "money_in" ? "MONEY IN" : "MONEY OUT"}</Badge></div><p>{selectedRow.postedDate} · {selectedRow.reference || "No reference"}</p><div className="bank-detail-amount"><span>Amount</span><strong>{money(selectedRow.amount, selectedRow.currency)}</strong></div><div className="bank-detail-actions"><button className="btn primary" onClick={() => setReviewRow(selectedRow)}>Open review</button><span>{selectedRow.status === "matched" ? "Matched" : "Awaiting transaction decision"}</span></div></> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside></div>
+      <div className="bank-transaction-workspace">
+        <div className="bank-transaction-list">
+          {visibleRows.map((row) => <button className={`bank-transaction-row ${selectedRowId === row.id ? "selected" : ""}`}
+            key={row.id} disabled={openingReview} onClick={() => setSelectedRowId(row.id)}>
+            <span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong>
+            <b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b>
+            <Badge>{row.status === "needs_review" ? "Needs review" : BANK_MATCH_LABELS[bankMatchStatus(row)]}</Badge>
+          </button>)}
+        </div>
+        <aside className="bank-transaction-detail">{selectedRow ? <>
+          <div className="bank-detail-heading"><h3>{selectedRow.description || "Bank transaction"}</h3><Badge>{selectedRow.direction === "money_in" ? "MONEY IN" : "MONEY OUT"}</Badge></div>
+          <p>{selectedRow.postedDate} · {selectedRow.reference || "No reference"}</p>
+          <div className="bank-detail-amount"><span>Amount</span><strong>{money(selectedRow.amount, selectedRow.currency)}</strong></div>
+          <div className="bank-detail-actions">
+            <button className="btn primary" type="button" disabled={openingReview} onClick={() => void openReview(selectedRow.id)}>
+              {openingReview ? "Opening review…" : "Open review"}
+            </button>
+            <span>{BANK_MATCH_LABELS[bankMatchStatus(selectedRow)]}</span>
+          </div>
+        </> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside>
+      </div>
     </Panel>}
     {false && <>
     <div className="reconciliation-stats">
@@ -335,8 +374,8 @@ export function ReconciliationPage({ user }: { user: User }) {
             <div><span>Reason</span><strong>{candidate.reasons.join(", ") || "Suggested match"}</strong></div>
           </div>
           <div className="reconciliation-actions">
-            <button className="btn primary" disabled={busyId === candidate.id} onClick={() => void decide(row, candidate, "confirm")}>Confirm match</button>
-            <button className="btn" disabled={busyId === candidate.id} onClick={() => void decide(row, candidate, "reject")}>Reject</button>
+            <button className="btn primary" disabled={busyId === candidate.id} onClick={() => void decide(candidate, "confirm")}>Confirm match</button>
+            <button className="btn" disabled={busyId === candidate.id} onClick={() => void decide(candidate, "reject")}>Reject</button>
           </div>
         </div>);
         })}
@@ -345,7 +384,7 @@ export function ReconciliationPage({ user }: { user: User }) {
     </>}
 
     {reviewRow && (
-      <Modal title="Review reconciliation match" onClose={() => setReviewRow(null)}>
+      <Modal key={reviewRow.id} title="Review reconciliation match" onClose={() => setReviewRow(null)} closeDisabled={busy || !!busyId}>
         <div className="panel-body reconciliation-review-modal">
           <div className="reconciliation-review-summary">
             <div>
@@ -356,14 +395,14 @@ export function ReconciliationPage({ user }: { user: User }) {
             <div>
               <span>{reviewRow.direction === "money_in" ? "Money In" : "Money Out"}</span>
               <strong>{money(reviewRow.amount, reviewRow.currency)}</strong>
-              <small>{reviewRow.matchStatus === "matched" ? "Matched" : "Awaiting match decision"}</small>
+              <small>{BANK_MATCH_LABELS[bankMatchStatus(reviewRow)]}</small>
             </div>
           </div>
 
           {reviewCandidate ? <section className="reconciliation-match-record">
             <div className="transaction-review-section-heading">
               <h3>Suggested standardised record</h3>
-              <Badge>{reviewCandidate.status === "confirmed" ? "MATCHED" : "PROPOSED"}</Badge>
+              <Badge>{reviewCandidate.status === "confirmed" ? "MATCHED" : reviewCandidate.status.toUpperCase()}</Badge>
             </div>
             <div className="reconciliation-match-record-grid">
               <div><span>Record</span><strong>{reviewCandidate.recordCode}</strong></div>
@@ -379,13 +418,17 @@ export function ReconciliationPage({ user }: { user: User }) {
               {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
             </div>
           </section> : <section className="reconciliation-match-record">
-            <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3><Badge>UNMATCHED</Badge></div>
+            <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3></div>
             <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
           </section>}
 
-          {reviewCandidate && reviewCandidate.status === "proposed" && <div className="reconciliation-review-actions">
-            <button className="btn primary" type="button" disabled={busyId === reviewCandidate.id} onClick={() => void decide(reviewRow, reviewCandidate, "confirm")}>Confirm match</button>
-            <button className="btn" type="button" disabled={busyId === reviewCandidate.id} onClick={() => void decide(reviewRow, reviewCandidate, "reject")}>Reject match</button>
+          {reviewRow.recordedDocumentId && <p>Original document <BankLineDocumentLink line={reviewRow} base={base} /></p>}
+          <BankLineActions user={user} line={reviewRow} busy={busy || !!busyId} onBusyChange={setBusy}
+            onLineLoaded={(line) => { setReviewRow(line); void refresh(); }} />
+
+          {reviewRow.status === "proposed" && reviewCandidate?.status === "proposed" && <div className="reconciliation-review-actions">
+            <button className="btn primary" type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)} onClick={() => void decide(reviewCandidate, "confirm")}>Confirm match</button>
+            <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
           </div>}
         </div>
       </Modal>

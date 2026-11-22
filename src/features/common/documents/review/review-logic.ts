@@ -38,6 +38,22 @@ export function failedCheckNames(key: string, failedFields: Iterable<string>) {
   return fieldGroup(key, { evidenceStatus: "source_backed", correctedBy: null }, failedFields) === "attention";
 }
 
+export const LINE_ITEM_FIELDS = [
+  ["description", "description", "Description"],
+  ["quantity", "quantity", "Quantity"],
+  ["unit_price", "unitPrice", "Unit price"],
+  ["amount", "amount", "Amount"],
+] as const;
+
+export function resolveLineItemField(path: string, lines: readonly { id?: string | null }[]) {
+  const match = /^line_items\.(0|[1-9]\d*)\.([a-z_]+)$/.exec(path);
+  if (!match) return undefined;
+  const index = Number(match[1]);
+  const field = LINE_ITEM_FIELDS.find(([key]) => key === match[2]);
+  if (!field || !lines[index]?.id) return undefined;
+  return { index, key: field[0], label: `Line ${index + 1} ${field[2]}` };
+}
+
 /**
  * The signal shown for one field. A person's correction settles it; a failed check on the field always asks for a check,
  * whatever the reading said; otherwise the backend's `reviewSignal`, else the evidence status, else the extraction state.

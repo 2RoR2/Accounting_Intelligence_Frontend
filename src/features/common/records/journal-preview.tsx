@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DataTable, LoadingState, Modal, formatDate, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
+import { ApiError } from "@/lib/api/client";
 import { getScannedPostPreview, postScannedRecord } from "@/lib/api/erp.service";
 import { previewTotals } from "./posting-logic";
 
@@ -12,21 +13,39 @@ export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: 
   onClose: () => void;
   onPosted: () => void;
 }) {
-  const { data, error, loading, refresh } = useResource(() => getScannedPostPreview(recordId), recordId);
+  const { data, error, loading, refresh, setData } = useResource(() => getScannedPostPreview(recordId), recordId);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState("");
+  const [reloadState, setReloadState] = useState<"idle" | "loading" | "failed">("idle");
+  const [previewNotice, setPreviewNotice] = useState("");
   const totals = data ? previewTotals(data) : undefined;
-  const ready = !!data && !!totals?.balanced && !data.alreadyPosted && !data.problem;
+  const ready = !!data?.planHash && !!totals?.balanced && !data.alreadyPosted && !data.problem && reloadState === "idle";
+
+  async function reloadChangedPreview() {
+    setReloadState("loading");
+    setPreviewNotice("Reloading the journal preview…");
+    try {
+      const updated = await getScannedPostPreview(recordId);
+      if (!updated) throw new Error("No journal preview was returned.");
+      setData(updated);
+      setReloadState("idle");
+      setPreviewNotice("Journal preview refreshed. Review it before posting.");
+    } catch {
+      setReloadState("failed");
+      setPreviewNotice("Unable to refresh the journal preview. Reload it before posting.");
+    }
+  }
 
   async function post() {
-    if (!ready || !canPost || posting) return;
+    if (!data?.planHash || !ready || !canPost || posting) return;
     setPosting(true);
     setPostError("");
     try {
-      await postScannedRecord(recordId);
+      await postScannedRecord(recordId, { expectedPlanHash: data.planHash });
       onPosted();
     } catch (e) {
       setPostError(e instanceof Error ? e.message : "Unable to post this journal.");
+      if (e instanceof ApiError && e.status === 409) await reloadChangedPreview();
     } finally {
       setPosting(false);
     }
@@ -41,7 +60,9 @@ export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: 
           <p className="notice danger" role="alert">{error}</p>
           <button className="btn" type="button" onClick={() => void refresh()}>Retry preview</button>
         </>}
-        {data && totals && <>
+        {previewNotice && <p role="status">{previewNotice}</p>}
+        {reloadState === "failed" && <button className="btn" type="button" onClick={() => void reloadChangedPreview()}>Reload preview</button>}
+        {data && totals && reloadState === "idle" && <>
           <p>Journal date {formatDate(data.journalDate)}</p>
           {data.lines.length > 0 && <DataTable
             rows={data.lines.map((line, index) => ({ ...line, index }))}
@@ -59,6 +80,7 @@ export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: 
           </dl>
           <p className={totals.balanced ? "notice success" : "notice danger"}>{totals.balanced ? "Balanced" : "Not balanced"}</p>
           {data.alreadyPosted && <p>This journal is already posted.</p>}
+          {data.previouslyReversed && <p>Previously reversed - posting creates a new journal</p>}
           {data.problem && <p className="notice danger" role="alert">{data.problem}</p>}
         </>}
         {postError && <p className="notice danger" role="alert">{postError}</p>}

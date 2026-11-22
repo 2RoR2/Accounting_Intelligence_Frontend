@@ -26,7 +26,7 @@ function mapTransaction(row: BankTransactionResponse): BankMoneyTransactionDetai
     ...row,
     amount: row.amount,
     amountDelta: row.amountDelta,
-    currency: row.currency ?? "MYR",
+    currency: row.currency,
     createdAt: row.createdAt,
     candidates: row.candidates ?? [],
     candidateId: row.candidateId ?? null,
@@ -49,8 +49,7 @@ export async function getMoneyTransactionDetail(
   id: string,
 ): Promise<BankMoneyTransactionDetail | undefined> {
   const row = await get<BankTransactionResponse & { billPayableAccountId?: string | null }>(`/api/bank/transactions/${encodeURIComponent(id)}`);
-  const mapped = mapTransaction(row);
-  return mapped && { ...mapped, billPayableAccountId: row.billPayableAccountId ?? null };
+  return row ? { ...mapTransaction(row), billPayableAccountId: row.billPayableAccountId ?? null } : undefined;
 }
 
 export async function decideMatch(
@@ -77,11 +76,12 @@ export const recordBankExpense = (id: string, ledgerAccountId: string, descripti
   api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description }),
   );
-export const matchBankRecords = (id: string, allocations: Array<{ recordId: string; amount: string }>) =>
+export const matchBankRecords = (id: string, expectedAllocated: string, allocations: Array<{ recordId: string; amount: string }>) =>
   api<{ settlementId: string; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus }>(
-    `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { allocations }),
+    `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { expectedAllocated, allocations }),
   );
-export const createManualMatchCandidate = (bankTransactionId: string, recordId: string) => api(`/api/bank/reconciliation/candidates`, { method: "POST", body: JSON.stringify({ bankTransactionId, recordId, proposedBy: "accountant", reasonCodes: ["MANUAL_SELECTION"] }) });
+export const createManualMatchCandidate = (bankTransactionId: string, recordId: string) =>
+  api<{ id: string }>("/api/bank/reconciliation/candidates", json("POST", { bankTransactionId, recordId, proposedBy: "accountant", reasonCodes: ["MANUAL_SELECTION"] }));
 
 export interface BankImportPreview {
   importId: string;

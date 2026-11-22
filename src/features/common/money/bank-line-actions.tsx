@@ -1,27 +1,109 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Field, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { amountInCents, decimalAmount } from "@/features/common/erp/document-logic";
+import { amountInCents, decimalAmount, documentHref } from "@/features/common/erp/document-logic";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
-import { matchBankRecords, recordBankExpense, searchMatchRecords, type ManualMatchRecord } from "@/lib/api/money.service";
-import type { BankMoneyTransactionDetail } from "@/types/money";
-import { allocationCents, allocationTotals, defaultAllocation, MATCH_LIMIT } from "./allocation-logic";
+import { getMoneyTransactionDetail, recordBankExpense, searchMatchRecords, type ManualMatchRecord } from "@/lib/api/money.service";
+import type { User } from "@/types";
+import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
+import {
+  allocationCents, allocationTotals, canAllocateBankLine, canMatchRecord, defaultAllocation,
+  isUnallocated, MATCH_LIMIT, needsBankMatchRefresh, submitBankAllocations,
+} from "./allocation-logic";
 
-export type RecordedBankLine = Awaited<ReturnType<typeof recordBankExpense>>;
-export type MatchedBankLine = Awaited<ReturnType<typeof matchBankRecords>>;
+type RunBankAction = (action: () => Promise<string>, fallback: string, resetDraft?: () => void) => Promise<void>;
 
 export function bankLineMoney(value: string, currency?: string | null) {
   return !currency || currency === "MYR" ? money(value) : decimalDisplay(value, currency);
 }
 
-export function RecordBankLine({ line, busy, onBusyChange, onRecorded }: {
+export function BankLineDocumentLink({ line, base }: { line: BankMoneyTransaction; base: string }) {
+  if (line.recordedDocumentId && line.recordedDocumentType) {
+    return <Link href={documentHref(base, "bank-entries", line.recordedDocumentType, line.recordedDocumentId)}>
+      {line.recordedDocumentNumber || "Open document"}
+    </Link>;
+  }
+  return line.relatedDocumentId
+    ? <Link href={`${base}/documents/${line.relatedDocumentId}`}>{line.relatedDocumentCode || "Open document"}</Link>
+    : "—";
+}
+
+export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }: {
+  user: User;
   line: BankMoneyTransactionDetail;
   busy: boolean;
   onBusyChange: (busy: boolean) => void;
-  onRecorded: (result: RecordedBankLine) => void;
+  onLineLoaded: (line: BankMoneyTransactionDetail) => void;
+}) {
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [failure, setFailure] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function reloadLine() {
+    setRefreshRequired(true);
+    setRefreshError("");
+    try {
+      const updated = await getMoneyTransactionDetail(user, line.id);
+      if (!updated || allocationCents(updated.allocatedAmount ?? "") === null || allocationCents(updated.remainingAmount ?? "") === null) {
+        throw new Error("The bank line balances were unavailable.");
+      }
+      onLineLoaded(updated);
+      setRefreshRequired(false);
+    } catch (e) {
+      setRefreshError(e instanceof Error ? e.message : "Unable to reload the bank line.");
+    }
+  }
+
+  const run: RunBankAction = async (action, fallback, resetDraft) => {
+    if (busy || refreshRequired) return;
+    onBusyChange(true);
+    setFailure("");
+    setNotice("");
+    try {
+      try {
+        setNotice(await action());
+      } catch (e) {
+        setFailure(e instanceof Error ? e.message : fallback);
+        if (!needsBankMatchRefresh(e)) return;
+        setNotice("Check the latest allocated and remaining amounts before matching again.");
+      }
+      resetDraft?.();
+      await reloadLine();
+    } finally {
+      onBusyChange(false);
+    }
+  };
+
+  const canManage = user.role === "LOCAL_ADMIN" || user.role === "ACCOUNTANT";
+  const canAllocate = canManage && canAllocateBankLine(line);
+  const disabled = busy || refreshRequired;
+  return <>
+    {!refreshRequired && (allocationCents(line.allocatedAmount ?? "") ?? 0n) > 0n && <p role="status">
+      Already matched {bankLineMoney(line.allocatedAmount, line.currency)} · Left to match {bankLineMoney(line.remainingAmount, line.currency)}
+    </p>}
+    {notice && <p role="status">{notice}</p>}
+    {failure && <p className="notice danger" role="alert">{failure}</p>}
+    {refreshError && <div className="notice danger" role="alert">
+      <p>Unable to refresh the bank line. {refreshError}</p>
+      <button className="btn small" type="button" disabled={busy} onClick={async () => {
+        onBusyChange(true);
+        try { await reloadLine(); } finally { onBusyChange(false); }
+      }}>Reload bank line</button>
+    </div>}
+    {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
+    {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}
+  </>;
+}
+
+function RecordBankLine({ line, busy, run }: {
+  line: BankMoneyTransactionDetail;
+  busy: boolean;
+  run: RunBankAction;
 }) {
   const expense = line.direction === "money_out";
   const action = expense ? "Record as expense" : "Record as income";
@@ -30,20 +112,14 @@ export function RecordBankLine({ line, busy, onBusyChange, onRecorded }: {
   const accounts = (data ?? []).filter((account) => account.accountType.toLowerCase() === accountType);
   const [accountId, setAccountId] = useState("");
   const [description, setDescription] = useState("");
-  const [failure, setFailure] = useState("");
   const canRecord = !busy && accounts.some((account) => account.id === accountId);
 
-  async function record() {
+  function record() {
     if (!canRecord) return;
-    onBusyChange(true);
-    setFailure("");
-    try {
-      onRecorded(await recordBankExpense(line.id, accountId, description.trim() || undefined));
-    } catch (e) {
-      setFailure(e instanceof Error ? e.message : "Unable to record this bank line.");
-    } finally {
-      onBusyChange(false);
-    }
+    void run(async () => {
+      const result = await recordBankExpense(line.id, accountId, description.trim() || undefined);
+      return `Created document ${result.documentNumber}.`;
+    }, "Unable to record this bank line.");
   }
 
   return (
@@ -65,7 +141,6 @@ export function RecordBankLine({ line, busy, onBusyChange, onRecorded }: {
         <Field label="Description (optional)">
           <input value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
         </Field>
-        {failure && <p className="notice danger" role="alert">{failure}</p>}
         <button type="submit" className="btn primary" disabled={!canRecord}>{action}</button>
       </form>}
     </section>
@@ -79,21 +154,21 @@ function validAllocation({ record, amount }: AllocationDraft) {
   return cents !== null && cents > 0n && cents <= amountInCents(record.remainingAmount);
 }
 
-export function MatchBankLine({ line, available, busy, onBusyChange, onMatched }: {
+function MatchBankLine({ user, line, busy, run }: {
+  user: User;
   line: BankMoneyTransactionDetail;
-  available: string;
   busy: boolean;
-  onBusyChange: (busy: boolean) => void;
-  onMatched: (result: MatchedBankLine) => void;
+  run: RunBankAction;
 }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<ManualMatchRecord[]>();
   const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
   const [searching, setSearching] = useState(false);
   const [failure, setFailure] = useState("");
-  const { allocated, remaining, exceedsAvailable } = allocationTotals(available, allocations.map((item) => item.amount));
-  const category = line.direction === "money_out" ? "ACCOUNTS_PAYABLE" : "ACCOUNTS_RECEIVABLE";
-  const canMatch = !busy && !searching && allocations.length > 0 && !exceedsAvailable && allocations.every(validAllocation);
+  const { allocated, remaining, exceedsAvailable } = allocationTotals(line, allocations.map((item) => item.amount));
+  const matchingRecords = matches?.filter((record) => canMatchRecord(line, record));
+  const compatible = allocations.every(({ record }) => canMatchRecord(line, record));
+  const canMatch = !busy && !searching && allocations.length > 0 && !exceedsAvailable && compatible && allocations.every(validAllocation);
   const atLimit = allocations.length >= MATCH_LIMIT;
 
   async function search() {
@@ -102,8 +177,7 @@ export function MatchBankLine({ line, available, busy, onBusyChange, onMatched }
     setFailure("");
     setMatches(undefined);
     try {
-      const results = await searchMatchRecords(line.id, query.trim());
-      setMatches(results.filter((record) => record.category.toUpperCase() === category));
+      setMatches(await searchMatchRecords(line.id, query.trim()));
     } catch (e) {
       setFailure(e instanceof Error ? e.message : "Unable to search approved records.");
     } finally {
@@ -111,23 +185,19 @@ export function MatchBankLine({ line, available, busy, onBusyChange, onMatched }
     }
   }
 
-  async function match() {
+  function match() {
     if (!canMatch) return;
-    onBusyChange(true);
     setFailure("");
-    try {
-      const result = await matchBankRecords(line.id, allocations.map(({ record, amount }) => ({
+    void run(async () => {
+      const remaining = await submitBankAllocations(user, line, allocations.map(({ record, amount }) => ({
         recordId: record.recordId,
         amount: decimalAmount(amountInCents(amount)),
       })));
+      return amountInCents(remaining) > 0n ? "Allocations saved." : "Bank line matched.";
+    }, "Unable to match the selected records.", () => {
       setAllocations([]);
       setMatches(undefined);
-      onMatched(result);
-    } catch (e) {
-      setFailure(e instanceof Error ? e.message : "Unable to match the selected records.");
-    } finally {
-      onBusyChange(false);
-    }
+    });
   }
 
   return (
@@ -139,9 +209,9 @@ export function MatchBankLine({ line, available, busy, onBusyChange, onMatched }
         </Field>
         <button type="submit" className="btn" disabled={busy || searching}>{searching ? "Searching…" : "Search"}</button>
       </form>
-      {matches?.length === 0 && <p role="status">No matching approved records.</p>}
-      {matches && matches.length > 0 && <ul>
-        {matches.map((record) => {
+      {matchingRecords?.length === 0 && <p role="status">No matching approved records in {line.currency}.</p>}
+      {matchingRecords && matchingRecords.length > 0 && <ul>
+        {matchingRecords.map((record) => {
           const amount = defaultAllocation(record.remainingAmount, remaining);
           const checked = allocations.some((item) => item.record.recordId === record.recordId);
           const reference = record.invoiceNumber || record.reference;
@@ -169,10 +239,11 @@ export function MatchBankLine({ line, available, busy, onBusyChange, onMatched }
             onClick={() => setAllocations(allocations.filter((draft) => draft.record.recordId !== record.recordId))}>Remove</button>
         </div>;
       })}
-      <p role="status">
-        Allocated {bankLineMoney(allocated, line.currency)} · Remaining {bankLineMoney(remaining, line.currency)}
-      </p>
+      {allocations.length > 0 && <p role="status">
+        After this match, allocated {bankLineMoney(allocated, line.currency)} · Remaining {bankLineMoney(remaining, line.currency)}
+      </p>}
       {exceedsAvailable && <p className="notice danger" role="alert">The allocated total exceeds the amount left to match.</p>}
+      {!compatible && <p className="notice danger" role="alert">Select only eligible records in {line.currency}.</p>}
       {allocations.some((item) => !validAllocation(item)) && <p className="notice danger" role="alert">
         Enter a positive amount with up to two decimal places for each record, up to its outstanding amount.
       </p>}

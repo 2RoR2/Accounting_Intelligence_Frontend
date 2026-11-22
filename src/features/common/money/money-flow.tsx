@@ -1,18 +1,17 @@
 "use client";
 import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
-import { bankLineMoney, MatchBankLine, RecordBankLine, type MatchedBankLine, type RecordedBankLine } from "./bank-line-actions";
-import { documentHref } from "@/features/common/erp/document-logic";
+import { BankLineActions, BankLineDocumentLink, bankLineMoney } from "./bank-line-actions";
+import { BANK_MATCH_LABELS, bankMatchStatus, isUnallocated } from "./allocation-logic";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
-  BankTransactionStatus,
   MatchStatus,
   MoneyDirection,
 } from "@/types/money";
@@ -70,13 +69,6 @@ function addDecimalValues(values: Array<string | null | undefined>): string {
   return `${negative ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
 }
 
-const MATCH_LABEL: Record<MatchStatus, string> = {
-  unmatched: "Unmatched",
-  proposed: "Proposed",
-  matched: "Matched",
-  ignored: "Ignored",
-};
-
 export function MoneyFlowPage({
   user,
   direction,
@@ -88,16 +80,14 @@ export function MoneyFlowPage({
   const canManageBankLine = user.role === "LOCAL_ADMIN" || user.role === "ACCOUNTANT";
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MatchStatus | "">("");
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [decisionReason, setDecisionReason] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<ReactNode>("");
-  const [recordedLines, setRecordedLines] = useState<Record<string, RecordedBankLine>>({});
-  const [settlementMatches, setSettlementMatches] = useState<Record<string, MatchedBankLine>>({});
+  const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
   const [codingAccounts, setCodingAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [costCentres, setCostCentres] = useState<Array<{ id: string; code: string; name: string }>>([]);
@@ -137,35 +127,10 @@ export function MoneyFlowPage({
   );
 
   const reload = () => setRefreshKey((k) => k + 1);
-  const recordedHref = (result: RecordedBankLine) =>
-    documentHref(base, "bank-entries", direction === "money_out" ? "money-out" : "money-in", result.documentId);
-  const updateBankStatus = (id: string, status: BankTransactionStatus) => {
-    setDetail((current) => current?.id === id ? {
-      ...current,
-      status,
-      matchStatus: status === "matched" ? "matched" : current.matchStatus,
-    } : current);
+  const updateDetail = (updated: BankMoneyTransactionDetail) => {
+    setDetail(updated);
+    setSelectedCandidateId(updated.candidateId ?? updated.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
     reload();
-  };
-  const onRecorded = (id: string, result: RecordedBankLine) => {
-    setRecordedLines((current) => ({ ...current, [id]: result }));
-    setNotice(<>Created document <Link href={recordedHref(result)}>{result.documentNumber}</Link>.</>);
-    updateBankStatus(id, result.bankTransactionStatus);
-  };
-  const onMatched = (id: string, currency: string | null, result: MatchedBankLine) => {
-    setSettlementMatches((current) => ({ ...current, [id]: result }));
-    setNotice(Number(result.remaining) > 0 ? `${bankLineMoney(result.remaining, currency)} left to match.` : "Bank line matched.");
-    updateBankStatus(id, result.bankTransactionStatus);
-  };
-  const remainingFor = (row: BankMoneyTransactionDetail) => {
-    if (row.status === "matched" || row.status === "ignored") return undefined;
-    const remaining = settlementMatches[row.id]?.remaining;
-    return remaining && Number(remaining) > 0 ? remaining : undefined;
-  };
-  const verification = (row: BankMoneyTransactionDetail) => {
-    if (recordedLines[row.id]) return "Matched";
-    if (remainingFor(row)) return "Partly matched";
-    return MATCH_LABEL[row.matchStatus] ?? row.matchStatus;
   };
 
   const openDetail = useCallback(async (id: string) => {
@@ -252,6 +217,7 @@ export function MoneyFlowPage({
   const onDecide = async (decision: "confirm" | "reject") => {
     const candidate = detail?.candidates?.find((item) => item.id === selectedCandidateId);
     if (!detail || detail.status !== "proposed" || !candidate || candidate.status !== "proposed" || !selectedCandidateId) return;
+    if (decision === "confirm" && !isUnallocated(detail)) return;
     if (decision === "reject" && !decisionReason.trim()) {
       setActionError("Enter a reason before rejecting a proposed match.");
       return;
@@ -341,6 +307,7 @@ export function MoneyFlowPage({
       r.reference ?? "",
       r.relatedRecordCode ?? "",
       r.relatedDocumentCode ?? "",
+      r.recordedDocumentNumber ?? "",
       r.bankAccountRef ?? "",
       r.postedDate,
       String(r.amount),
@@ -348,21 +315,18 @@ export function MoneyFlowPage({
       .join(" ")
       .toLowerCase();
     if (q && !searchable.includes(q)) return false;
-    if (statusFilter && r.matchStatus !== statusFilter) return false;
+    if (statusFilter && bankMatchStatus(r) !== statusFilter) return false;
     if (month && !r.postedDate.startsWith(month)) return false;
     return true;
   });
-  const matched = filtered.filter((r) => r.matchStatus === "matched").length;
+  const matched = filtered.filter((r) => bankMatchStatus(r) === "matched").length;
   const pageTotals = Array.from(new Set(filtered.map((row) => row.currency ?? ""))).map((currency) => ({
     currency: currency || "MYR",
     amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
   }));
 
-  const recorded = detail ? recordedLines[detail.id] : undefined;
-  const settlementMatch = detail ? settlementMatches[detail.id] : undefined;
-  const partialRemaining = detail ? remainingFor(detail) : undefined;
-  const availableToMatch = partialRemaining || detail?.amount;
-  const canMatchLine = !!detail && canManageBankLine && !recorded && detail.status !== "matched" && detail.status !== "ignored";
+  const canMatchSingle = !!detail && canManageBankLine && !detail.recordedDocumentId && isUnallocated(detail) &&
+    detail.status !== "matched" && detail.status !== "ignored";
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
@@ -486,7 +450,7 @@ export function MoneyFlowPage({
                 aria-expanded={statusOpen}
                 style={{ minWidth: 150, justifyContent: "space-between" }}
               >
-                {statusFilter ? MATCH_LABEL[statusFilter as MatchStatus] : "All statuses"}
+                {statusFilter ? BANK_MATCH_LABELS[statusFilter] : "All statuses"}
               </button>
               {statusOpen && (
                 <div
@@ -504,13 +468,7 @@ export function MoneyFlowPage({
                     padding: 4,
                   }}
                 >
-                  {[
-                    ["", "All statuses"],
-                    ["matched", "Matched"],
-                    ["proposed", "Proposed"],
-                    ["unmatched", "Unmatched"],
-                    ["ignored", "Ignored"],
-                  ].map(([value, label]) => (
+                  {(["", "matched", "partially_matched", "proposed", "unmatched", "ignored"] as const).map((value) => (
                     <button
                       key={value || "all"}
                       type="button"
@@ -532,7 +490,7 @@ export function MoneyFlowPage({
                         cursor: "pointer",
                       }}
                     >
-                      {label}
+                      {value ? BANK_MATCH_LABELS[value] : "All statuses"}
                     </button>
                   ))}
                 </div>
@@ -574,7 +532,7 @@ export function MoneyFlowPage({
             },
             {
               label: "Verification",
-              render: (r) => <Badge>{verification(r)}</Badge>,
+              render: (r) => <Badge>{BANK_MATCH_LABELS[bankMatchStatus(r)]}</Badge>,
             },
             {
               label: "Anomaly",
@@ -592,13 +550,7 @@ export function MoneyFlowPage({
             },
             {
               label: "Original document",
-              render: (r) => {
-                const created = recordedLines[r.id];
-                if (created) return <Link href={recordedHref(created)}>{created.documentNumber}</Link>;
-                return r.relatedDocumentId
-                  ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
-                  : "—";
-              },
+              render: (r) => <BankLineDocumentLink line={r} base={base} />,
             },
             {
               label: "Action",
@@ -671,13 +623,6 @@ export function MoneyFlowPage({
             style={{ maxHeight: "70vh", overflowY: "auto", paddingBottom: 24 }}
           >
             {detailLoading && <LoadingState />}
-            {recorded && <p className="notice success" role="status">
-              Created document <Link href={recordedHref(recorded)}>{recorded.documentNumber}</Link>.
-            </p>}
-            {partialRemaining && <p className="notice success" role="status">
-              {bankLineMoney(partialRemaining, detail.currency)} left to match.
-            </p>}
-            {settlementMatch && detail.status === "matched" && <p className="notice success" role="status">Bank line matched.</p>}
             <p style={{ marginBottom: 12, color: "var(--muted)" }}>
               Bank statement row. Compare it with the related standardised record, then confirm or reject.
             </p>
@@ -704,15 +649,15 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Verification</span>
-                <Badge>{verification(detail)}</Badge>
+                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(detail)]}</Badge>
               </div>
               <div>
                 <span>Related record</span>
                 <strong>{detail.relatedRecordCode || "Not matched yet"}</strong>
               </div>
               <div>
-                <span>Related document</span>
-                <strong>{recorded ? <Link href={recordedHref(recorded)}>{recorded.documentNumber}</Link> : detail.relatedDocumentCode || "—"}</strong>
+                <span>Original document</span>
+                <strong><BankLineDocumentLink line={detail} base={base} /></strong>
               </div>
             </div>
 
@@ -720,11 +665,7 @@ export function MoneyFlowPage({
               <BankAnomalyChart anomaly={detail.anomaly} direction={detail.direction} />
             )}
 
-            {canMatchLine && !partialRemaining && <RecordBankLine line={detail} busy={busy} onBusyChange={setBusy}
-              onRecorded={(result) => onRecorded(detail.id, result)} />}
-            {canMatchLine && availableToMatch && Number(availableToMatch) > 0 && <MatchBankLine line={detail}
-              available={availableToMatch} busy={busy} onBusyChange={setBusy}
-              onMatched={(result) => onMatched(detail.id, detail.currency, result)} />}
+            <BankLineActions user={user} line={detail} busy={busy} onBusyChange={setBusy} onLineLoaded={updateDetail} />
 
             <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Code transaction</h3><span>{detail.codingDecision ? "Coding confirmed" : "Ledger posting remains separate"}</span></div>
@@ -767,7 +708,7 @@ export function MoneyFlowPage({
               })()}
             </div>}
 
-            {canMatchLine && !partialRemaining && <section className="transaction-review-section">
+            {canMatchSingle && <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Match existing</h3><span>Approved records only</span></div>
               <p style={{ marginTop: 0, color: "var(--muted)" }}>Search approved standardised records by invoice/reference or counterparty. Remaining amount is shown when prior allocations exist.</p>
               <div className="transaction-match-search"><input aria-label="Search for a single approved record" value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
@@ -783,7 +724,7 @@ export function MoneyFlowPage({
               <button
                 className="btn primary"
                 type="button"
-                disabled={busy || !!partialRemaining || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
+                disabled={busy || !canMatchSingle || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
                 onClick={() => void onDecide("confirm")}
               >
                 Confirm match
@@ -807,7 +748,7 @@ export function MoneyFlowPage({
               </button>
             </div>
             {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" &&
-              !recorded && !settlementMatch && (detail.relatedRecordId || detail.candidates?.some((candidate) => candidate.status === "confirmed")) && (
+              !detail.recordedDocumentId && (detail.relatedRecordId || detail.candidates?.some((candidate) => candidate.status === "confirmed")) && (
               <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
             )}
           </div>

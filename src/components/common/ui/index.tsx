@@ -392,7 +392,7 @@ export function Modal({
 }: {
   title: string;
   children: ReactNode;
-  onClose: () => void;
+  onClose: (event: React.SyntheticEvent) => void;
   closeDisabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -406,10 +406,10 @@ export function Modal({
       ref={ref}
       onCancel={(e) => {
         if (closeDisabled) e.preventDefault();
-        else onClose();
+        else onClose(e);
       }}
       onClick={(e) => {
-        if (!closeDisabled && e.target === ref.current) onClose();
+        if (!closeDisabled && e.target === ref.current) onClose(e);
       }}
       aria-label={title}
     >
