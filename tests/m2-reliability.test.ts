@@ -132,7 +132,7 @@ test("review prevents revalidating over unsaved edits and candidates need an exp
   const {readFile}=await import("node:fs/promises");
   const source=await readFile(new URL("../src/features/common/documents/document-review.tsx",import.meta.url),"utf8");
   assert.match(source,/Revalidation uses saved values only/);
-  assert.equal((source.match(/disabled=\{(?:readonly \|\| )?busy \|\| unsaved\.length > 0\}/g)??[]).length,2);
+  assert.equal((source.match(/disabled=\{(?:readonly \|\| )?busy \|\| unsaved\.length > 0\}/g)??[]).length,3); // revalidate, apply suggestion, and one more existing guard
   assert.match(source,/Fills the input only/);
 });
 test("AI Assist never offers a rejected or empty result for saving and never calls a suggestion verified",()=>{

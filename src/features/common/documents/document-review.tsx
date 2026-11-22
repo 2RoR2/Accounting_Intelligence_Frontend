@@ -799,7 +799,16 @@ function DocumentReviewPage({
               </div>}
               {data.validationReport?.transactionAnomaly && <TransactionAnomalyVisual result={data.validationReport.transactionAnomaly} />}
               {current && <SuggestedFixes key={`${data.doc.contentRevision ?? extraction.contentRevision}:${checksRefresh}`}
-                documentId={documentId} fieldForCheck={fieldForCheck} disabled={readonly || busy} onApply={(field, value) => {
+                documentId={documentId} fieldForCheck={fieldForCheck} disabled={readonly || busy || unsaved.length > 0} onApply={(field, value) => {
+                  // A header field is saved and checked in one click; a line-item value fills that line's editor,
+                  // which the reviewer saves with the line as usual.
+                  if (field in extraction.fields && data.extraction.contentRevision) {
+                    void run(async () => {
+                      await updateExtractedField(user, documentId, field, value, data.extraction.contentRevision!);
+                      await revalidateDocument(user, documentId);
+                    }, "Suggestion saved and the document checked again.");
+                    return;
+                  }
                   setAppliedSuggestion({ field, value });
                   focusField(field);
                 }} />}
