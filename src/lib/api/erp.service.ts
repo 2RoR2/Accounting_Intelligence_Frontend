@@ -176,3 +176,52 @@ export type PostingAccount = { purpose: PostingPurpose; accountId: string | null
 export const getPostingAccounts = () => get<PostingAccount[]>("/api/erp/posting-accounts");
 export const setPostingAccounts = (accounts: Partial<Record<PostingPurpose, string>>) =>
   api<PostingAccount[]>("/api/erp/posting-accounts", json("PUT", { accounts }));
+
+// ---------------------------------------------------------------- Sharing and MyInvois (L7)
+export type SharingStatus = { shareLinks: boolean; myinvoisPrep: boolean; myinvoisNote: string };
+export type ShareStatus = "active" | "expired" | "revoked";
+export type DocumentShare = {
+  id: string; recipient: string | null; status: ShareStatus; expiresAt: string; createdAt: string;
+  lastOpenedAt: string | null; openCount: number;
+};
+export type CreatedDocumentShare = DocumentShare & { url: string };
+export type SharedDocument = {
+  companyName: string; documentType: DocumentType; documentLabel: string; number: string;
+  documentDate: string; dueDate: string | null; contactName: string | null; referenceNo: string | null;
+  description: string | null; currency: string;
+  lines: Required<Pick<DocumentLine, "description" | "quantity" | "unitPrice" | "discount" | "tax">>[];
+  subtotal: string; taxAmount: string; total: string; expiresAt: string;
+};
+export type ConsolidationInput = {
+  documentType: "invoice"; dateFrom: string; dateTo: string; documentIds: string[]; idempotencyKey: string;
+};
+export type PreparedConsolidation = {
+  id: string; documentType: DocumentType; status: "prepared"; documentCount: number; totalAmount: string; note: string;
+};
+export type ConsolidationRecord = PreparedConsolidation & { dateFrom: string; dateTo: string; createdAt: string; documentIds?: string[] };
+
+export const getSharingStatus = () => get<SharingStatus>("/api/erp/sharing-status");
+const sharesPath = (type: DocumentType, id: string) => `/api/erp/documents/${seg(type)}/${seg(id)}/shares`;
+export const listDocumentShares = (type: DocumentType, id: string) => get<DocumentShare[]>(sharesPath(type, id));
+export const createDocumentShare = (type: DocumentType, id: string, input: { expiresInDays: number; recipient?: string }) =>
+  api<CreatedDocumentShare>(sharesPath(type, id), json("POST", input));
+export const revokeDocumentShare = (id: string) =>
+  api<DocumentShare>(`/api/erp/shares/${seg(id)}/revoke`, json("POST"));
+
+export function publicShareErrorText(status?: number) {
+  if (status === 404) return "This link is not valid";
+  if (status === 410) return "This link has expired or was withdrawn";
+  return "Unable to open this shared document. Please try again.";
+}
+
+export async function getSharedDocument(token: string, signal: AbortSignal): Promise<SharedDocument> {
+  const unavailable = () => { throw new Error(publicShareErrorText()); };
+  const response = await fetch(`/api/public/erp-share/${seg(token)}`, { credentials: "omit", cache: "no-store", signal })
+    .catch(unavailable);
+  if (!response.ok) throw new Error(publicShareErrorText(response.status));
+  return response.json().catch(unavailable);
+}
+
+export const listConsolidations = () => get<ConsolidationRecord[]>("/api/myinvois/consolidated");
+export const prepareConsolidation = (input: ConsolidationInput) =>
+  api<PreparedConsolidation & { idempotent: boolean }>("/api/myinvois/consolidated", json("POST", input));
