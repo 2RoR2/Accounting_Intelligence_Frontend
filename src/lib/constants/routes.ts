@@ -10,9 +10,9 @@ export const WORKSPACE_PAGES: Record<string, ReadonlySet<string>> = {
   "dashboard", "documents", "upload", "exceptions",
   "approvals", "contacts", "reconciliation",
   "records", "users", "validation-overview", "validation-rules", "reports", "audit", "evaluation",
-  "settings", "profile", "money-in", "money-out", "ledger"
+  "settings", "profile", "money-in", "money-out", "ledger", "bank-accounts"
 ]),
-  workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger"]),
+  workspace: new Set(["today", "dashboard","evaluation", "documents", "upload", "exceptions", "contacts", "records", "reports", "settings", "help", "profile", "money-in", "money-out", "reconciliation", "ledger", "bank-accounts"]),
 };
 const DETAIL_PAGES = new Set(["documents", "records", "tenants"]);
 export const isPublicRoute = (path: string[]) => path.length === 1 && PUBLIC_ROUTES.has(path[0]);

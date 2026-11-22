@@ -20,6 +20,10 @@ export type ProfitAndLossDashboard = {
   periods: Array<ProfitAndLossTotal & { period: string }>;
   accrualNote: string | null;
   cashBasisNote: string | null;
+  /** Posted income and expense by account. */
+  accounts: Array<{ currency: string; accountType: string; accountCode: string; accountName: string; amount: string }>;
+  /** Open approved invoices (accounts_receivable) and bills by age bucket, e.g. "not_due", "1_30_days". */
+  aging: Array<{ category: string; currency: string; bucket: string; amount: string; itemCount: number }>;
 };
 export type JournalPosting = { id: string; status: string; idempotent: boolean };
 
@@ -27,8 +31,8 @@ export const getChartAccounts = (includeInactive = false) =>
   api<ChartAccount[]>(`/api/chart-of-accounts?includeInactive=${includeInactive}`);
 export const createChartAccount = (input: ChartAccountInput) =>
   api<ChartAccount>("/api/chart-of-accounts", { method: "POST", body: JSON.stringify(input) });
-export const getProfitAndLossDashboard = (fromDate: string, toDate: string, basis: "accrual" | "cash" = "accrual") =>
-  api<ProfitAndLossDashboard>(`/api/ledger/profit-and-loss?${new URLSearchParams({ fromDate, toDate, basis, granularity: "month" })}`);
+export const getProfitAndLossDashboard = (fromDate: string, toDate: string, basis: "accrual" | "cash" = "accrual", granularity: "day" | "week" | "month" = "month") =>
+  api<ProfitAndLossDashboard>(`/api/ledger/profit-and-loss?${new URLSearchParams({ fromDate, toDate, basis, granularity })}`);
 export const createManualJournal = (input: {
   periodId: string; idempotencyKey: string; journalDate: string; description: string; lines: JournalLineInput[];
 }) => api<JournalPosting>("/api/ledger/journals", {

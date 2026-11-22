@@ -12,6 +12,7 @@ import { UserManagement } from "@/features/common/users/user-management";
 import { ContactsPage } from "@/features/common/contacts/contacts";
 import { MoneyFlowPage } from "@/features/common/money/money-flow";
 import { ReconciliationPage } from "@/features/common/money/reconciliation-page";
+import { BankAccountsPage } from "@/features/common/money/bank-accounts";
 import { ApprovalQueuePage } from "@/features/common/documents/approval-queue";
 import { LedgerPage } from "@/features/common/ledger/ledger-page";
 import { ValidationOverviewPage } from "@/features/common/validation/validation-overview";
@@ -36,6 +37,7 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "money-in": return <MoneyFlowPage user={user} direction="money_in" />;
     case "money-out": return <MoneyFlowPage user={user} direction="money_out" />;
     case "reconciliation": return <ReconciliationPage user={user} />;
+    case "bank-accounts": return <BankAccountsPage user={user} />;
     case "users": return <UserManagement user={user} />;
     case "validation-overview": return <ValidationOverviewPage user={user} />;
     case "validation-rules": return <RulesPage user={user} />;

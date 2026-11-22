@@ -61,17 +61,25 @@ export function DocumentList({ user }: { user: User }) {
   }, [data, refresh]);
   const visibleDocuments = useMemo(() => {
     if (!data) return [];
-    const typeByTab: Record<string, string | undefined> = {
-      "sales-invoices": "INVOICE",
-      "purchase-bills": "BILL",
-      receipts: "RECEIPT",
-      "credit-notes": "CREDIT_NOTE",
-      "debit-notes": "DEBIT_NOTE",
+    // Sales = accounts receivable, Purchases = accounts payable (the category chosen at upload).
+    const filterByTab: Record<string, { type: string; category?: string } | undefined> = {
+      "sales-invoices": { type: "INVOICE" },
+      "purchase-bills": { type: "BILL" },
+      receipts: { type: "RECEIPT" },
+      "credit-notes": { type: "CREDIT_NOTE" },
+      "debit-notes": { type: "DEBIT_NOTE" },
+      "sales-credit-notes": { type: "CREDIT_NOTE", category: "ACCOUNTS_RECEIVABLE" },
+      "sales-debit-notes": { type: "DEBIT_NOTE", category: "ACCOUNTS_RECEIVABLE" },
+      "supplier-credit-notes": { type: "CREDIT_NOTE", category: "ACCOUNTS_PAYABLE" },
+      "supplier-debit-notes": { type: "DEBIT_NOTE", category: "ACCOUNTS_PAYABLE" },
     };
     const sourceDocuments = data.filter((document) => !/\.json$/i.test(document.name));
-    return typeByTab[selectedTab] ? sourceDocuments.filter((document) => document.type === typeByTab[selectedTab]) : sourceDocuments;
+    const filter = filterByTab[selectedTab];
+    return filter
+      ? sourceDocuments.filter((document) => document.type === filter.type && (!filter.category || document.category?.toUpperCase() === filter.category))
+      : sourceDocuments;
   }, [data, selectedTab]);
-  const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Purchase Bills", "purchase-bills"], ["Receipts", "receipts"], ["Credit Notes", "credit-notes"], ["Debit Notes", "debit-notes"]];
+  const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Sales Credit Notes", "sales-credit-notes"], ["Sales Debit Notes", "sales-debit-notes"], ["Purchase Bills", "purchase-bills"], ["Supplier Credit Notes", "supplier-credit-notes"], ["Supplier Debit Notes", "supplier-debit-notes"], ["Receipts", "receipts"]];
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   return (
