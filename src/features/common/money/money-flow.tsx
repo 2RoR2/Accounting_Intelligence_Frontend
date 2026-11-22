@@ -1,15 +1,18 @@
 "use client";
 import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
+import { bankLineMoney, MatchBankLine, RecordBankLine, type MatchedBankLine, type RecordedBankLine } from "./bank-line-actions";
+import { documentHref } from "@/features/common/erp/document-logic";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
+  BankTransactionStatus,
   MatchStatus,
   MoneyDirection,
 } from "@/types/money";
@@ -81,6 +84,8 @@ export function MoneyFlowPage({
   user: User;
   direction: MoneyDirection;
 }) {
+  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+  const canManageBankLine = user.role === "LOCAL_ADMIN" || user.role === "ACCOUNTANT";
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -90,7 +95,9 @@ export function MoneyFlowPage({
   const [decisionReason, setDecisionReason] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<ReactNode>("");
+  const [recordedLines, setRecordedLines] = useState<Record<string, RecordedBankLine>>({});
+  const [settlementMatches, setSettlementMatches] = useState<Record<string, MatchedBankLine>>({});
   const [actionError, setActionError] = useState("");
   const [codingAccounts, setCodingAccounts] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [costCentres, setCostCentres] = useState<Array<{ id: string; code: string; name: string }>>([]);
@@ -130,8 +137,38 @@ export function MoneyFlowPage({
   );
 
   const reload = () => setRefreshKey((k) => k + 1);
+  const recordedHref = (result: RecordedBankLine) =>
+    documentHref(base, "bank-entries", direction === "money_out" ? "money-out" : "money-in", result.documentId);
+  const updateBankStatus = (id: string, status: BankTransactionStatus) => {
+    setDetail((current) => current?.id === id ? {
+      ...current,
+      status,
+      matchStatus: status === "matched" ? "matched" : current.matchStatus,
+    } : current);
+    reload();
+  };
+  const onRecorded = (id: string, result: RecordedBankLine) => {
+    setRecordedLines((current) => ({ ...current, [id]: result }));
+    setNotice(<>Created document <Link href={recordedHref(result)}>{result.documentNumber}</Link>.</>);
+    updateBankStatus(id, result.bankTransactionStatus);
+  };
+  const onMatched = (id: string, currency: string | null, result: MatchedBankLine) => {
+    setSettlementMatches((current) => ({ ...current, [id]: result }));
+    setNotice(Number(result.remaining) > 0 ? `${bankLineMoney(result.remaining, currency)} left to match.` : "Bank line matched.");
+    updateBankStatus(id, result.bankTransactionStatus);
+  };
+  const remainingFor = (row: BankMoneyTransactionDetail) => {
+    if (row.status === "matched" || row.status === "ignored") return undefined;
+    const remaining = settlementMatches[row.id]?.remaining;
+    return remaining && Number(remaining) > 0 ? remaining : undefined;
+  };
+  const verification = (row: BankMoneyTransactionDetail) => {
+    if (recordedLines[row.id]) return "Matched";
+    if (remainingFor(row)) return "Partly matched";
+    return MATCH_LABEL[row.matchStatus] ?? row.matchStatus;
+  };
 
-  const openDetail = async (id: string) => {
+  const openDetail = useCallback(async (id: string) => {
     setActionError("");
     setDecisionReason("");
     setDetailLoading(true);
@@ -152,7 +189,7 @@ export function MoneyFlowPage({
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [codingAccounts.length, user]);
 
   useEffect(() => {
     const transactionId = searchParams.get("transaction");
@@ -161,7 +198,7 @@ export function MoneyFlowPage({
       autoOpenedTransaction.current = transactionId;
       void openDetail(transactionId);
     }
-  }, [rows, searchParams]);
+  }, [openDetail, rows, searchParams]);
 
   const onCode = async () => {
     if (!detail || !selectedAccountId) return;
@@ -321,7 +358,11 @@ export function MoneyFlowPage({
     amount: addDecimalValues(filtered.filter((row) => (row.currency ?? "") === currency).map((row) => row.amount)),
   }));
 
-  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+  const recorded = detail ? recordedLines[detail.id] : undefined;
+  const settlementMatch = detail ? settlementMatches[detail.id] : undefined;
+  const partialRemaining = detail ? remainingFor(detail) : undefined;
+  const availableToMatch = partialRemaining || detail?.amount;
+  const canMatchLine = !!detail && canManageBankLine && !recorded && detail.status !== "matched" && detail.status !== "ignored";
   const title = direction === "money_in" ? "Money In" : "Money Out";
   const description =
     direction === "money_in"
@@ -353,7 +394,7 @@ export function MoneyFlowPage({
         </div>
       )}
 
-      {actionError && <p role="alert" className="error-text">{actionError}</p>}
+      {actionError && !detail && !importFile && <p role="alert" className="notice danger">{actionError}</p>}
 
       <Panel className={`cash-summary-panel cash-summary-${direction}`}>
         <div className="cash-summary-inner">
@@ -533,7 +574,7 @@ export function MoneyFlowPage({
             },
             {
               label: "Verification",
-              render: (r) => <Badge>{MATCH_LABEL[r.matchStatus] ?? r.matchStatus}</Badge>,
+              render: (r) => <Badge>{verification(r)}</Badge>,
             },
             {
               label: "Anomaly",
@@ -551,9 +592,13 @@ export function MoneyFlowPage({
             },
             {
               label: "Original document",
-              render: (r) => r.relatedDocumentId
-                ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
-                : "—",
+              render: (r) => {
+                const created = recordedLines[r.id];
+                if (created) return <Link href={recordedHref(created)}>{created.documentNumber}</Link>;
+                return r.relatedDocumentId
+                  ? <Link href={`${base}/documents/${r.relatedDocumentId}`}>{r.relatedDocumentCode || "Open document"}</Link>
+                  : "—";
+              },
             },
             {
               label: "Action",
@@ -614,18 +659,25 @@ export function MoneyFlowPage({
                 <button className="btn primary" type="button" disabled={busy || !importPreview.canConfirm} onClick={() => void finishImport(true)}>{busy ? "Saving…" : "Confirm import"}</button>
               </div>
             </>}
-            {actionError && <p role="alert" className="error-text" style={{ marginTop: 12 }}>{actionError}</p>}
+            {actionError && <p role="alert" className="notice danger" style={{ marginTop: 12 }}>{actionError}</p>}
           </div>
         </Modal>
       )}
 
       {detail && (
-        <Modal title={detail.description} onClose={() => setDetail(null)}>
+        <Modal key={detail.id} title={detail.description} onClose={() => setDetail(null)} closeDisabled={busy}>
           <div
             className="panel-body"
             style={{ maxHeight: "70vh", overflowY: "auto", paddingBottom: 24 }}
           >
             {detailLoading && <LoadingState />}
+            {recorded && <p className="notice success" role="status">
+              Created document <Link href={recordedHref(recorded)}>{recorded.documentNumber}</Link>.
+            </p>}
+            {partialRemaining && <p className="notice success" role="status">
+              {bankLineMoney(partialRemaining, detail.currency)} left to match.
+            </p>}
+            {settlementMatch && detail.status === "matched" && <p className="notice success" role="status">Bank line matched.</p>}
             <p style={{ marginBottom: 12, color: "var(--muted)" }}>
               Bank statement row. Compare it with the related standardised record, then confirm or reject.
             </p>
@@ -640,7 +692,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Amount</span>
-                <strong>{money(detail.amount, detail.currency)}</strong>
+                <strong>{detail.amount ? bankLineMoney(detail.amount, detail.currency) : "Not provided"}</strong>
               </div>
               <div>
                 <span>Reference</span>
@@ -652,7 +704,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Verification</span>
-                <Badge>{MATCH_LABEL[detail.matchStatus] ?? detail.matchStatus}</Badge>
+                <Badge>{verification(detail)}</Badge>
               </div>
               <div>
                 <span>Related record</span>
@@ -660,13 +712,19 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Related document</span>
-                <strong>{detail.relatedDocumentCode || "—"}</strong>
+                <strong>{recorded ? <Link href={recordedHref(recorded)}>{recorded.documentNumber}</Link> : detail.relatedDocumentCode || "—"}</strong>
               </div>
             </div>
 
             {detail.anomaly && (
               <BankAnomalyChart anomaly={detail.anomaly} direction={detail.direction} />
             )}
+
+            {canMatchLine && !partialRemaining && <RecordBankLine line={detail} busy={busy} onBusyChange={setBusy}
+              onRecorded={(result) => onRecorded(detail.id, result)} />}
+            {canMatchLine && availableToMatch && Number(availableToMatch) > 0 && <MatchBankLine line={detail}
+              available={availableToMatch} busy={busy} onBusyChange={setBusy}
+              onMatched={(result) => onMatched(detail.id, detail.currency, result)} />}
 
             <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Code transaction</h3><span>{detail.codingDecision ? "Coding confirmed" : "Ledger posting remains separate"}</span></div>
@@ -709,23 +767,23 @@ export function MoneyFlowPage({
               })()}
             </div>}
 
-            <section className="transaction-review-section">
+            {canMatchLine && !partialRemaining && <section className="transaction-review-section">
               <div className="transaction-review-section-heading"><h3>Match existing</h3><span>Approved records only</span></div>
               <p style={{ marginTop: 0, color: "var(--muted)" }}>Search approved standardised records by invoice/reference or counterparty. Remaining amount is shown when prior allocations exist.</p>
-              <div className="transaction-match-search"><input value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
+              <div className="transaction-match-search"><input aria-label="Search for a single approved record" value={matchSearch} onChange={(e) => setMatchSearch(e.target.value)} placeholder="INV1042 or Harbour Design" /><button className="btn" type="button" disabled={busy} onClick={() => void onSearchMatches()}>Search</button></div>
               {matchResults.map((record) => <div key={record.recordId} className="detail-list" style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 8 }}><div><span>Record</span><strong>{record.recordCode}</strong></div><div><span>Party</span><strong>{record.party || "—"}</strong></div><div><span>Total / remaining</span><strong>{record.currency || ""} {record.totalAmount || "—"} / {record.remainingAmount}</strong></div><button className="btn small" type="button" disabled={busy || Number(record.remainingAmount) <= 0} onClick={() => void onSelectManualMatch(record.recordId)}>Select record</button></div>)}
-            </section>
+            </section>}
 
             <label style={{ display: "block", marginTop: 14 }}>Decision note{selectedCandidateId ? " (required when rejecting)" : ""}
               <textarea value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} maxLength={2000} rows={3} style={{ display: "block", width: "100%", marginTop: 4 }} placeholder="Explain the review decision" />
             </label>
-            {actionError && <p role="alert" className="error-text">{actionError}</p>}
+            {actionError && <p role="alert" className="notice danger">{actionError}</p>}
 
             <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 className="btn primary"
                 type="button"
-                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
+                disabled={busy || !!partialRemaining || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
                 onClick={() => void onDecide("confirm")}
               >
                 Confirm match
@@ -748,7 +806,8 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
-            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" && (
+            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" &&
+              !recorded && !settlementMatch && (detail.relatedRecordId || detail.candidates?.some((candidate) => candidate.status === "confirmed")) && (
               <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
             )}
           </div>

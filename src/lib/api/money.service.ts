@@ -1,9 +1,10 @@
 import type { User } from "@/types";
-import { api, get } from "@/lib/api/client";
+import { api, get, json } from "@/lib/api/client";
 import type {
   BankMoneyTransaction,
   BankMoneyTransactionDetail,
   BankReconciliationCandidate,
+  BankTransactionStatus,
   CashSummary,
   MoneyDirection,
 } from "@/types/money";
@@ -72,6 +73,14 @@ export async function decideMatch(
 
 export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string };
 export const searchMatchRecords = (id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
+export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string) =>
+  api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description }),
+  );
+export const matchBankRecords = (id: string, allocations: Array<{ recordId: string; amount: string }>) =>
+  api<{ settlementId: string; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { allocations }),
+  );
 export const createManualMatchCandidate = (bankTransactionId: string, recordId: string) => api(`/api/bank/reconciliation/candidates`, { method: "POST", body: JSON.stringify({ bankTransactionId, recordId, proposedBy: "accountant", reasonCodes: ["MANUAL_SELECTION"] }) });
 
 export interface BankImportPreview {

@@ -1,5 +1,5 @@
 import { validateBankMatchingInputs } from "./bank-contract";
-import { api, get } from "./client";
+import { api, get, json } from "@/lib/api/client";
 
 export type InboxDocument = {
   id: string;
@@ -92,6 +92,15 @@ export interface DocumentReviews {
   decisions: Array<{ id: string; reviewedBy: string; decision: string; note: string; approvedRevision: number | null; createdAt: string }>;
 }
 export const getDocumentReviews = (documentId: string) => get<DocumentReviews>(`/api/documents/${documentId}/reviews`);
+export type ReviewBatchItem = { documentId: string; expectedContentRevision: number };
+type ReviewBatchResult<T extends "IN_REVIEW" | "VALIDATED"> = {
+  results: Array<{ documentId: string; ok: boolean; status?: T; reason?: string }>;
+};
+export const bulkSubmitReviews = (items: ReviewBatchItem[], note?: string) =>
+  api<ReviewBatchResult<"IN_REVIEW">>("/api/documents/review/bulk-submit", json("POST", { items, note }));
+export const bulkApproveReviews = (items: ReviewBatchItem[], note?: string) =>
+  api<ReviewBatchResult<"VALIDATED">>("/api/documents/review/bulk-decision", json("POST", { items, decision: "approved", note }));
+
 function requireRevision(revision: number) {
   if (!Number.isInteger(revision) || revision < 1) throw new Error("Refresh the document to obtain its current revision.");
 }

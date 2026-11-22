@@ -5,6 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, Download, ShieldCheck } from "lucide-react";
 import type { StandardisedRecord, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
+import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
+import { bulkResultSummary } from "@/features/common/bulk-selection";
+import { postScannedRecords } from "@/lib/api/erp.service";
+import { JournalPostingPreview } from "./journal-preview";
+import { postingSelectionTotals } from "./posting-logic";
 import {
   getRecordMetadata,
   getStandardisedRecord,
@@ -27,6 +32,7 @@ import {
   Panel,
   SearchInput,
   formatDate,
+  money as rmMoney,
   StatusBadge,
 } from "@/components/common/ui";
 import { isDueWindow, lockedCategory, recordFilterLabel } from "@/lib/today";
@@ -105,17 +111,21 @@ export function RecordsPage({
     asOf: requestedAsOf && /^\d{4}-\d{2}-\d{2}$/.test(requestedAsOf) ? requestedAsOf : undefined,
   };
   const todayLabel = admin ? null : recordFilterLabel(todayFilter.category ?? null, todayFilter.due ?? null, todayFilter.posting ?? null);
+  const toPost = !admin && todayFilter.posting === "to-post";
+  const canPost = toPost && user.role === "LOCAL_ADMIN";
+  const queryKey = JSON.stringify([user.id, tenantId, todayFilter]);
   // The server already returns only this category: the Categories selector is shown fixed, not filtered locally.
   const fixedCategory = admin ? null : lockedCategory(todayFilter.category);
-  const { data, error, loading, refresh } = useResource(
+  const { data, error, loading, refresh, setData } = useResource(
     async () => ({
+      queryKey,
       tenants: await getTenants(user),
       docs: await getDocuments(user),
       exceptions: await getExceptions(user),
       records: admin ? [] : await getStandardisedRecords(user, todayFilter),
       metadata: admin ? await getRecordMetadata(user, tenantId) : [],
     }),
-    `${user.id}:${tenantId}:${todayFilter.category}:${todayFilter.due}:${todayFilter.posting}:${todayFilter.asOf}`,
+    queryKey,
   );
   const [selectedTenant, setSelectedTenant] = useState(tenantId ?? "");
   const [search, setSearch] = useState("");
@@ -138,6 +148,11 @@ export function RecordsPage({
   const [exportError, setExportError] = useState("");
   const [metadataId, setMetadataId] = useState("");
   const [deepLinkDismissed, setDeepLinkDismissed] = useState(false);
+  const [previewRecordId, setPreviewRecordId] = useState("");
+  const [confirmRecords, setConfirmRecords] = useState<StandardisedRecord[]>([]);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState("");
+  const [postSummary, setPostSummary] = useState("");
   useEffect(() => {
     if (!initialRecordId || admin) return;
     let cancelled = false;
@@ -153,13 +168,11 @@ export function RecordsPage({
       });
     return () => { cancelled = true; };
   }, [admin, data, initialRecordId, user]);
-  if (loading) return <LoadingState variant="table" />;
-  if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const linkedRecord = initialRecordId
-    ? data.records.find((record) => record.id === initialRecordId || record.code === initialRecordId)
+    ? data?.records.find((record) => record.id === initialRecordId || record.code === initialRecordId)
     : undefined;
   const visibleDetail = detail ?? (!deepLinkDismissed ? linkedRecord : undefined);
-  const records = data.records.filter(
+  const records = (data?.records ?? []).filter(
     (r) =>
       `${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
         .toLowerCase()
@@ -170,6 +183,43 @@ export function RecordsPage({
       (!validation || r.validation === validation) &&
       (!status || r.status === status),
   );
+  const currentList = data?.queryKey === queryKey;
+  const eligible = canPost && currentList ? records : [];
+  const selection = useBulkSelection(eligible.map((record) => record.id), JSON.stringify([queryKey, search, supplier, category, date, validation, status]));
+  const confirmTotals = postingSelectionTotals(confirmRecords.map((record) => ({
+    amount: record.totalAmount ?? record.extraction.fields.total?.value,
+    currency: record.currency ?? record.extraction.fields.currency?.value,
+  })));
+
+  function removePostedRecords(ids: string[]) {
+    const posted = new Set(ids);
+    setData((current) => current?.queryKey === queryKey
+      ? { ...current, records: current.records.filter((record) => !posted.has(record.id)) }
+      : current);
+  }
+
+  async function postSelected() {
+    if (!canPost || posting || !confirmRecords.length) return;
+    setPosting(true);
+    setPostError("");
+    setPostSummary("");
+    try {
+      const { results } = await postScannedRecords(confirmRecords.map((record) => record.id));
+      const names = new Map(confirmRecords.map((record) => [record.id, record.code || record.id]));
+      setPostSummary(bulkResultSummary("posted", results, (item) => names.get(item.recordId) ?? item.recordId));
+      removePostedRecords(results.filter((item) => item.ok).map((item) => item.recordId));
+      setConfirmRecords([]);
+      selection.clear();
+      await refresh();
+    } catch (e) {
+      setPostError(e instanceof Error ? e.message : "Unable to post the selected journals.");
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  if (loading) return <LoadingState variant="table" />;
+  if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const metadata = data.metadata.find((r) => r.id === metadataId);
   const createBackendExport = async () => {
     setExportError("");
@@ -205,6 +255,7 @@ export function RecordsPage({
         }
       />
       {exportError && <p className="error-text" role="alert">{exportError}</p>}
+      {toPost && postSummary && <p className="notice" role="status">{postSummary}</p>}
       {exportsLoaded && <Panel title="Export history" subtitle="Download a previous export or check when it was created.">
         {exports.length ? <DataTable rows={exports} rowKey={(row) => row.id} columns={[{ label: "Resource", render: (row) => row.resource }, { label: "Format", render: (row) => row.format.toUpperCase() }, { label: "Rows", render: (row) => row.rowCount }, { label: "Status", render: (row) => <Badge>{row.status}</Badge> }, { label: "Created", render: (row) => formatDate(row.createdAt) }, { label: "Action", render: (row) => <a className="btn small" href={downloadExport(row.id)} target="_blank" rel="noreferrer">Download</a> }]} /> : <div className="empty-state"><strong>No exports yet</strong><p>Create an export to see it here.</p></div>}
       </Panel>}
@@ -367,10 +418,24 @@ export function RecordsPage({
               options={["COMPLETED"]}
             />
           </div>
+          {canPost && <BulkControls selection={selection} eligibleCount={eligible.length} busy={posting}>
+            <button className="btn primary" type="button" disabled={posting || !selection.ids.length} onClick={() => {
+              setPostError("");
+              setConfirmRecords(eligible.filter((record) => selection.checked.has(record.id)));
+            }}>Post selected</button>
+          </BulkControls>}
           <DataTable
             rows={records}
             rowKey={(r) => r.id}
             columns={[
+              ...(canPost ? [{
+                label: "Select",
+                render: (record: StandardisedRecord) => {
+                  const checked = selection.checked.has(record.id);
+                  return <input type="checkbox" aria-label={`Select ${record.code || record.id}`} checked={checked}
+                    disabled={posting || !currentList || (selection.atLimit && !checked)} onChange={() => selection.toggle(record.id)} />;
+                },
+              }] : []),
               {
                 label: "Record / invoice",
                 render: (r) => (
@@ -414,14 +479,39 @@ export function RecordsPage({
               {
                 label: "Action",
                 render: (r) => (
-                  <button className="text-link" onClick={() => setDetail(r)}>
-                    View <ArrowRight size={14} />
-                  </button>
+                  <div className="row-actions">
+                    <button className="text-link" type="button" onClick={() => setDetail(r)}>View <ArrowRight size={14} /></button>
+                    {toPost && <button className="btn small" type="button" disabled={posting || !currentList}
+                      onClick={() => setPreviewRecordId(r.id)}>Preview journal</button>}
+                  </div>
                 ),
               },
             ]}
           />
         </Panel>
+      )}
+      {toPost && previewRecordId && <JournalPostingPreview key={previewRecordId} recordId={previewRecordId} canPost={canPost}
+        onClose={() => setPreviewRecordId("")} onPosted={() => {
+          setPreviewRecordId("");
+          setPostSummary("1 posted, 0 not");
+          removePostedRecords([previewRecordId]);
+          void refresh();
+        }} />}
+      {canPost && confirmRecords.length > 0 && (
+        <Modal title="Post selected journals" onClose={() => setConfirmRecords([])} closeDisabled={posting}>
+          <div className="panel-body">
+            <p>Post {confirmRecords.length} {confirmRecords.length === 1 ? "journal" : "journals"}?</p>
+            <p>Document total {confirmTotals.totals.length
+              ? confirmTotals.totals.map(({ amount, currency }) => currency === "MYR" ? rmMoney(amount) : money(amount, currency)).join(" + ")
+              : "unavailable"}</p>
+            {confirmTotals.missing > 0 && <p>{confirmTotals.missing} {confirmTotals.missing === 1 ? "record has" : "records have"} no amount.</p>}
+            {postError && <p className="notice danger" role="alert">{postError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn" disabled={posting} onClick={() => setConfirmRecords([])}>Cancel</button>
+              <button type="button" className="btn primary" disabled={posting} onClick={() => void postSelected()}>{posting ? "Posting…" : "Post selected"}</button>
+            </div>
+          </div>
+        </Modal>
       )}
       {metadata && (
         <Modal title="Record metadata" onClose={() => setMetadataId("")}>

@@ -44,6 +44,16 @@ export async function getDocuments(user: User, filters: DocumentSearch = {}) {
 export async function getDocument(user: User, documentId: string) {
   return mapDocument(await get<Document & { kind?: string }>(`/api/documents/${documentId}`));
 }
+export type SuggestedFix = {
+  field: string;
+  label: string;
+  reason: string;
+  suggestedValue: string | null;
+  source: "candidate" | "supplier-match" | "rule";
+  explanation: string;
+};
+export const getSuggestedFixes = (documentId: string) =>
+  get<SuggestedFix[]>(`/api/documents/${encodeURIComponent(documentId)}/suggested-fixes`);
 export async function getExtraction(user: User, documentId: string) {
   requireRole(user, ["LOCAL_ADMIN", "ACCOUNTANT"]);
   return mapExtraction(await get<ExtractionResponse>("/api/documents/" + documentId + "/extraction"));

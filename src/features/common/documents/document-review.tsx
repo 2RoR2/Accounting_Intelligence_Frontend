@@ -15,6 +15,7 @@ import {
   getDocument,
   getExceptions,
   getExtraction,
+  getSuggestedFixes,
   getValidationReport,
   revalidateDocument,
   updateExtractedField,
@@ -132,7 +133,39 @@ const SUBMIT_TARGET = "__submit__";
 /** What the review page's keyboard handler can do inside one field (task B4b). */
 interface FieldKeyActions { value: string; dirty: boolean; suggestion: string | null; save: (value: string) => Promise<boolean> }
 
-function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedDraft, locked }: {
+function SuggestedFixes({ documentId, fieldForCheck, disabled, onApply }: {
+  documentId: string;
+  fieldForCheck: (field: string) => string | undefined;
+  disabled: boolean;
+  onApply: (field: string, value: string) => void;
+}) {
+  const { data: fixes, error, loading, refresh } = useResource(() => getSuggestedFixes(documentId), documentId);
+  if (loading) return <p className="panel-body" role="status">Loading suggested fixes…</p>;
+  if (error) return <div className="panel-body">
+    <p className="notice danger" role="alert">{error}</p>
+    <button type="button" className="btn small" disabled={disabled} onClick={() => void refresh()}>Retry suggested fixes</button>
+  </div>;
+  if (!fixes?.length) return null;
+  return (
+    <div className="panel-body">
+      <h3>Suggested fixes</h3>
+      <ul>
+        {fixes.map(({ field, label, reason, suggestedValue, explanation }, index) => {
+          const key = fieldForCheck(field);
+          return <li key={`${field}:${index}`}>
+            <strong>{label}</strong>
+            <p>{reason}</p>
+            <p>{explanation}</p>
+            {suggestedValue !== null && <button type="button" className="btn small" disabled={disabled || !key}
+              onClick={() => { if (key) onApply(key, suggestedValue); }}>Apply suggestion: {suggestedValue}</button>}
+          </li>;
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedDraft, locked, appliedSuggestion, onSuggestionFilled }: {
   field: ExtractedField; fieldKey?: string; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean; selected?: boolean;
   onDirtyChange?: (label: string, dirty: boolean) => void; currencyReview?: CurrencyReview | null;
   /** Review signal in plain words; header fields only. */
@@ -144,6 +177,8 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   savedDraft?: SavedDraft;
   /** True while the page saves and submits: no edit may start after its snapshot of the drafts. */
   locked?: boolean;
+  appliedSuggestion?: string;
+  onSuggestionFilled?: () => void;
 }) {
   const inputId = useId();
   const [value, setValue] = useState(field.value ?? "");
@@ -171,7 +206,15 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     if (dirty && result.settled) setDirty(false);
   }, [dirty, value, field.value, savedDraft]);
   /** Fills the input only. Nothing is stored until the reviewer presses Save. */
-  const fillFromCandidate = (candidate: string) => { if (locked) return; setValue(candidate); setDirty(true); setConflict(false); setError(""); };
+  const fillFromCandidate = useCallback((candidate: string) => {
+    if (locked || readonly || saving) return;
+    setValue(candidate); setDirty(true); setConflict(false); setError("");
+  }, [locked, readonly, saving]);
+  useEffect(() => {
+    if (appliedSuggestion === undefined || locked || readonly || saving) return;
+    fillFromCandidate(appliedSuggestion);
+    onSuggestionFilled?.();
+  }, [appliedSuggestion, fillFromCandidate, locked, onSuggestionFilled, readonly, saving]);
   const save = async (next: string) => {
     setSaving(true); setError("");
     try { await onSave(next); setDirty(false); return true; }
@@ -278,6 +321,7 @@ function DocumentReviewPage({
     `${user.id}:${documentId}`,
   );
   const [panel, setPanel] = useState<"review" | "validation" | "record" | "activity">("review");
+  const [checksRefresh, setChecksRefresh] = useState(0);
   // "Only fields to check" (task B4b): on by default, hides fields read from the document.
   const [onlyToCheck, setOnlyToCheck] = useState(true);
   const [unsaved, setUnsaved] = useState<string[]>([]);
@@ -305,6 +349,7 @@ function DocumentReviewPage({
     try {
       await op();
       await refresh();
+      if (panel === "validation") setChecksRefresh((count) => count + 1);
       setToast(message); // Only after the saved value has been read back.
     } catch (e) {
       setFailure((e as Error).message);
@@ -328,6 +373,8 @@ function DocumentReviewPage({
   // `order` is the field order at opening: the keyboard keeps it, so corrected fields do not move.
   const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string>; order: string[] }>();
   const [focusRequest, setFocusRequest] = useState<string>();
+  const [appliedSuggestion, setAppliedSuggestion] = useState<{ field: string; value: string }>();
+  const clearAppliedSuggestion = useCallback(() => setAppliedSuggestion(undefined), []);
   // Save notes for the drafts save-and-submit sent, set after the saved values were read back (see FormField `savedDraft`).
   // Each note has a new id, so a field uses it once and an old note never clears a later edit.
   const [savedDrafts, setSavedDrafts] = useState<ReadonlyMap<string, SavedDraft>>(new Map());
@@ -386,7 +433,8 @@ function DocumentReviewPage({
   const visibleKeys = visible.map(entry => entry.key);
   const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
   const toCheckCount = order.filter(entry => isToCheck(entry.signal)).length;
-  const fieldForCheck = (name: string) => Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
+  const fieldForCheck = (name: string) => Object.hasOwn(extraction.fields, name)
+    ? name : Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
   const focusField = (key: string) => {
     setPanel("review");
     if (!visibleKeys.includes(key)) setOnlyToCheck(false);
@@ -420,6 +468,8 @@ function DocumentReviewPage({
       onDirtyChange={markDirty}
       signal={signalOf.get(key)}
       savedDraft={savedDrafts.get(key)}
+      appliedSuggestion={appliedSuggestion?.field === key ? appliedSuggestion.value : undefined}
+      onSuggestionFilled={clearAppliedSuggestion}
       locked={busy}
       inputRef={element => { if (element) inputs.current.set(key, element); else inputs.current.delete(key); }}
       onInputKey={fieldKeys(key)}
@@ -741,6 +791,11 @@ function DocumentReviewPage({
                 <div className="validation-stat"><strong>{summary.notApplicable}</strong><span>Not applicable</span></div>
               </div>}
               {data.validationReport?.transactionAnomaly && <TransactionAnomalyVisual result={data.validationReport.transactionAnomaly} />}
+              {current && <SuggestedFixes key={`${data.doc.contentRevision ?? extraction.contentRevision}:${checksRefresh}`}
+                documentId={documentId} fieldForCheck={fieldForCheck} disabled={readonly || busy} onApply={(field, value) => {
+                  setAppliedSuggestion({ field, value });
+                  focusField(field);
+                }} />}
               <div className="validation-results-head" ref={validationHeadingRef} tabIndex={-1}><div><strong>All checks</strong><span>{validation.length} checks on this version</span></div><StatusBadge status={data.doc.status} /></div>
               <DataTable
                 rows={[...validation].sort((a, b) => validationRank(a) - validationRank(b))}

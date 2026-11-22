@@ -3,7 +3,7 @@
  * One contact list (suppliers = the vendors the scanner matches, customers, employees), products and
  * catalog lists, and documents that post to the ledger when they become ready.
  */
-import { api, get } from "@/lib/api/client";
+import { api, get, json } from "@/lib/api/client";
 
 const q = (params: Record<string, string | number | boolean | undefined | null>) => {
   const search = new URLSearchParams();
@@ -13,7 +13,6 @@ const q = (params: Record<string, string | number | boolean | undefined | null>)
   const text = search.toString();
   return text ? `?${text}` : "";
 };
-const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
 const seg = encodeURIComponent;
 
 // ---------------------------------------------------------------- contacts (L2)
@@ -170,6 +169,22 @@ export const documentHistory = (type: DocumentType, id: string) =>
 /** L5: post an approved scanned invoice/bill/credit note through the same rule (posts once on either path). */
 export const postScannedRecord = (recordId: string, input: { accountId?: string; journalDate?: string } = {}) =>
   api<{ id: string; status: string; idempotent: boolean; recordId: string }>(`/api/erp/scanned/${seg(recordId)}/post`, json("POST", input));
+export type JournalPreview = {
+  recordId: string;
+  journalDate: string;
+  lines: Array<{ accountId: string; code: string; name: string; description: string; debit: string; credit: string }>;
+  totalDebit: string;
+  totalCredit: string;
+  balanced: boolean;
+  alreadyPosted: boolean;
+  problem?: string;
+};
+export const getScannedPostPreview = (recordId: string) =>
+  get<JournalPreview>(`/api/erp/scanned/${seg(recordId)}/post-preview`);
+export const postScannedRecords = (recordIds: string[]) =>
+  api<{ results: Array<{ recordId: string; ok: boolean; journalId?: string; idempotent?: boolean; reason?: string }> }>(
+    "/api/erp/scanned/post-bulk", json("POST", { recordIds }),
+  );
 
 export type PostingPurpose = "receivable" | "revenue" | "tax_output" | "payable" | "expense" | "tax_input" | "bank";
 export type PostingAccount = { purpose: PostingPurpose; accountId: string | null; code: string | null; name: string | null; problem?: string };
