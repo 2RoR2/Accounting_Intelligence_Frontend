@@ -1,6 +1,4 @@
 "use client";
-import { JournalPostingForm } from "@/features/common/ledger/journal-posting-form";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -8,7 +6,7 @@ import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
 import { BankLineActions, BankLineDocumentLink, bankLineMoney } from "./bank-line-actions";
-import { BANK_MATCH_LABELS, bankMatchStatus, isUnallocated } from "./allocation-logic";
+import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, initialBankCandidateId, isUnallocated } from "./allocation-logic";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -84,6 +82,7 @@ export function MoneyFlowPage({
   const [statusOpen, setStatusOpen] = useState(false);
   const [detail, setDetail] = useState<BankMoneyTransactionDetail | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const selectedCandidate = detail?.candidates?.find((candidate) => candidate.id === selectedCandidateId);
   const [decisionReason, setDecisionReason] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -129,7 +128,7 @@ export function MoneyFlowPage({
   const reload = () => setRefreshKey((k) => k + 1);
   const updateDetail = (updated: BankMoneyTransactionDetail) => {
     setDetail(updated);
-    setSelectedCandidateId(updated.candidateId ?? updated.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
+    setSelectedCandidateId(initialBankCandidateId(updated));
     reload();
   };
 
@@ -142,7 +141,7 @@ export function MoneyFlowPage({
       setDetail(d ?? null);
       setSelectedAccountId(d?.accountId ?? "");
       setSelectedCostCentreId(d?.costCentreId ?? "");
-      setSelectedCandidateId(d?.candidateId ?? d?.candidates?.find((candidate) => candidate.status === "proposed")?.id ?? "");
+      setSelectedCandidateId(initialBankCandidateId(d));
       setMatchSearch(""); setMatchResults([]);
       if (!codingAccounts.length) {
         const [accounts, centres] = await Promise.all([getCodingAccounts(), getCodingCostCentres()]);
@@ -209,14 +208,20 @@ export function MoneyFlowPage({
   const onSelectManualMatch = async (recordId: string) => {
     if (!detail) return;
     setBusy(true); setActionError("");
-    try { await createManualMatchCandidate(detail.id, recordId); const updated = await getMoneyTransactionDetail(user, detail.id); setDetail(updated ?? detail); setSelectedCandidateId(updated?.candidateId ?? ""); setNotice("Approved record selected. Confirm the match to save it."); reload(); }
+    try {
+      const created = await createManualMatchCandidate(detail.id, recordId);
+      const updated = await getMoneyTransactionDetail(user, detail.id);
+      if (!updated) throw new Error("Unable to reload the selected record.");
+      updateDetail(updated);
+      if (updated.candidates?.some((candidate) => candidate.id === created.id)) setSelectedCandidateId(created.id);
+      setNotice("Approved record selected. Confirm the match to save it.");
+    }
     catch (error) { setActionError(error instanceof Error ? error.message : "Unable to select the approved record."); }
     finally { setBusy(false); }
   };
 
   const onDecide = async (decision: "confirm" | "reject") => {
-    const candidate = detail?.candidates?.find((item) => item.id === selectedCandidateId);
-    if (!detail || detail.status !== "proposed" || !candidate || candidate.status !== "proposed" || !selectedCandidateId) return;
+    if (busy || !detail || !selectedCandidate || !canReviewBankCandidate(detail, selectedCandidate)) return;
     if (decision === "confirm" && !isUnallocated(detail)) return;
     if (decision === "reject" && !decisionReason.trim()) {
       setActionError("Enter a reason before rejecting a proposed match.");
@@ -225,18 +230,17 @@ export function MoneyFlowPage({
     setBusy(true);
     setActionError("");
     try {
-      await decideMatch(user, selectedCandidateId, decision, candidate.revision, decisionReason);
+      await decideMatch(user, selectedCandidate.id, decision, selectedCandidate.revision, decisionReason);
       const updated = await getMoneyTransactionDetail(user, detail.id).catch(() => undefined);
       setDecisionReason("");
       setNotice(decision === "confirm" ? "Match confirmed." : "Match rejected.");
       if (updated) {
-        setDetail(updated);
-        setSelectedCandidateId(updated.candidateId ?? "");
+        updateDetail(updated);
       } else {
         // The decision is saved; keep the dialog open so the next step (posting the payment) is not lost.
         setActionError("The decision was saved, but these details could not be refreshed. Close and reopen the transaction to continue.");
+        reload();
       }
-      reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The reconciliation decision was not saved.");
     } finally {
@@ -532,7 +536,10 @@ export function MoneyFlowPage({
             },
             {
               label: "Verification",
-              render: (r) => <Badge>{BANK_MATCH_LABELS[bankMatchStatus(r)]}</Badge>,
+              render: (r) => <>
+                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(r)]}</Badge>
+                {r.paymentPosted && <> <Badge>Payment posted</Badge></>}
+              </>,
             },
             {
               label: "Anomaly",
@@ -690,22 +697,19 @@ export function MoneyFlowPage({
             {(detail.candidates?.length ?? 0) > 0 && <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontWeight: 600 }}>Reconciliation candidate
                 <select value={selectedCandidateId} onChange={(event) => setSelectedCandidateId(event.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
-                  {detail.candidates?.map((candidate) => <option key={candidate.id} value={candidate.id} disabled={candidate.status !== "proposed" || detail.status !== "proposed"}>
+                  {detail.candidates?.map((candidate) => <option key={candidate.id} value={candidate.id}>
                     {candidate.recordCode} — {candidate.category.replace(/_/g, " ")} — {candidate.currency ?? "Unknown currency"} {candidate.amount ?? "amount unavailable"} ({candidate.status})
                   </option>)}
                 </select>
               </label>
-              {(() => {
-                const candidate = detail.candidates?.find((item) => item.id === selectedCandidateId);
-                return candidate ? <div className="detail-list" style={{ marginTop: 10 }}>
-                  <div><span>Record reference</span><strong>{candidate.reference ?? "—"}</strong></div>
-                  <div><span>Party</span><strong>{candidate.party ?? "—"}</strong></div>
-                  <div><span>Candidate amount</span><strong>{money(candidate.amount, candidate.currency)}</strong></div>
-                  <div><span>Amount difference</span><strong>{money(candidate.amountDelta, candidate.currency)}</strong></div>
-                  <div><span>Match evidence</span><strong>{candidate.reasons.join(", ") || "No reason supplied"}</strong></div>
-                  {candidate.dateDeltaDays !== null && <div><span>Date difference</span><strong>{candidate.dateDeltaDays} days</strong></div>}
-                </div> : <p>No proposed candidate is available. This row needs manual review.</p>;
-              })()}
+              {selectedCandidate && <div className="detail-list" style={{ marginTop: 10 }}>
+                <div><span>Record reference</span><strong>{selectedCandidate.reference ?? "—"}</strong></div>
+                <div><span>Party</span><strong>{selectedCandidate.party ?? "—"}</strong></div>
+                <div><span>Candidate amount</span><strong>{money(selectedCandidate.amount, selectedCandidate.currency)}</strong></div>
+                <div><span>Amount difference</span><strong>{money(selectedCandidate.amountDelta, selectedCandidate.currency)}</strong></div>
+                <div><span>Match evidence</span><strong>{selectedCandidate.reasons.join(", ") || "No reason supplied"}</strong></div>
+                {selectedCandidate.dateDeltaDays !== null && <div><span>Date difference</span><strong>{selectedCandidate.dateDeltaDays} days</strong></div>}
+              </div>}
             </div>}
 
             {canMatchSingle && <section className="transaction-review-section">
@@ -724,7 +728,7 @@ export function MoneyFlowPage({
               <button
                 className="btn primary"
                 type="button"
-                disabled={busy || !canMatchSingle || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed"}
+                disabled={busy || !canMatchSingle || !canReviewBankCandidate(detail, selectedCandidate)}
                 onClick={() => void onDecide("confirm")}
               >
                 Confirm match
@@ -732,7 +736,7 @@ export function MoneyFlowPage({
               <button
                 className="btn"
                 type="button"
-                disabled={busy || detail.status !== "proposed" || !selectedCandidateId || detail.candidates?.find((item) => item.id === selectedCandidateId)?.status !== "proposed" || !decisionReason.trim()}
+                disabled={busy || !canReviewBankCandidate(detail, selectedCandidate) || !decisionReason.trim()}
                 onClick={() => void onDecide("reject")}
               >
                 Reject
@@ -747,10 +751,6 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
-            {user.role === "LOCAL_ADMIN" && detail.direction === "money_out" && detail.status === "matched" && detail.currency === "MYR" &&
-              !detail.recordedDocumentId && (detail.relatedRecordId || detail.candidates?.some((candidate) => candidate.status === "confirmed")) && (
-              <JournalPostingForm key={detail.id} payment={{ transactionId: detail.id, postedDate: detail.postedDate, payableAccountId: detail.billPayableAccountId }} onPosted={reload} />
-            )}
           </div>
         </Modal>
       )}

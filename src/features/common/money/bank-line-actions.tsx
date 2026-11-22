@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Field, money } from "@/components/common/ui";
+import { DataTable, Field, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { amountInCents, decimalAmount, documentHref } from "@/features/common/erp/document-logic";
 import { decimalDisplay } from "@/lib/api/document-contract";
+import { listCatalog } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
-import { getMoneyTransactionDetail, recordBankExpense, searchMatchRecords, type ManualMatchRecord } from "@/lib/api/money.service";
+import {
+  getMoneyTransactionDetail, postBankPayment, recordBankExpense, searchMatchRecords,
+  type BankPaymentPosting, type ManualMatchRecord,
+} from "@/lib/api/money.service";
 import type { User } from "@/types";
 import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
 import {
-  allocationCents, allocationTotals, canAllocateBankLine, canMatchRecord, defaultAllocation,
-  isUnallocated, MATCH_LIMIT, needsBankMatchRefresh, submitBankAllocations,
+  allocationCents, allocationTotals, canAllocateBankLine, canMatchRecord, canPostBankPayment, defaultAllocation,
+  isUnallocated, MATCH_LIMIT, needsBankAccountChoice, needsBankMatchRefresh, submitBankAllocations,
 } from "./allocation-logic";
 
 type RunBankAction = (action: () => Promise<string>, fallback: string, resetDraft?: () => void) => Promise<void>;
@@ -43,6 +47,7 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
   const [refreshError, setRefreshError] = useState("");
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
+  const [payment, setPayment] = useState<BankPaymentPosting | null>(null);
 
   async function reloadLine() {
     setRefreshRequired(true);
@@ -64,13 +69,14 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
     onBusyChange(true);
     setFailure("");
     setNotice("");
+    setPayment(null);
     try {
       try {
         setNotice(await action());
       } catch (e) {
         setFailure(e instanceof Error ? e.message : fallback);
         if (!needsBankMatchRefresh(e)) return;
-        setNotice("Check the latest allocated and remaining amounts before matching again.");
+        setNotice("Check the latest bank line before retrying.");
       }
       resetDraft?.();
       await reloadLine();
@@ -81,7 +87,18 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
 
   const canManage = user.role === "LOCAL_ADMIN" || user.role === "ACCOUNTANT";
   const canAllocate = canManage && canAllocateBankLine(line);
+  const canPost = canPostBankPayment(user.role, line);
   const disabled = busy || refreshRequired;
+  function postPayment() {
+    if (!canPost || disabled) return;
+    void run(async () => {
+      const posted = await postBankPayment(line.id);
+      if (!posted) throw new Error("The payment posting response was unavailable.");
+      setPayment(posted);
+      return "";
+    }, "Unable to post this payment.");
+  }
+
   return <>
     {!refreshRequired && (allocationCents(line.allocatedAmount ?? "") ?? 0n) > 0n && <p role="status">
       Already matched {bankLineMoney(line.allocatedAmount, line.currency)} · Left to match {bankLineMoney(line.remainingAmount, line.currency)}
@@ -95,6 +112,21 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
         try { await reloadLine(); } finally { onBusyChange(false); }
       }}>Reload bank line</button>
     </div>}
+    {(canPost || line.paymentPosted || payment) && <section className="transaction-review-section">
+      <div className="transaction-review-section-heading"><h3>Ledger payment</h3></div>
+      {(line.paymentPosted || payment) && <p role="status">Payment posted</p>}
+      {payment && payment.lines.length > 0 && <DataTable
+        rows={payment.lines.map((entry, index) => ({ ...entry, index }))}
+        rowKey={(entry) => String(entry.index)}
+        columns={[
+          { label: "Account", render: (entry) => `${entry.code} ${entry.name}` },
+          { label: "Description", render: (entry) => entry.description },
+          { label: "Debit", render: (entry) => bankLineMoney(entry.debit, line.currency) },
+          { label: "Credit", render: (entry) => bankLineMoney(entry.credit, line.currency) },
+        ]}
+      />}
+      {canPost && <button type="button" className="btn primary" disabled={disabled} onClick={postPayment}>Post payment to ledger</button>}
+    </section>}
     {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
     {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}
   </>;
@@ -112,13 +144,21 @@ function RecordBankLine({ line, busy, run }: {
   const accounts = (data ?? []).filter((account) => account.accountType.toLowerCase() === accountType);
   const [accountId, setAccountId] = useState("");
   const [description, setDescription] = useState("");
-  const canRecord = !busy && accounts.some((account) => account.id === accountId);
+  const [chooseBankAccount, setChooseBankAccount] = useState(false);
+  const [bankAccountId, setBankAccountId] = useState("");
+  const canRecord = !busy && accounts.some((account) => account.id === accountId) &&
+    (!chooseBankAccount || !!bankAccountId);
 
   function record() {
     if (!canRecord) return;
     void run(async () => {
-      const result = await recordBankExpense(line.id, accountId, description.trim() || undefined);
-      return `Created document ${result.documentNumber}.`;
+      try {
+        const result = await recordBankExpense(line.id, accountId, description.trim() || undefined, bankAccountId || undefined);
+        return `Created document ${result.documentNumber}.`;
+      } catch (error) {
+        if (needsBankAccountChoice(error)) setChooseBankAccount(true);
+        throw error;
+      }
     }, "Unable to record this bank line.");
   }
 
@@ -141,10 +181,36 @@ function RecordBankLine({ line, busy, run }: {
         <Field label="Description (optional)">
           <input value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
         </Field>
+        {chooseBankAccount && <BankAccountSelect tenantId={line.tenantId} value={bankAccountId} busy={busy} onChange={setBankAccountId} />}
         <button type="submit" className="btn primary" disabled={!canRecord}>{action}</button>
       </form>}
     </section>
   );
+}
+
+function BankAccountSelect({ tenantId, value, busy, onChange }: {
+  tenantId: string;
+  value: string;
+  busy: boolean;
+  onChange: (id: string) => void;
+}) {
+  const { data, loading, error, refresh } = useResource(() => listCatalog("bank-account"), tenantId);
+  const accounts = (data ?? []).filter((account) => account.isActive);
+  return <>
+    <Field label="Bank account">
+      <select value={value} required disabled={busy || loading || !accounts.length} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{loading ? "Loading bank accounts…" : "Choose a bank account"}</option>
+        {accounts.map((account) => <option key={account.id} value={account.id}>
+          {[account.code, account.name].filter(Boolean).join(" · ")}
+        </option>)}
+      </select>
+    </Field>
+    {error && <>
+      <p className="notice danger" role="alert">{error}</p>
+      <button type="button" className="btn small" disabled={busy} onClick={() => void refresh()}>Retry bank accounts</button>
+    </>}
+    {data && !accounts.length && <p>No active bank accounts are available in Catalog.</p>}
+  </>;
 }
 
 type AllocationDraft = { record: ManualMatchRecord; amount: string };

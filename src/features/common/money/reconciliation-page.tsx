@@ -22,7 +22,7 @@ import {
 import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } from "@/types";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
 import { BankLineActions, BankLineDocumentLink } from "./bank-line-actions";
-import { BANK_MATCH_LABELS, bankMatchStatus, isUnallocated } from "./allocation-logic";
+import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, isUnallocated } from "./allocation-logic";
 
 type ImportColumn = "posted_date" | "value_date" | "description" | "reference" | "debit" | "credit" | "currency";
 const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolean }> = [
@@ -165,10 +165,7 @@ export function ReconciliationPage({ user }: { user: User }) {
   }, {} as Record<string, { moneyIn: number; moneyOut: number }>), [visibleRows]);
   const primaryCurrency = Object.keys(totals)[0] ?? "MYR";
   const primaryTotals = totals[primaryCurrency] ?? { moneyIn: 0, moneyOut: 0 };
-  const reviewCandidate = reviewRow?.candidates?.find((candidate) => candidate.status === "proposed")
-    ?? reviewRow?.candidates?.find((candidate) => candidate.status === "confirmed")
-    ?? reviewRow?.candidates?.[0]
-    ?? null;
+  const reviewCandidates = reviewRow?.candidates ?? [];
 
   async function onImport(file: File | undefined) {
     if (!file) return;
@@ -267,13 +264,20 @@ export function ReconciliationPage({ user }: { user: User }) {
   }
 
   async function decide(candidate: BankReconciliationCandidate, decision: "confirm" | "reject") {
+    if (busy || busyId) return;
     setBusyId(candidate.id); setNotice(""); setActionError("");
     try {
       await decideMatch(user, candidate.id, decision, candidate.revision, decision === "reject" ? "Rejected during reconciliation review" : undefined);
       setNotice(decision === "confirm" ? "Match confirmed." : "Candidate rejected.");
+      if (reviewRow && decision === "confirm") {
+        const updated = await getMoneyTransactionDetail(user, reviewRow.id).catch(() => undefined);
+        setReviewRow(updated ?? null);
+        if (!updated) setActionError("Match confirmed. Reopen the bank line to load the latest details.");
+      } else {
+        setReviewRow(null);
+        setSelectedRowId(null);
+      }
       await refresh();
-      setReviewRow(null);
-      setSelectedRowId(null);
     } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to save reconciliation decision."); }
     finally { setBusyId(null); }
   }
@@ -308,7 +312,7 @@ export function ReconciliationPage({ user }: { user: User }) {
       <div><span>Net movement</span><strong>{money((primaryTotals.moneyIn - primaryTotals.moneyOut).toFixed(2), primaryCurrency)}</strong></div>
     </div>}
     {notice && <div className="notice success" role="status">{notice}</div>}
-    {actionError && <p className="error-text" role="alert">{actionError}</p>}
+    {actionError && !reviewRow && <p className="error-text" role="alert">{actionError}</p>}
     {activeTab === "period" && <Panel title="Period reconciliation" subtitle="Enter the statement balances for one bank account. The checks below determine whether sign-off is available.">
       <div className="period-form">
         <div className="period-form-section"><div className="period-form-heading"><span>Statement</span><small>Identify the account and statement dates</small></div><div className="period-form-grid period-form-grid-statement">
@@ -343,6 +347,7 @@ export function ReconciliationPage({ user }: { user: User }) {
               {openingReview ? "Opening review…" : "Open review"}
             </button>
             <span>{BANK_MATCH_LABELS[bankMatchStatus(selectedRow)]}</span>
+            {selectedRow.paymentPosted && <Badge>Payment posted</Badge>}
           </div>
         </> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside>
       </div>
@@ -399,7 +404,7 @@ export function ReconciliationPage({ user }: { user: User }) {
             </div>
           </div>
 
-          {reviewCandidate ? <section className="reconciliation-match-record">
+          {reviewCandidates.length ? reviewCandidates.map((reviewCandidate) => <section key={reviewCandidate.id} className="reconciliation-match-record">
             <div className="transaction-review-section-heading">
               <h3>Suggested standardised record</h3>
               <Badge>{reviewCandidate.status === "confirmed" ? "MATCHED" : reviewCandidate.status.toUpperCase()}</Badge>
@@ -417,7 +422,11 @@ export function ReconciliationPage({ user }: { user: User }) {
               <Link className="btn small" href={`${base}/records/${reviewCandidate.recordId}`}>View standardised record</Link>
               {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
             </div>
-          </section> : <section className="reconciliation-match-record">
+            {canReviewBankCandidate(reviewRow, reviewCandidate) && <div className="reconciliation-review-actions">
+              <button className="btn primary" type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)} onClick={() => void decide(reviewCandidate, "confirm")}>Confirm match</button>
+              <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
+            </div>}
+          </section>) : <section className="reconciliation-match-record">
             <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3></div>
             <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
           </section>}
@@ -426,10 +435,7 @@ export function ReconciliationPage({ user }: { user: User }) {
           <BankLineActions user={user} line={reviewRow} busy={busy || !!busyId} onBusyChange={setBusy}
             onLineLoaded={(line) => { setReviewRow(line); void refresh(); }} />
 
-          {reviewRow.status === "proposed" && reviewCandidate?.status === "proposed" && <div className="reconciliation-review-actions">
-            <button className="btn primary" type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)} onClick={() => void decide(reviewCandidate, "confirm")}>Confirm match</button>
-            <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
-          </div>}
+          {actionError && <p className="notice danger" role="alert">{actionError}</p>}
         </div>
       </Modal>
     )}

@@ -5,7 +5,7 @@ import { DataTable, LoadingState, Modal, formatDate, money } from "@/components/
 import { useResource } from "@/features/common/hooks/use-resource";
 import { ApiError } from "@/lib/api/client";
 import { getScannedPostPreview, postScannedRecord } from "@/lib/api/erp.service";
-import { previewTotals } from "./posting-logic";
+import { previewAccountReason, previewTotals } from "./posting-logic";
 
 export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: {
   recordId: string;
@@ -68,7 +68,10 @@ export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: 
             rows={data.lines.map((line, index) => ({ ...line, index }))}
             rowKey={(line) => String(line.index)}
             columns={[
-              { label: "Account", render: (line) => `${line.code} ${line.name}` },
+              { label: "Account", render: (line) => {
+                const reason = previewAccountReason(line);
+                return <>{line.code} {line.name}{reason && <> · {reason}</>}</>;
+              } },
               { label: "Description", render: (line) => line.description },
               { label: "Debit", render: (line) => money(line.debit) },
               { label: "Credit", render: (line) => money(line.credit) },

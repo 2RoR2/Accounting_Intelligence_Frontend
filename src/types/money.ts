@@ -68,6 +68,8 @@ export interface BankMoneyTransaction {
   currency: string | null;
   status: BankTransactionStatus;
   matchStatus: MatchStatus;
+  paymentPosted?: boolean;
+  canPostPayment?: boolean;
   bankAccountRef?: string | null;
   relatedRecordId?: string | null;
   relatedRecordCode?: string | null;

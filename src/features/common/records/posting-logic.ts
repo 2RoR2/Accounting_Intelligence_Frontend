@@ -1,6 +1,10 @@
 import { amountInCents, decimalAmount } from "@/features/common/erp/document-logic";
 import type { JournalPreview } from "@/lib/api/erp.service";
 
+export function previewAccountReason(line: Pick<JournalPreview["lines"][number], "reason" | "description">) {
+  return line.reason?.trim() || line.description.match(/\((supplier default)\)$/i)?.[1];
+}
+
 export function previewTotals(preview: Pick<JournalPreview, "totalDebit" | "totalCredit" | "balanced">) {
   const debit = amountInCents(preview.totalDebit);
   const credit = amountInCents(preview.totalCredit);

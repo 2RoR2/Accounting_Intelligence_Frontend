@@ -9,6 +9,7 @@ import { getDocuments } from "@/lib/api/document.service";
 import {
   contactHistory, deactivateContact, getContact, reactivateContact, updateContact, type Contact,
 } from "@/lib/api/erp.service";
+import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import type { User } from "@/types";
 import { buildContactInput, contactFormProblems, contactToForm, historyActionLabel, kindLabel, relatedDocuments, type ContactForm } from "./contact-logic";
 
@@ -41,7 +42,13 @@ export function ContactDetail({ user, contactId, base }: { user: User; contactId
     setBusy(true);
     setFailure("");
     try {
-      const saved = await updateContact(contact.id, buildContactInput(form, contact.fields));
+      const changes = {
+        ...form,
+        defaultExpenseAccountId: form.defaultExpenseAccountId === (contact.defaultExpenseAccountId ?? "")
+          ? undefined
+          : form.defaultExpenseAccountId,
+      };
+      const saved = await updateContact(contact.id, buildContactInput(changes, contact.fields));
       setData((current) => (current ? { ...current, contact: saved } : current));
       setNotice("Contact saved.");
       void refresh();
@@ -126,6 +133,12 @@ function ContactEditor({ contact, busy, onSave }: { contact: Contact; busy: bool
         <Field label="Registration no.">{input("registrationNumber")}</Field>
         <Field label="TIN" hint="Tax identification number.">{input("tin")}</Field>
         <Field label="SST registration no.">{input("sstNumber")}</Field>
+        {contact.kind === "supplier" && <DefaultExpenseAccount
+          contact={contact}
+          value={form.defaultExpenseAccountId ?? ""}
+          busy={busy}
+          onChange={(defaultExpenseAccountId) => setForm((current) => ({ ...current, defaultExpenseAccountId }))}
+        />}
       </div>
     </Panel>
     <Panel title="Contact information">
@@ -153,4 +166,30 @@ function ContactEditor({ contact, busy, onSave }: { contact: Contact; busy: bool
       </div>
     </Panel>
   </form>;
+}
+
+function DefaultExpenseAccount({ contact, value, busy, onChange }: {
+  contact: Contact;
+  value: string;
+  busy: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { data, loading, error, refresh } = useResource(getLedgerAccounts, contact.id);
+  const accounts = (data ?? []).filter((account) => account.accountType.toLowerCase() === "expense");
+  const savedId = contact.defaultExpenseAccountId;
+  const savedLabel = [contact.defaultExpenseAccountCode, contact.defaultExpenseAccountName].filter(Boolean).join(" ") || savedId;
+  return <div>
+    <Field label="Default expense account" hint="Used when posting this supplier’s scanned bills.">
+      <select value={value} disabled={busy || loading || !!error} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Use company posting account</option>
+        {savedId && !accounts.some((account) => account.id === savedId) && <option value={savedId}>{savedLabel}</option>}
+        {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} {account.name}</option>)}
+      </select>
+    </Field>
+    {loading && <p role="status">Loading expense accounts…</p>}
+    {error && <>
+      <p className="notice danger" role="alert">{error}</p>
+      <button type="button" className="btn small" disabled={busy} onClick={() => void refresh()}>Retry expense accounts</button>
+    </>}
+  </div>;
 }

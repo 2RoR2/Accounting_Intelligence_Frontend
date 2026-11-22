@@ -72,10 +72,25 @@ export async function decideMatch(
 
 export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string };
 export const searchMatchRecords = (id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
-export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string) =>
+export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string, bankAccountId?: string) =>
   api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(
-    `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description }),
+    `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description, bankAccountId }),
   );
+
+type PaymentJournalLine = {
+  accountId: string;
+  code: string;
+  name: string;
+  description: string;
+  debit: string;
+  credit: string;
+};
+
+export type BankPaymentPosting = { journalId: string; lines: PaymentJournalLine[]; idempotent: boolean };
+
+export const postBankPayment = (id: string, journalDate?: string) =>
+  api<BankPaymentPosting>(`/api/bank/transactions/${encodeURIComponent(id)}/post-payment`, json("POST", { journalDate }));
+
 export const matchBankRecords = (id: string, expectedAllocated: string, allocations: Array<{ recordId: string; amount: string }>) =>
   api<{ settlementId: string; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { expectedAllocated, allocations }),

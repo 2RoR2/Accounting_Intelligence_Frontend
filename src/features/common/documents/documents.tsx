@@ -38,7 +38,7 @@ import { DOCUMENT_LANES, isDocumentLane } from "@/lib/today";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { bulkSubmitReviews, cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
-import { bulkResultSummary } from "@/features/common/bulk-selection";
+import { bulkResultSummary, hasContentRevision } from "@/features/common/bulk-selection";
 
 function NeedsFixing({ id, revision }: { id: string; revision?: number }) {
   const { data, error, loading } = useResource(() => getSuggestedFixes(id), `${id}:${revision}`);
@@ -103,7 +103,7 @@ export function DocumentList({ user }: { user: User }) {
   }, [data, selectedTab]);
   const canBulkSubmit = lane === "ready" && user.role === "ACCOUNTANT";
   const eligible = canBulkSubmit && data?.queryKey === queryKey
-    ? visibleDocuments.filter((doc) => !!doc.contentRevision)
+    ? visibleDocuments.filter(hasContentRevision)
     : [];
   const selection = useBulkSelection(eligible.map(reviewSelectionKey), `${queryKey}:${selectedTab}`);
 
@@ -115,7 +115,7 @@ export function DocumentList({ user }: { user: User }) {
     setSubmitSummary("");
     try {
       const { results } = await bulkSubmitReviews(docs.map((doc) => ({
-        documentId: doc.id, expectedContentRevision: doc.contentRevision!,
+        documentId: doc.id, expectedContentRevision: doc.contentRevision,
       })));
       const names = new Map(docs.map((doc) => [doc.id, doc.code || doc.name]));
       setSubmitSummary(bulkResultSummary("submitted", results, (item) => names.get(item.documentId) ?? item.documentId));
@@ -220,9 +220,15 @@ export function DocumentList({ user }: { user: User }) {
               render: (doc: (typeof visibleDocuments)[number]) => {
                 const key = reviewSelectionKey(doc);
                 const checked = selection.checked.has(key);
-                return <input type="checkbox" aria-label={`Select ${doc.code || doc.name}`} checked={checked}
-                  disabled={submitting || data.queryKey !== queryKey || !doc.contentRevision || (selection.atLimit && !checked)}
-                  onChange={() => selection.toggle(key)} />;
+                const hasRevision = hasContentRevision(doc);
+                const hint = hasRevision ? undefined : "Revision unavailable. Open the document to submit it.";
+                return <>
+                  <input type="checkbox" aria-label={`Select ${doc.code || doc.name}`} checked={checked}
+                    aria-describedby={hint ? `revision-hint-${doc.id}` : undefined}
+                    disabled={submitting || data.queryKey !== queryKey || !hasRevision || (selection.atLimit && !checked)}
+                    onChange={() => selection.toggle(key)} />
+                  {hint && <small id={`revision-hint-${doc.id}`}>{hint}</small>}
+                </>;
               },
             }] : []),
             {

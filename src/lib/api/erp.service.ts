@@ -20,9 +20,10 @@ export type ContactKind = "customer" | "supplier" | "employee";
 export type Contact = {
   id: string; kind: ContactKind; legalName: string; code?: string | null; registrationNumber?: string | null;
   email?: string | null; phone?: string | null; address?: string | null; city?: string | null; state?: string | null;
+  defaultExpenseAccountId?: string | null; defaultExpenseAccountCode?: string | null; defaultExpenseAccountName?: string | null;
   postcode?: string | null; fields: Record<string, unknown>; isActive: boolean; createdAt: string; updatedAt: string;
 };
-export type ContactInput = Omit<Contact, "id" | "isActive" | "createdAt" | "updatedAt" | "fields"> & { fields?: Record<string, unknown> };
+export type ContactInput = Omit<Contact, "id" | "isActive" | "createdAt" | "updatedAt" | "fields" | "defaultExpenseAccountCode" | "defaultExpenseAccountName"> & { fields?: Record<string, unknown> };
 export type ContactEvent = { action: string; by: string; at: string };
 
 export const listContacts = (params: { kind?: ContactKind; search?: string; includeInactive?: boolean } = {}) =>
@@ -172,7 +173,7 @@ export const postScannedRecord = (recordId: string, input: { accountId?: string;
 export type JournalPreview = {
   recordId: string;
   journalDate: string;
-  lines: Array<{ accountId: string; code: string; name: string; description: string; debit: string; credit: string }>;
+  lines: Array<{ accountId: string; code: string; name: string; description: string; debit: string; credit: string; reason?: string | null }>;
   totalDebit: string;
   totalCredit: string;
   balanced: boolean;

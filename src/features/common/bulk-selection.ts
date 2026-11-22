@@ -1,5 +1,11 @@
 export const BULK_LIMIT = 100;
 
+export function hasContentRevision<T extends { contentRevision?: number | null }>(
+  item: T,
+): item is T & { contentRevision: number } {
+  return typeof item.contentRevision === "number" && Number.isInteger(item.contentRevision) && item.contentRevision > 0;
+}
+
 export function selectedIds(selected: readonly string[], eligible: readonly string[]) {
   const eligibleSet = new Set(eligible);
   return selected.filter((id) => eligibleSet.has(id));

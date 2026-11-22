@@ -2,7 +2,7 @@ import { amountInCents, decimalAmount } from "@/features/common/erp/document-log
 import { ApiError } from "@/lib/api/client";
 import { createManualMatchCandidate, decideMatch, getMoneyTransactionDetail, matchBankRecords, type ManualMatchRecord } from "@/lib/api/money.service";
 import type { User } from "@/types";
-import type { BankMoneyTransaction, MatchStatus } from "@/types/money";
+import type { BankMoneyTransaction, BankReconciliationCandidate, MatchStatus } from "@/types/money";
 
 export const MATCH_LIMIT = 50;
 
@@ -31,6 +31,30 @@ export const BANK_MATCH_LABELS: Record<MatchStatus, string> = {
 
 export function bankMatchStatus(line: Pick<BankMoneyTransaction, "status" | "matchStatus">): MatchStatus {
   return line.status === "partially_matched" ? line.status : line.matchStatus;
+}
+
+export function canPostBankPayment(role: User["role"], line: Pick<BankMoneyTransaction, "status" | "canPostPayment">) {
+  return role === "LOCAL_ADMIN" && line.canPostPayment === true &&
+    (line.status === "matched" || line.status === "partially_matched");
+}
+
+export function needsBankAccountChoice(error: unknown) {
+  return error instanceof ApiError && error.status === 422 &&
+    error.message === "Choose the bank account for this statement line.";
+}
+
+export function initialBankCandidateId(line?: Pick<BankMoneyTransaction, "candidateId" | "candidates">) {
+  const candidates = line?.candidates ?? [];
+  return (candidates.find((candidate) => candidate.id === line?.candidateId && candidate.status === "proposed") ??
+    candidates.find((candidate) => candidate.status === "proposed") ??
+    candidates.find((candidate) => candidate.status === "confirmed") ?? candidates[0])?.id ?? "";
+}
+
+export function canReviewBankCandidate(
+  line: Pick<BankMoneyTransaction, "status">,
+  candidate?: Pick<BankReconciliationCandidate, "status">,
+) {
+  return candidate?.status === "proposed" && (line.status === "proposed" || line.status === "imported");
 }
 
 export function canAllocateBankLine(line: BankMoneyTransaction) {

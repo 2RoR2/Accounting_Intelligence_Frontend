@@ -1,14 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BULK_LIMIT, bulkResultSummary, selectedIds, toggleSelection } from "../src/features/common/bulk-selection";
+import { BULK_LIMIT, bulkResultSummary, hasContentRevision, selectedIds, toggleSelection } from "../src/features/common/bulk-selection";
 import {
   allocationCents, allocationTotals, bankMatchStatus, canAllocateBankLine, canMatchRecord,
-  defaultAllocation, isUnallocated, needsBankMatchRefresh, submitBankAllocations,
+  canPostBankPayment, canReviewBankCandidate, defaultAllocation, initialBankCandidateId,
+  isUnallocated, needsBankAccountChoice, needsBankMatchRefresh, submitBankAllocations,
 } from "../src/features/common/money/allocation-logic";
 import { resolveLineItemField } from "../src/features/common/documents/review/review-logic";
-import { postingSelectionTotals, previewTotals } from "../src/features/common/records/posting-logic";
+import { postingSelectionTotals, previewAccountReason, previewTotals } from "../src/features/common/records/posting-logic";
 import { ApiError } from "../src/lib/api/client";
+import { getDocuments, getSuggestedFixes } from "../src/lib/api/document.service";
 import { getScannedPostPreview, postScannedRecord } from "../src/lib/api/erp.service";
+import { getMoneyTransactionDetail, postBankPayment, recordBankExpense } from "../src/lib/api/money.service";
 import type { BankMoneyTransaction, BankReconciliationCandidate, User } from "../src/types";
 
 const user = { id: "accountant", role: "ACCOUNTANT" } as User;
@@ -28,6 +31,34 @@ const proposedCandidate: BankReconciliationCandidate = {
   reference: null, party: null, currency: "MYR", amount: "100.00", amountDelta: "0.00",
   dateDeltaDays: null, reasons: [], evidence: {},
 };
+
+test("the Ready lane keeps list revisions and selects rows carrying a valid revision", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL) => {
+    assert.ok(String(url).endsWith("/api/documents?lane=ready"));
+    return Response.json([
+      { id: "ready", kind: "BILL", contentRevision: 4 },
+      { id: "missing" },
+      { id: "null", contentRevision: null },
+      { id: "invalid", contentRevision: 0 },
+    ]);
+  });
+  const rows = await getDocuments(user, { lane: "ready" });
+  assert.deepEqual(rows.filter(hasContentRevision).map((row) => [row.id, row.contentRevision]), [["ready", 4]]);
+  assert.equal(hasContentRevision({ contentRevision: 1.5 }), false);
+});
+
+test("suggested fixes keep server rule values and supplier explanations", async (t) => {
+  const fixes = [
+    { field: "date", label: "Date", reason: "Date format", source: "rule", suggestedValue: "2026-11-23", explanation: "Day-first date." },
+    { field: "billing_period", label: "Billing period", reason: "Date format", source: "rule", suggestedValue: "2026-10-15 to 2026-11-16", explanation: "Day-first range." },
+    { field: "supplier", label: "Supplier", reason: "Supplier not found", source: "supplier-match", suggestedValue: null, explanation: "Several suppliers are similar." },
+  ];
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL) => {
+    assert.ok(String(url).endsWith("/api/documents/bill/suggested-fixes"));
+    return Response.json(fixes);
+  });
+  assert.deepEqual(await getSuggestedFixes("bill"), fixes);
+});
 
 test("bulk selection keeps eligible rows, drops changed revisions and respects the request limit", () => {
   const selected = toggleSelection(["doc-1:2"], "doc-2:1");
@@ -150,6 +181,70 @@ test("conflicts, timeouts, transport errors and server errors require a bank lin
   assert.equal(needsBankMatchRefresh(new ApiError("Invalid allocation", 422)), false);
 });
 
+test("recording a bank line retries with the selected catalog ID after the account-choice response", async (t) => {
+  const requests: unknown[] = [];
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
+    assert.ok(String(url).endsWith("/api/bank/transactions/bank-line/record-expense"));
+    requests.push(JSON.parse(String(init?.body)));
+    if (requests.length === 1) {
+      return Response.json({ detail: "Choose the bank account for this statement line." }, { status: 422 });
+    }
+    return Response.json({ documentNumber: "MO-123" }, { status: 201 });
+  });
+  await assert.rejects(recordBankExpense(bankLine.id, "expense", "Utilities"), needsBankAccountChoice);
+  assert.equal((await recordBankExpense(bankLine.id, "expense", "Utilities", "catalog-id")).documentNumber, "MO-123");
+  assert.deepEqual(requests, [
+    { ledgerAccountId: "expense", description: "Utilities" },
+    { ledgerAccountId: "expense", description: "Utilities", bankAccountId: "catalog-id" },
+  ]);
+  assert.equal(needsBankAccountChoice(new ApiError("Choose the bank account for this statement line.", 409)), false);
+  assert.equal(needsBankAccountChoice(new ApiError("Pick a ledger account.", 422)), false);
+});
+
+test("fresh bank details expose every suggestion even when the bank status still says imported", async (t) => {
+  const other = { ...proposedCandidate, id: "other", recordId: "other-bill" };
+  const confirmed = { ...proposedCandidate, id: "confirmed", status: "confirmed" as const };
+  const candidates = [confirmed, proposedCandidate, other];
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL) => {
+    assert.ok(String(url).endsWith("/api/bank/transactions/bank-line"));
+    return Response.json({ ...bankLine, candidates, candidateId: "stale" });
+  });
+  const line = await getMoneyTransactionDetail(user, bankLine.id);
+  assert.ok(line);
+  assert.deepEqual(line.candidates, candidates);
+  assert.equal(initialBankCandidateId(line), proposedCandidate.id);
+  assert.equal(initialBankCandidateId({ candidates, candidateId: other.id }), other.id);
+  assert.equal(initialBankCandidateId({ candidates: [confirmed] }), confirmed.id);
+  assert.equal(initialBankCandidateId({ candidates: [] }), "");
+  assert.equal(canReviewBankCandidate(line, proposedCandidate), true);
+  assert.equal(canReviewBankCandidate(line, confirmed), false);
+  assert.equal(canReviewBankCandidate(partialLine, proposedCandidate), false);
+});
+
+test("payment posting requires an eligible matched line and a company admin", () => {
+  const matched = { status: "matched", canPostPayment: true } as const;
+  assert.equal(canPostBankPayment("LOCAL_ADMIN", matched), true);
+  assert.equal(canPostBankPayment("LOCAL_ADMIN", { ...partialLine, canPostPayment: true }), true);
+  assert.equal(canPostBankPayment("ACCOUNTANT", matched), false);
+  assert.equal(canPostBankPayment("LOCAL_ADMIN", { ...matched, canPostPayment: false }), false);
+  assert.equal(canPostBankPayment("LOCAL_ADMIN", { ...bankLine, canPostPayment: true }), false);
+});
+
+test("post payment uses the bank endpoint and preserves journal lines on an idempotent response", async (t) => {
+  const posted = {
+    journalId: "journal",
+    lines: [{ accountId: "bank", code: "1000", name: "Bank", description: "Customer payment", debit: "100.00", credit: "0.00" }],
+    idempotent: true,
+  };
+  t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
+    assert.ok(String(url).endsWith("/api/bank/transactions/bank-line/post-payment"));
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), {});
+    return Response.json(posted, { status: 201 });
+  });
+  assert.deepEqual(await postBankPayment(bankLine.id), posted);
+});
+
 test("suggested fixes resolve the zero-based line index and an editable field", () => {
   const lines = [{ id: "first" }, { id: "second" }, { id: null }];
   assert.deepEqual(resolveLineItemField("line_items.0.quantity", lines), { index: 0, key: "quantity", label: "Line 1 Quantity" });
@@ -167,6 +262,12 @@ test("journal preview uses the reported totals and preserves the server balance 
     debit: "10.01", credit: "10.00", balanced: false,
   });
   assert.equal(previewTotals({ totalDebit: "0.00", totalCredit: "0.00", balanced: false }).balanced, false);
+});
+
+test("journal preview displays a server reason or the supplier default annotation beside the account", () => {
+  assert.equal(previewAccountReason({ reason: "supplier default", description: "Purchases" }), "supplier default");
+  assert.equal(previewAccountReason({ description: "Purchases (supplier default)" }), "supplier default");
+  assert.equal(previewAccountReason({ description: "Purchases" }), undefined);
 });
 
 test("the scanned post request carries the hash from the preview", async (t) => {
