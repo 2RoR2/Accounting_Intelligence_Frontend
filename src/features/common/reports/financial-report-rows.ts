@@ -1,16 +1,22 @@
 import type { FinancialSection } from "@/lib/api/reports.service";
 
-export function statementRows(section: FinancialSection, currentYearEarnings?: string) {
+export type StatementReport = "profit-and-loss" | "balance-sheet";
+
+export function statementRows(section: FinancialSection, report: StatementReport) {
   const rows = section.accounts.map(({ accountId, code, name, amount }) => ({
     key: `account-${accountId}`,
-    label: `${code} · ${name}`,
+    label: code ? `${code} · ${name}` : name,
     amount,
   }));
-  if (section.key === "equity" && currentYearEarnings !== undefined) {
-    rows.push({ key: "earnings", label: "Current year earnings", amount: currentYearEarnings });
+  const lowerLabel = section.label.toLowerCase();
+  let subtotalLabel = `Total ${lowerLabel}`;
+  if (report === "profit-and-loss") {
+    subtotalLabel = lowerLabel === "income" || lowerLabel === "expenses"
+      ? "Subtotal"
+      : `Total ${section.label}`;
   }
   return {
     rows,
-    subtotal: { label: `Total ${section.label.toLowerCase()}`, amount: section.total },
+    subtotal: { label: subtotalLabel, amount: section.total },
   };
 }

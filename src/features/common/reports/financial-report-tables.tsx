@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { Badge, DataTable, EmptyState, formatDate, money } from "@/components/common/ui";
 import type { Ageing, AgeingBucket, FinancialReport, FinancialSection, GeneralLedger, TaxSummary } from "@/lib/api/reports.service";
-import { statementRows } from "./financial-report-rows";
+import { statementRows, type StatementReport } from "./financial-report-rows";
 
 function ReportTable({ label, columns, children }: { label: string; columns: string[]; children: ReactNode }) {
   return <div className="table-scroll" role="region" aria-label={label} tabIndex={0}>
@@ -12,15 +12,15 @@ function ReportTable({ label, columns, children }: { label: string; columns: str
   </div>;
 }
 
-function StatementTable({ label, sections, earnings, totals }: {
+function StatementTable({ label, report, sections, totals }: {
   label: string;
+  report: StatementReport;
   sections: FinancialSection[];
-  earnings?: string;
   totals: Array<{ label: string; amount: string }>;
 }) {
   return <ReportTable label={label} columns={["Account", "Amount"]}>
     {sections.map((section) => {
-      const { rows, subtotal } = statementRows(section, earnings);
+      const { rows, subtotal } = statementRows(section, report);
       return <tbody key={section.key}>
         <tr><th scope="rowgroup" colSpan={2}>{section.label}</th></tr>
         {rows.map((row) => <tr key={row.key}><td>{row.label}</td><td>{money(row.amount)}</td></tr>)}
@@ -76,6 +76,12 @@ const bucketLabels: Record<AgeingBucket, string> = {
   "90+": "90+ days",
 };
 
+const ageingSourceLabels: Record<Ageing["rows"][number]["source"], string> = {
+  typed: "Typed",
+  scanned: "Scanned",
+  opening: "Opening balance",
+};
+
 function AgeingTables({ buckets, rows, totals }: Ageing) {
   return <>
     <ReportTable label="Ageing totals" columns={["", ...buckets.map((bucket) => bucketLabels[bucket]), "Total outstanding"]}>
@@ -90,7 +96,7 @@ function AgeingTables({ buckets, rows, totals }: Ageing) {
       rowKey={(row) => String(row.index)}
       columns={[
         { label: "Contact", render: (row) => row.contactName },
-        { label: "Source", render: (row) => row.source === "typed" ? "Typed" : "Scanned" },
+        { label: "Source", render: (row) => ageingSourceLabels[row.source] },
         { label: "Document number", render: (row) => row.documentNumber },
         { label: "Document date", render: (row) => formatDate(row.documentDate) },
         { label: "Due date", render: (row) => formatDate(row.dueDate) },
@@ -125,19 +131,19 @@ export function FinancialReportTable(result: FinancialReport) {
   switch (result.report) {
     case "profit-and-loss": {
       const { sections, totalIncome, totalExpenses, netProfit } = result.data;
-      return <StatementTable label="Profit and loss" sections={sections} totals={[
+      return <StatementTable label="Profit and loss" report={result.report} sections={sections} totals={[
         { label: "Total income", amount: totalIncome },
         { label: "Total expenses", amount: totalExpenses },
         { label: "Net profit", amount: netProfit },
       ]} />;
     }
     case "balance-sheet": {
-      const { sections, currentYearEarnings, totalAssets, totalLiabilitiesAndEquity, balanced } = result.data;
+      const { sections, totalAssets, totalLiabilitiesAndEquity, balanced } = result.data;
       return <>
         <div className="panel-body">
           {balanced ? <Badge>Balanced</Badge> : <p className="notice danger">Does not balance</p>}
         </div>
-        <StatementTable label="Balance sheet" sections={sections} earnings={currentYearEarnings} totals={[
+        <StatementTable label="Balance sheet" report={result.report} sections={sections} totals={[
           { label: "Total assets", amount: totalAssets },
           { label: "Total liabilities and equity", amount: totalLiabilitiesAndEquity },
         ]} />

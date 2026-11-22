@@ -33,6 +33,7 @@ type ProfitAndLoss = {
 type BalanceSheet = {
   asOf: string;
   sections: Array<FinancialSection & { key: "assets" | "liabilities" | "equity" }>;
+  retainedEarnings: string;
   currentYearEarnings: string;
   totalAssets: string;
   totalLiabilitiesAndEquity: string;
@@ -60,7 +61,7 @@ export type Ageing = {
   buckets: AgeingBuckets;
   rows: Array<{
     contactName: string;
-    source: "typed" | "scanned";
+    source: "typed" | "scanned" | "opening";
     documentNumber: string;
     documentDate: string;
     dueDate: string | null;

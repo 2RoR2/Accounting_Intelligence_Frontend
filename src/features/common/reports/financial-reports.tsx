@@ -114,10 +114,12 @@ export function MonthPack() {
     {!data && !error && <LoadingState variant="form" />}
     {error && <ReportNotice message={error} retry={refresh} />}
     {data && (periods.length > 0 ? <form className="report-toolbar report-date-filters" onSubmit={exportPack} aria-busy={downloading}>
-      <Field label="Month *">
+      <Field label="Accounting period *">
         <select required value={selected} disabled={downloading} onChange={(event) => setPeriod(event.target.value)}>
-          <option value="">Select a month</option>
-          {periods.map(({ id, periodCode }) => <option key={id} value={periodCode}>{periodCode}</option>)}
+          <option value="">Select a period</option>
+          {periods.map(({ id, periodCode, startsOn, endsOn }) => <option key={id} value={periodCode}>
+            {`${periodCode} (${startsOn} to ${endsOn})`}
+          </option>)}
         </select>
       </Field>
       <button type="submit" className="btn" disabled={!selected || downloading}>Download month pack (Excel)</button>
