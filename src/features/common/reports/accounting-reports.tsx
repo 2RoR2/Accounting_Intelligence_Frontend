@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments, getExceptions } from "@/lib/api/document.service";
 import { getStandardisedRecords, downloadCsv } from "@/lib/api/record.service";
@@ -7,6 +7,7 @@ import { getPerformanceMetrics } from "@/lib/api/processing.service";
 import { currencyTotals, decimalDisplay, escapeMarkup, isPlainNumber } from "@/lib/api/document-contract";
 import type { User } from "@/types";
 import { EvaluationPage } from "@/features/common/reports/evaluation-page";
+import { FinancialReportView, MonthPack } from "./financial-reports";
 import {
   ErrorState,
   LoadingState,
@@ -93,7 +94,69 @@ function downloadPdf(title: string, rows: SummaryRow[]) {
   setTimeout(() => URL.revokeObjectURL(url), 15000);
 }
 
+const reportTabs = [
+  ["processing-summary", "Processing summary"],
+  ["profit-and-loss", "Profit and loss"],
+  ["balance-sheet", "Balance sheet"],
+  ["general-ledger", "General ledger"],
+  ["receivables-ageing", "Receivables ageing"],
+  ["payables-ageing", "Payables ageing"],
+  ["tax-summary", "Tax summary"],
+] as const;
+
 export function AccountingReportsPage({ user }: { user: User }) {
+  const [active, setActive] = useState(0);
+  const id = useId();
+  const tabId = (index: number) => `${id}-tab-${index}`;
+  const panelId = (index: number) => `${id}-panel-${index}`;
+
+  function focusTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const last = reportTabs.length - 1;
+    let next: number;
+    switch (event.key) {
+      case "ArrowLeft": next = index === 0 ? last : index - 1; break;
+      case "ArrowRight": next = index === last ? 0 : index + 1; break;
+      case "Home": next = 0; break;
+      case "End": next = last; break;
+      default: return;
+    }
+    event.preventDefault();
+    document.getElementById(tabId(next))?.focus();
+  }
+
+  return <div className="dashboard-page reports-page">
+    <PageHeader title="Reports" />
+    <div className="report-tabs" role="tablist" aria-label="Reports">
+      {reportTabs.map(([key, label], index) => <button
+        key={key}
+        id={tabId(index)}
+        type="button"
+        role="tab"
+        className={active === index ? "active" : ""}
+        aria-selected={active === index}
+        aria-controls={panelId(index)}
+        tabIndex={active === index ? 0 : -1}
+        onClick={() => setActive(index)}
+        onKeyDown={(event) => focusTab(event, index)}
+      >{label}</button>)}
+    </div>
+    {reportTabs.map(([key, title], index) => <div
+      key={key}
+      id={panelId(index)}
+      role="tabpanel"
+      aria-labelledby={tabId(index)}
+      tabIndex={0}
+      hidden={active !== index}
+    >
+      {active === index && (key === "processing-summary"
+        ? <ProcessingSummary user={user} />
+        : <FinancialReportView report={key} title={title} />)}
+    </div>)}
+    <MonthPack />
+  </div>;
+}
+
+function ProcessingSummary({ user }: { user: User }) {
   const { data, error, loading, refresh } = useResource(
     async () => {
       const [docs, exceptions, records, metrics] = await Promise.all([
@@ -205,12 +268,13 @@ export function AccountingReportsPage({ user }: { user: User }) {
   const exportPdf = () => downloadPdf("Processing Summary", summary.rows);
 
   return (
-    <div className="dashboard-page reports-page">
-      <PageHeader
-        title="Processing Summary"
-        description="Overall totals, status breakdown, and performance against the success criteria. Use Documents, Exceptions, or Standardised Records for detail."
-        actions={
-          <>
+    <div className="processing-summary">
+      <div className="page-heading">
+        <div>
+          <h2>Processing summary</h2>
+          <p>Overall totals, status breakdown, and performance against the success criteria. Use Documents, Exceptions, or Standardised Records for detail.</p>
+        </div>
+        <div className="actions">
             <button className="btn" onClick={exportCsv}>
               <Download size={15} /> CSV
             </button>
@@ -220,9 +284,8 @@ export function AccountingReportsPage({ user }: { user: User }) {
             <button className="btn" onClick={exportPdf}>
               <FileText size={15} /> PDF
             </button>
-          </>
-        }
-      />
+        </div>
+      </div>
 
       <div className="stats-grid pipeline-health-grid">
         <StatCard variant="solid" tone="invoice" label="Documents" value={summary.total} icon={<Files size={17} />} detail="All uploads" />

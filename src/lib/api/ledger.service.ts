@@ -1,7 +1,8 @@
-import { api } from "./client";
+import { api, get, post } from "./client";
 
 export type LedgerAccount = { id: string; code: string; name: string; accountType: string };
-export type AccountingPeriod = { id: string; periodCode: string; startsOn: string; endsOn: string; status: string };
+export type AccountingPeriodInput = { periodCode: string; startsOn: string; endsOn: string };
+export type AccountingPeriod = AccountingPeriodInput & { id: string; status: "open" | "closed" };
 export type JournalLineInput = { accountId: string; debit?: string; credit?: string; description?: string; sourceField?: string | null };
 export type Journal = { id: string; periodId: string; sourceType: string; sourceId?: string | null; status: string; date: string; description: string; totalDebit: string; totalCredit: string; idempotencyKey: string };
 export type Settlement = { id: string; settlementRef: string; date?: string; direction: "money_in" | "money_out"; amount: string; allocated: string; unmatchedAmount: string; currency: string; status: string };
@@ -46,7 +47,13 @@ export const postSupplierPayment = (transactionId: string, input: {
 );
 
 export const getLedgerAccounts = () => api<LedgerAccount[]>("/api/ledger/accounts");
-export const getAccountingPeriods = () => api<AccountingPeriod[]>("/api/ledger/periods");
+const periodsPath = "/api/ledger/periods";
+export const getAccountingPeriods = () => get<AccountingPeriod[]>(periodsPath);
+export const createAccountingPeriod = (input: AccountingPeriodInput) => post<AccountingPeriod>(periodsPath, input);
+export const closeAccountingPeriod = (id: string, reason?: string) =>
+  post<AccountingPeriod>(`${periodsPath}/${encodeURIComponent(id)}/close`, { reason });
+export const reopenAccountingPeriod = (id: string, reason: string) =>
+  post<AccountingPeriod>(`${periodsPath}/${encodeURIComponent(id)}/reopen`, { reason });
 export const getLedgerJournals = () => api<Journal[]>("/api/ledger/journals");
 export const getSettlements = () => api<Settlement[]>("/api/ledger/settlements");
 export const getAllocations = () => api<Allocation[]>("/api/ledger/allocations");

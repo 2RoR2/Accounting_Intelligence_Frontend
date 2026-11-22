@@ -212,7 +212,7 @@ const STATUS_LABELS: Record<string, string> = {
   UPLOADED: "Uploaded",
   QUEUED: "Waiting to be read",
   PROCESSING: "Reading document",
-  EXTRACTED: "Ready to approve",
+  EXTRACTED: "Read, to check",
   VALIDATING: "Checking",
   EXCEPTION: "Needs fixing",
   IN_REVIEW: "In review",

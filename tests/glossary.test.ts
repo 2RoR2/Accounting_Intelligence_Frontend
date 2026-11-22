@@ -46,7 +46,7 @@ test("a new counterparty says supplier or customer by the field", () => {
 });
 
 test("statuses read as accountant words and keep their colour", () => {
-  assert.equal(statusLabel("EXTRACTED"), "Ready to approve");
+  assert.equal(statusLabel("EXTRACTED"), "Read, to check");
   assert.equal(statusLabel("EXCEPTION"), "Needs fixing");
   assert.equal(statusLabel("PROCESSING"), "Reading document");
   assert.equal(statusLabel("COMPLETED"), "Saved to records");

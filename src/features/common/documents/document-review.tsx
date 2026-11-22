@@ -439,7 +439,6 @@ function DocumentReviewPage({
   // Revalidating resets status to extracted/exception, which would silently undo a submission or approval.
   const canRevalidate = !["IN_REVIEW", "VALIDATED"].includes(data.doc.status);
   const blockingFindings = summary.blocking;
-  const validationStatus = data.validationReport?.validationStatus;
   const viewIssues = () => {
     setPanel("validation");
     window.setTimeout(() => validationHeadingRef.current?.focus(), 0);
@@ -708,10 +707,11 @@ function DocumentReviewPage({
                         <span aria-hidden="true" />{unsaved.length ? `Unsaved changes: ${unsaved.length}` : "All changes saved"}
                       </div>
                       {unsaved.length > 0 && <p className="review-unsaved-hint">Revalidation uses saved values only. Save changes before revalidating.</p>}
+                      {/* The reason a save or submit was refused, next to the buttons (the page-top notice is out of view here). */}
+                      {failure && <p className="notice danger" role="alert">{failure}</p>}
                       <div className="review-action-buttons">
                         <button className="btn" disabled={readonly || busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.")}>Save draft</button>
                         {canRevalidate && <button className="btn primary" disabled={readonly || busy || unsaved.length > 0} onClick={() => run(() => revalidateDocument(user, documentId), "Review saved and revalidated.")}><CheckCircle2 size={16} /> Save & revalidate</button>}
-                        {user.role === "ACCOUNTANT" && canRevalidate && <button className={`btn ${validationStatus === "PASS" && blockingFindings === 0 ? "primary" : "secondary"}`} disabled={readonly || busy || validationStatus !== "PASS" || blockingFindings > 0 || unsaved.length > 0} onClick={() => run(() => submitDocumentReview(documentId, "submitted", note || "Ready for approval", data.doc.contentRevision ?? 1), "Submitted for approval.")}>Submit for approval</button>}
                         {canSubmit && <button ref={submitButton} type="button" className="btn primary review-save-submit" disabled={busy} aria-keyshortcuts="Control+Enter" onClick={() => void saveAndSubmit()}>
                           Save, check and submit <kbd>Ctrl+Enter</kbd></button>}
                       </div>

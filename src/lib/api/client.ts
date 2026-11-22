@@ -39,17 +39,36 @@ function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
+async function readError(response: Response): Promise<ApiError> {
+  const contentType = response.headers.get("Content-Type") ?? "";
+  const plain = contentType.includes("text/plain");
+  const body = plain ? null : await response.json().catch(() => null);
+  const reason = plain ? (await response.text()).trim() : "";
+  const detail = body && typeof body.detail === "string"
+    ? body.detail
+    : body?.detail?.message
+      ? `${body.detail.message}${body.detail.existingDocumentCode ? ` Existing document: ${body.detail.existingDocumentCode}.` : ""}`
+      : typeof body?.message === "string"
+        ? body.message
+        : typeof body?.error === "string"
+          ? body.error
+          : reason || (response.status >= 500
+            ? `The backend could not complete this request (${response.status}). Check the API and database service logs.`
+            : `Request failed (${response.status})`);
+  const details = body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail) ? body.detail as Record<string, unknown> : undefined;
+  return new ApiError(detail, response.status, details);
+}
+
+async function request<T>(path: string, read: (response: Response) => Promise<T>, init: RequestInit, allowRefresh: boolean): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   headers.set("X-Requested-With", "AccountingIntelligence");
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
-  let response: Response;
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 15000);
   try {
-    response = await fetch(apiUrl(path), {
+    const response = await fetch(apiUrl(path), {
       ...init,
       headers,
       credentials: "include",
@@ -57,29 +76,15 @@ export async function api<T>(path: string, init: RequestInit = {}, allowRefresh 
       signal: controller.signal,
     });
 
-    // Keep the timeout active until the body is fully consumed. A server can
-    // send 200 headers while the database-backed JSON response is still
-    // blocked, which previously left the UI in a permanent loading state.
-    const body = await response.json().catch(() => null);
-    if (response.status === 401 && allowRefresh && !NO_REFRESH.test(path) && await refreshSession()) {
-      return await api<T>(path, init, false);
-    }
     if (!response.ok) {
-      const detail = body && typeof body.detail === "string"
-        ? body.detail
-        : body?.detail?.message
-          ? `${body.detail.message}${body.detail.existingDocumentCode ? ` Existing document: ${body.detail.existingDocumentCode}.` : ""}`
-          : typeof body?.message === "string"
-            ? body.message
-            : typeof body?.error === "string"
-              ? body.error
-              : response.status >= 500
-                ? `The backend could not complete this request (${response.status}). Check the API and database service logs.`
-                : `Request failed (${response.status})`;
-      const details = body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail) ? body.detail as Record<string, unknown> : undefined;
-      throw new ApiError(detail, response.status, details);
+      const error = await readError(response);
+      if (response.status === 401 && allowRefresh && !NO_REFRESH.test(path) && await refreshSession()) {
+        return await request(path, read, init, false);
+      }
+      throw error;
     }
-    return body as T;
+    // Keep the timeout active while the response body is being read.
+    return await read(response);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("The request timed out. Check that the backend and database are running, then try again.");
@@ -94,6 +99,20 @@ export async function api<T>(path: string, init: RequestInit = {}, allowRefresh 
   } finally {
     globalThis.clearTimeout(timeout);
   }
+}
+
+export function api<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
+  return request(path, (response) => response.json().catch(() => null), init, allowRefresh);
+}
+
+export async function download(path: string, filename: string) {
+  const blob = await request(path, (response) => response.blob(), {}, true);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export const get = <T>(path: string) => api<T>(path);
