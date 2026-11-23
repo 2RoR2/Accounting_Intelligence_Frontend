@@ -1,0 +1,123 @@
+/* Business summary (Reports). Colours come from the app theme; print rules make the page a clean A4 sheet. */
+.biz-summary {
+  --biz-ink: #1f2d3d;
+  --biz-muted: #5b6b7f;
+  --biz-line: #dfe8f3;
+  --biz-sales: var(--color-0, #3c92f7);
+  --biz-expenses: var(--color-2, #9dcaff);
+  --biz-profit: #1f2d3d;
+  --biz-good: #15803d;
+  --biz-bad: #b42318;
+  --biz-card: #fff;
+}
+.theme-dark .biz-summary {
+  --biz-ink: #e6edf7;
+  --biz-muted: #a7b5c8;
+  --biz-line: #2b3a50;
+  --biz-profit: #e6edf7;
+  --biz-good: #4ade80;
+  --biz-bad: #f87171;
+  --biz-card: #172233;
+}
+
+.biz-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px; margin: 4px 0 18px; }
+.biz-controls .field, .biz-controls label { margin: 0; }
+.biz-controls input[type="month"] { min-height: 38px; }
+.biz-toggle { display: inline-flex; border: 1px solid var(--biz-line); border-radius: 10px; overflow: hidden; background: var(--biz-card); }
+.biz-toggle button { padding: 9px 18px; border: 0; background: transparent; color: var(--biz-ink); font-weight: 600; cursor: pointer; }
+.biz-toggle button.active { background: var(--color-0, #3c92f7); color: #fff; }
+.biz-toggle button:focus-visible { outline: 2px solid var(--color-0, #3c92f7); outline-offset: -2px; }
+.biz-period { margin: 0; align-self: center; color: var(--biz-muted); font-size: 14px; }
+
+.biz-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 8px; }
+.biz-figure { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border: 1px solid var(--biz-line); border-radius: 14px; background: var(--biz-card); min-width: 0; }
+.biz-figure span { color: var(--biz-muted); font-size: 13px; font-weight: 600; }
+.biz-figure strong { font-size: 24px; line-height: 1.15; color: var(--biz-ink); overflow-wrap: anywhere; }
+.biz-figure small { color: var(--biz-muted); font-size: 12px; }
+.biz-figure .biz-good { color: var(--biz-good); }
+.biz-figure .biz-bad { color: var(--biz-bad); }
+.biz-note, .biz-hint { margin: 6px 2px 16px; color: var(--biz-muted); font-size: 13px; }
+
+.biz-position, .biz-two, .biz-three { display: grid; gap: 14px; margin-bottom: 14px; }
+.biz-position { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.biz-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.biz-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.biz-card { min-width: 0; margin: 0; }
+.biz-card > p, .biz-card > ul, .biz-card > ol, .biz-card > figure { margin-left: 20px; margin-right: 20px; }
+.biz-card > .data-table-wrap { margin: 0 20px 20px; overflow-x: auto; }
+.biz-total { margin-top: 4px; margin-bottom: 6px; font-size: 26px; font-weight: 700; color: var(--biz-ink); overflow-wrap: anywhere; }
+.biz-muted { color: var(--biz-muted); font-size: 14px; margin-bottom: 18px; }
+.biz-overdue { color: var(--biz-bad); font-size: 14px; font-weight: 600; margin-bottom: 18px; }
+.biz-accounts { list-style: none; padding: 0; margin-bottom: 18px; display: grid; gap: 6px; }
+.biz-accounts li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--biz-ink); }
+.biz-accounts li span { min-width: 0; overflow-wrap: anywhere; color: var(--biz-muted); }
+
+.biz-top { list-style: none; padding: 0; margin-bottom: 18px; display: grid; gap: 12px; counter-reset: top; }
+.biz-top li { position: relative; display: grid; gap: 5px; }
+.biz-top li > div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--biz-ink); }
+.biz-top li > div span { min-width: 0; overflow-wrap: anywhere; }
+.biz-top li > i { display: block; height: 6px; border-radius: 99px; background: var(--biz-sales); opacity: 0.75; min-width: 3px; }
+
+.biz-table { width: 100%; min-width: 0; }
+.biz-table th, .biz-table td { padding: 9px 10px; font-size: 13px; vertical-align: top; }
+.biz-table .num, .biz-trend-values .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.biz-table small { color: var(--biz-muted); }
+.biz-unnamed td:first-child { color: var(--biz-muted); font-style: italic; }
+.biz-total-row th, .biz-total-row td { border-top: 2px solid var(--biz-line); font-weight: 700; }
+.biz-chip { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--biz-bad) 12%, transparent); color: var(--biz-bad); white-space: nowrap; }
+
+.biz-trend { margin: 0 20px 20px; }
+.biz-trend svg { width: 100%; height: auto; display: block; max-height: 280px; }
+.biz-axis { stroke: var(--biz-line); stroke-width: 1; }
+.biz-axis-label { fill: var(--biz-muted); font-size: 11px; }
+.biz-bar-sales, .biz-key-sales { fill: var(--biz-sales); background: var(--biz-sales); }
+.biz-bar-expenses, .biz-key-expenses { fill: var(--biz-expenses); background: var(--biz-expenses); }
+.biz-line { fill: none; stroke: var(--biz-profit); stroke-width: 2; }
+.biz-dot { fill: var(--biz-profit); }
+.biz-key-profit { background: var(--biz-profit); }
+.biz-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 13px; color: var(--biz-muted); }
+.biz-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.biz-trend-values { width: 100%; margin-top: 14px; border-collapse: collapse; font-size: 13px; }
+.biz-trend-values th, .biz-trend-values td { padding: 6px 8px; border-top: 1px solid var(--biz-line); text-align: left; }
+.biz-trend-values th.num { text-align: right; }
+.biz-print-head { display: none; }
+
+@media (max-width: 1100px) {
+  .biz-three { grid-template-columns: 1fr; }
+  .biz-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .biz-position, .biz-two { grid-template-columns: 1fr; }
+  .biz-figures { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .biz-figure { padding: 12px 14px; }
+  .biz-figure strong { font-size: 20px; }
+  .biz-controls { align-items: stretch; }
+  .biz-toggle { width: 100%; }
+  .biz-toggle button { flex: 1; }
+  .biz-card > .data-table-wrap { margin-left: 12px; margin-right: 12px; }
+  .biz-trend { margin-left: 12px; margin-right: 12px; }
+}
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  .sidebar, .topbar, .nav-backdrop, .skip-link, .page-heading .actions, .biz-controls, .biz-hint, .sr-only { display: none !important; }
+  .app-shell, .app-main { display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .biz-summary { --biz-ink: #111; --biz-muted: #444; --biz-line: #bbb; --biz-card: #fff; --biz-good: #111; --biz-bad: #111; padding: 0 !important; }
+  .biz-summary .page-heading { margin: 0 0 6px !important; }
+  .biz-print-head { display: grid; gap: 2px; margin-bottom: 10px; font-size: 12px; color: #333; }
+  .biz-print-head strong { font-size: 16px; color: #000; }
+  .biz-summary .panel, .biz-figure { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+  .biz-figures { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .biz-position, .biz-two { grid-template-columns: repeat(3, 1fr); }
+  .biz-two { grid-template-columns: repeat(2, 1fr); }
+  .biz-three { grid-template-columns: 1fr; }
+  .biz-trend-values { display: table; }
+  .biz-chip { background: none; border: 1px solid #888; color: #111; }
+  .biz-top li > i, .biz-bar-sales, .biz-bar-expenses, .biz-key-sales, .biz-key-expenses, .biz-key-profit {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+}
+
+.biz-summary .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.biz-trend-values thead th { background: transparent; color: var(--biz-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.biz-trend-values tbody td { color: var(--biz-ink); }

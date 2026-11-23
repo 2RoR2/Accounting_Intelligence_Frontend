@@ -57,6 +57,7 @@ const SECTIONS: NavSection[] = [
       leaf("Periods & month-end", "ledger", "section=periods"),
     ] },
     { label: "Reports", page: "reports", icon: "reports", children: [
+      leaf("Business summary", "reports", "view=business-summary"),
       leaf("Financial reports", "reports"),
       leaf("Month pack", "reports", "view=month-pack"),
       leaf("Performance evaluation", "evaluation"),

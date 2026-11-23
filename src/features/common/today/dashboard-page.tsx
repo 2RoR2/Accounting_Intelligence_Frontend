@@ -4,7 +4,7 @@ import Link from "next/link";
 import { documentDisplayName } from "@/lib/document-display-name";
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck, FileSearch, Files, HandCoins,
+  AlertTriangle, ArrowRight, BarChart3, CalendarClock, CheckCircle2, ClipboardCheck, FileSearch, Files, HandCoins,
   Landmark, Plus, Receipt, Search, ShieldAlert, Send, type LucideIcon,
 } from "lucide-react";
 import { ErrorState, LoadingState, StatusBadge, formatDate } from "@/components/common/ui";
@@ -164,6 +164,7 @@ export function DashboardPage({ user }: { user: User }) {
           <p className="dash-headline">{view.headline}</p>
         </div>
         <div className="workspace-dashboard-actions">
+          <Link className="btn" href={`${base}/reports?view=business-summary`}><BarChart3 size={15} aria-hidden /> Business summary</Link>
           <Link className="btn" href={`${base}/documents`}><Search size={15} aria-hidden /> Search documents</Link>
           <Link className="btn primary" href={`${base}/upload`}><Plus size={15} aria-hidden /> Upload documents</Link>
         </div>
