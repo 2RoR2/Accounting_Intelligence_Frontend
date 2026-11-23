@@ -49,3 +49,13 @@ test("the preview shows opening, each line once, closing, the ageing and unalloc
   }));
   assert.ok(flagged.includes("differs from the closing balance"));
 });
+
+test("the preview explains unposted matched payments and an amount due below the posted total", () => {
+  const html = renderToStaticMarkup(createElement(StatementTable, {
+    statement: { ...statement, ageing: { ...statement.ageing, unallocatedCredits: "0.00", unpostedPayments: "500.00",
+                                         amountDueBelowTotal: "200.00", balance: "1700.00" } },
+  }));
+  assert.ok(html.includes("Matched payments not yet posted (still owed)"));
+  assert.ok(html.includes("total above the amount due shown"));
+  assert.ok(!html.includes("not allocated to an item"));
+});
