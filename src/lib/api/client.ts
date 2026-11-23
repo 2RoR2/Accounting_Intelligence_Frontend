@@ -96,7 +96,7 @@ async function request<T>(path: string, read: (response: Response) => Promise<T>
     // Preserve API/application errors. Only browser transport failures should
     // be rewritten as an unreachable-backend message.
     if (error instanceof Error && error.name !== "TypeError") throw error;
-    throw new Error("Unable to reach the backend API. Check that the backend is running on port 8000.");
+    throw new Error("Unable to reach the backend API. Check your connection, then try again.");
   } finally {
     globalThis.clearTimeout(timeout);
   }

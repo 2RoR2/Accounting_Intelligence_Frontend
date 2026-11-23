@@ -1,6 +1,6 @@
 import {
   ALLOCATES_TO, AMOUNT_ONLY_TYPES, BANK_TYPES, DOCUMENT_LABELS, NOTE_TARGETS, POSTING_TYPES, PRINTED_TYPES, PURCHASE_TYPES,
-  SALES_TYPES, TRANSFERS, type DocumentFile, type DocumentLine, type DocumentStatus, type DocumentType, type ErpDocument,
+  SALES_TYPES, SCANNED_LIST_TYPES, TRANSFERS, type DocumentFile, type DocumentLine, type DocumentStatus, type DocumentType, type ErpDocument,
 } from "@/lib/api/erp.service";
 import type { User } from "@/types";
 
@@ -23,6 +23,26 @@ export function documentGroup(type: DocumentType): DocumentGroup | undefined {
 
 export function documentHref(base: string, group: DocumentGroup, type: DocumentType, id?: string) {
   return `${base}/${group}${id ? `/${encodeURIComponent(id)}` : ""}?type=${encodeURIComponent(type)}`;
+}
+
+/** Types whose name is already a plural or a mass noun: the list title and sentences use the label as it is. */
+const UNCOUNTED_TYPES: ReadonlySet<DocumentType> = new Set(["goods-received", "money-in", "money-out"]);
+
+/** The list title: "Invoices", but "Goods received". */
+export function documentListTitle(type: DocumentType) {
+  const label = DOCUMENT_LABELS[type];
+  return UNCOUNTED_TYPES.has(type) ? label : `${label}s`;
+}
+
+/** What an empty list says to do next. Only bills and supplier credit notes also list approved scanned documents. */
+export function emptyListHint(type: DocumentType) {
+  const noun = documentListTitle(type).toLowerCase();
+  if (type === "payment") return `No ${noun} yet. Record one against an invoice with New.`;
+  if (type === "purchase-payment") return `No ${noun} yet. Record one against a bill with New.`;
+  if ((SALES_TYPES as readonly string[]).includes(type)) return `No ${noun} yet. Create one with New: what you issue is typed here, not uploaded.`;
+  if (type === "bank-transfer") return "No transfers yet. Record a move between your own bank accounts with New.";
+  if (SCANNED_LIST_TYPES.has(type)) return `No ${noun} yet. Captured documents appear here after you approve them in the Inbox, or create one with New.`;
+  return `No ${noun} yet. Create one with New, or turn an earlier document into one.`;
 }
 
 /** Open items: they carry an outstanding balance and a payment status. */
@@ -99,7 +119,20 @@ function printedActions(status: DocumentStatus, type: DocumentType, admin: boole
   }
 }
 
-export function documentActions(status: DocumentStatus, type: DocumentType, role: User["role"]): DocumentAction[] {
+/**
+ * What the user can do with a document in this state. Pass the open item's `outstanding` amount when it is known:
+ * once nothing is left to pay, "Receive payment" / "Turn into supplier payment" are not offered (the API would refuse
+ * with "has nothing outstanding").
+ */
+export function documentActions(status: DocumentStatus, type: DocumentType, role: User["role"], outstanding?: string | null): DocumentAction[] {
+  const actions = actionsFor(status, type, role);
+  if (outstanding == null || amountInCents(outstanding) > 0n) return actions;
+  return actions.filter((action) => !(action.kind === "transfer" && MONEY_TARGETS.has(action.target)));
+}
+
+const MONEY_TARGETS: ReadonlySet<DocumentType> = new Set(["payment", "purchase-payment"]);
+
+function actionsFor(status: DocumentStatus, type: DocumentType, role: User["role"]): DocumentAction[] {
   const admin = role === "LOCAL_ADMIN";
   if (!admin && role !== "ACCOUNTANT") return [];
   if (type === "quotation") return quotationActions(status);

@@ -8,11 +8,11 @@ import {
 } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  DOCUMENT_LABELS, SALES_TYPES, SCANNED_LIST_TYPES, getSharingStatus, listDocuments, postScannedRecord,
+  SCANNED_LIST_TYPES, getSharingStatus, listDocuments, postScannedRecord,
   type DocumentType, type ErpDocument,
 } from "@/lib/api/erp.service";
 import {
-  documentHref, documentStatusLabel, hasOutstanding, statusFilterOptions, type DocumentGroup,
+  documentHref, documentListTitle, documentStatusLabel, emptyListHint, hasOutstanding, statusFilterOptions, type DocumentGroup,
 } from "./document-logic";
 
 type DocumentListProps = { base: string; group: DocumentGroup; type: DocumentType; canPost: boolean };
@@ -22,8 +22,7 @@ export function DocumentList({ base, group, type, canPost }: DocumentListProps) 
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>({ page: 1, pageSize: 30 });
   const showsScanned = SCANNED_LIST_TYPES.has(type);
-  const label = DOCUMENT_LABELS[type];
-  const title = type === "goods-received" || type === "money-in" || type === "money-out" ? label : `${label}s`;
+  const title = documentListTitle(type);
 
   useEffect(() => {
     const value = search.trim();
@@ -140,7 +139,7 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
           {columns.map(({ label, render }) => <td key={label}>{render(row)}</td>)}
         </tr>)}</tbody>
       </table>
-    </div> : <EmptyState message={hasFilters(filters) ? "No documents match these filters. Clear a filter to see the rest." : emptyHint(type)} />}
+    </div> : <EmptyState message={hasFilters(filters) ? "No documents match these filters. Clear a filter to see the rest." : emptyListHint(type)} />}
     <div className="filter-bar" aria-label="Document pages">
       <button className="btn small" type="button" disabled={data.page <= 1 || !!postingId} onClick={() => onPage(data.page - 1)}>Previous</button>
       <span>Page {data.page} · {data.total} {data.total === 1 ? "result" : "results"}</span>
@@ -152,11 +151,3 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
 
 const hasFilters = (filters: Filters) => Object.entries(filters).some(([key, value]) => key !== "page" && key !== "pageSize" && !!value && value !== "all");
 
-/** B4 (from S2): an empty list says what to do next. */
-function emptyHint(type: DocumentType) {
-  const label = DOCUMENT_LABELS[type].toLowerCase();
-  if (type === "payment" || type === "purchase-payment") return `No ${label}s yet. Record one against an invoice or bill with New.`;
-  if ((SALES_TYPES as readonly string[]).includes(type)) return `No ${label}s yet. Create one with New: what you issue is typed here, not uploaded.`;
-  if (type === "bank-transfer") return "No transfers yet. Record a move between your own bank accounts with New.";
-  return `No ${label}s yet. Captured documents appear here after you approve them in the Inbox.`;
-}
