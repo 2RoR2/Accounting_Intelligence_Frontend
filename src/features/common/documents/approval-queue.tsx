@@ -10,7 +10,8 @@ import { canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { bulkApproveReviews, decideDocumentReview, getDocumentReviews } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
-import { bulkResultSummary } from "@/features/common/bulk-selection";
+import { bulkResultSummary, saveApprovedToRecords, savedToRecordsSummary } from "@/features/common/bulk-selection";
+import { standardiseDocument } from "@/lib/api/record.service";
 import {
   Badge,
   ErrorState,
@@ -61,7 +62,14 @@ export function ApprovalQueuePage({ user }: { user: User }) {
     setDecisionError("");
     try {
       await decideDocumentReview(documentId, decision, note.trim() || defaultNote(decision), revision);
-      setMessage(decision === "approved" ? "Document approved." : decision === "returned" ? "Document returned for revalidation." : "Document rejected.");
+      if (decision === "approved") {
+        // An approved document is saved to records straight away, so it shows in "Approved, not posted yet".
+        const saved = await saveApprovedToRecords([documentId], (id) => standardiseDocument(user, id));
+        if (saved.failed.length) setDecisionError(`Document approved, but not saved to records: ${saved.failed[0].reason} Open it and use Save to records.`);
+        else setMessage("Document approved and saved to records.");
+      } else {
+        setMessage(decision === "returned" ? "Document returned for revalidation." : "Document rejected.");
+      }
       setNote("");
       await refresh();
     } catch (e) {
@@ -95,7 +103,11 @@ export function ApprovalQueuePage({ user }: { user: User }) {
         documentId, expectedContentRevision,
       })), note.trim() || undefined);
       const names = new Map(confirm.map((item) => [item.documentId, item.number]));
-      setBulkSummary(bulkResultSummary("approved", results, (item) => names.get(item.documentId) ?? item.documentId));
+      const label = (id: string) => names.get(id) ?? id;
+      const saved = await saveApprovedToRecords(results.filter((item) => item.ok).map((item) => item.documentId),
+        (id) => standardiseDocument(user, id));
+      setBulkSummary([bulkResultSummary("approved", results, (item) => label(item.documentId)), savedToRecordsSummary(saved, label)]
+        .filter(Boolean).join(". "));
       setConfirm([]);
       setNote("");
       selection.clear();
