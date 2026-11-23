@@ -25,7 +25,7 @@ import type { User } from "@/types";
 const ICONS: Record<TileId, LucideIcon> = {
   toReview: FileSearch, needsFixing: ShieldAlert, readyToApprove: ClipboardCheck, waitingApproval: Send,
   bankToMatch: Landmark, billsDueSoon: CalendarClock, billsOverdue: AlertTriangle, invoicesOverdue: HandCoins,
-  journalsToPost: Receipt,
+  journalsToPost: Receipt, paymentsToPost: Landmark,
 };
 const AGE_LABEL: Record<string, string> = {
   not_due: "Not due", no_due_date: "No due date", "1_30_days": "1–30 days", "31_60_days": "31–60 days",

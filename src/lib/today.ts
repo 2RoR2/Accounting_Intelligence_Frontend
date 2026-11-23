@@ -40,6 +40,8 @@ export interface HomeSummary {
     billsOverdue: MoneyTile | Unavailable;
     invoicesOverdue: MoneyTile | Unavailable;
     journalsToPost: JournalTile | Unavailable;
+    /** Matched bank lines whose payment is not posted yet (absent from an older backend). */
+    paymentsToPost?: CountTile | Unavailable;
   };
   monthEnd: MonthEnd | Unavailable;
 }
@@ -98,7 +100,7 @@ export function recordFilterLabel(category: string | null, due: string | null, p
   return `${side} ${DUE_WINDOWS[due]}`;
 }
 const ORDER: TileId[] = ["toReview", "needsFixing", "readyToApprove", "waitingApproval", "bankToMatch",
-  "billsDueSoon", "billsOverdue", "invoicesOverdue", "journalsToPost"];
+  "billsDueSoon", "billsOverdue", "invoicesOverdue", "journalsToPost", "paymentsToPost"];
 
 export const areaFor = (role: TodayRole) => (role === "LOCAL_ADMIN" ? "company" : "workspace");
 export function linkHref(role: TodayRole, link: TodayLink | null | undefined) {
@@ -191,10 +193,17 @@ const COPY: Record<TileId, TileCopy> = {
     empty: () => ({ text: "Everything approved is posted to the ledger." }),
     details: (t) => (t.draftJournals ? [`${plural(t.draftJournals, "draft journal")} not yet posted.`] : []),
   },
+  paymentsToPost: {
+    title: () => "Bank payments to post",
+    caption: (t, role) => (role === "LOCAL_ADMIN"
+      ? `${plural(t.count, "matched bank line")} with the payment not in the ledger yet`
+      : `${plural(t.count, "matched bank line")} waiting for an admin to post`),
+    empty: () => ({ text: "Every matched bank payment is posted to the ledger." }),
+  },
 };
 
 /** One tile, in accounting words. */
-export function tileView(id: TileId, tile: HomeSummary["tiles"][TileId], role: TodayRole): TodayTileView {
+export function tileView(id: TileId, tile: NonNullable<HomeSummary["tiles"][TileId]>, role: TodayRole): TodayTileView {
   const copy = COPY[id];
   const href = linkHref(role, tile.link);
   if (!tile.available) {
@@ -219,7 +228,10 @@ export function tileView(id: TileId, tile: HomeSummary["tiles"][TileId], role: T
 
 /** All tiles in the order of the daily routine: check, fix, approve, bank, pay, collect, post. */
 export function todayTiles(summary: HomeSummary, role: TodayRole): TodayTileView[] {
-  return ORDER.map((id) => tileView(id, summary.tiles[id], role));
+  return ORDER.flatMap((id) => {
+    const tile = summary.tiles[id];
+    return tile ? [tileView(id, tile, role)] : [];
+  });
 }
 
 export interface MonthEndStepView {

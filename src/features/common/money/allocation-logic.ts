@@ -29,6 +29,21 @@ export const BANK_MATCH_LABELS: Record<MatchStatus, string> = {
   ignored: "Ignored",
 };
 
+/** "Matched, not posted": the bank line is matched but its payment is not in the ledger yet. */
+export const PAYMENT_NOT_POSTED = "Matched, not posted";
+export const PAYMENT_WAITING_FOR_ADMIN = "Waiting for an admin to post";
+
+export function bankPaymentNotPosted(line: Pick<BankMoneyTransaction, "status" | "matchStatus" | "paymentPending">) {
+  const status = bankMatchStatus(line);
+  return line.paymentPending === true && (status === "matched" || status === "partially_matched");
+}
+
+/** The status a bank line shows in lists: its match status, or "Matched, not posted" while the payment waits. */
+export function bankLineStatusLabel(line: Pick<BankMoneyTransaction, "status" | "matchStatus" | "paymentPending">) {
+  if (line.status === "needs_review") return "Needs review";
+  return bankPaymentNotPosted(line) ? PAYMENT_NOT_POSTED : BANK_MATCH_LABELS[bankMatchStatus(line)];
+}
+
 export function bankMatchStatus(line: Pick<BankMoneyTransaction, "status" | "matchStatus">): MatchStatus {
   return line.status === "partially_matched" ? line.status : line.matchStatus;
 }
