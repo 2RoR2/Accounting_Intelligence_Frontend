@@ -104,7 +104,8 @@ export const NOTE_TARGETS: Partial<Record<DocumentType, readonly DocumentType[]>
 export const PRINTED_TYPES: ReadonlySet<DocumentType> = new Set(["quotation", "invoice", "credit-note", "debit-note", "payment",
   "purchase-payment", "delivery-order"]);
 /** Lists that also show approved scanned documents (source "scanned"). */
-export const SCANNED_LIST_TYPES: ReadonlySet<DocumentType> = new Set(["invoice", "bill", "credit-note", "purchase-credit-note"]);
+// Plan M: captured documents are purchases only; Sales lists hold typed documents.
+export const SCANNED_LIST_TYPES: ReadonlySet<DocumentType> = new Set(["bill", "purchase-credit-note"]);
 /** What a document can be turned into (the backend's TRANSFERS). */
 export const TRANSFERS: Partial<Record<DocumentType, DocumentType[]>> = {
   quotation: ["sales-order", "delivery-order", "invoice"], "sales-order": ["delivery-order", "invoice"], "delivery-order": ["invoice"],

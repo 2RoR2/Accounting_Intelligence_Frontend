@@ -14,6 +14,7 @@ import {
   type DocumentAllocation, type DocumentFile, type DocumentHistory, type DocumentInput, type DocumentLine, type DocumentType,
   type ErpDocument, type Product, type TypedDocument,
 } from "@/lib/api/erp.service";
+import { download, openInNewTab } from "@/lib/api/client";
 import { getLedgerAccounts, type LedgerAccount } from "@/lib/api/ledger.service";
 import { statusLabel } from "@/lib/glossary";
 import type { User } from "@/types";
@@ -129,6 +130,8 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState<"delete" | "void" | null>(null);
   const [voidReason, setVoidReason] = useState("");
+  // Duplicate matches the user has already seen; issuing stops once when a save reveals a new one (Codex review P2).
+  const seenDuplicates = useRef(new Set((initialDocument?.possibleDuplicates ?? []).map(({ id }) => id)));
 
   const label = DOCUMENT_LABELS[type];
   const status = document?.status ?? "draft";
@@ -201,14 +204,23 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     });
   }
 
-  async function save(input: DocumentInput) {
+  async function save(input: DocumentInput): Promise<TypedDocument | null> {
     if (!document) {
       const created = await createDocument(type, input);
       acceptSaved(created);
       navigateTo(created, true);
-      return;
+      return created;
     }
-    if (Object.keys(input).length) acceptSaved(await updateDocument(type, document.id, input));
+    if (!Object.keys(input).length) return document;
+    const saved = await updateDocument(type, document.id, input);
+    acceptSaved(saved);
+    return saved;
+  }
+
+  function newDuplicates(saved: TypedDocument | null) {
+    const fresh = (saved?.possibleDuplicates ?? []).filter(({ id }) => !seenDuplicates.current.has(id));
+    fresh.forEach(({ id }) => seenDuplicates.current.add(id));
+    return fresh;
   }
 
   async function perform(action: DocumentAction, reason?: string) {
@@ -224,7 +236,13 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       if (action.kind === "save") {
         await save(changes);
       } else if (document && action.kind === "transition") {
-        if (editable) await save(changes);
+        if (editable) {
+          const saved = await save(changes);
+          if (action.status !== "draft" && action.status !== "void" && newDuplicates(saved).length) {
+            setError("This document now looks like a possible duplicate (see the warning). Check it, then choose the action again to continue.");
+            return;
+          }
+        }
         acceptSaved(await transitionDocument(type, document.id, action.status, reason));
       } else if (document && action.kind === "delete") {
         await deleteDocument(type, document.id);
@@ -253,6 +271,16 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   }
 
   const latest = latestFile(document?.files);
+
+  async function openPdf(path: string, fileName = document?.displayName ?? "document.pdf") {
+    setError("");
+    try { await openInNewTab(path, fileName); } catch (error) { setError(error instanceof Error ? error.message : "Unable to open the PDF."); }
+  }
+
+  async function savePdf(path: string, fileName: string) {
+    setError("");
+    try { await download(path, fileName); } catch (error) { setError(error instanceof Error ? error.message : "Unable to download the PDF."); }
+  }
   const blockedHints = [...new Set(actions.flatMap((action) =>
     action.kind === "transition" && action.disabledReason ? [action.disabledReason] : []))];
 
@@ -261,15 +289,22 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       return <button key={action.label} className="btn primary" type="submit" form={formId} disabled={locked}>Save</button>;
     }
     if (action.kind === "preview") {
-      return document && <a key={action.label} className="btn" href={documentPreviewUrl(type, document.id)} target="_blank"
-        rel="noopener noreferrer" title="The last saved version, marked DRAFT">{action.label}</a>;
+      return document && <button key={action.label} className="btn" type="button" disabled={locked}
+        title="The last saved version, marked DRAFT" onClick={() => void openPdf(documentPreviewUrl(type, document.id))}>{action.label}</button>;
     }
     if (action.kind === "print" || action.kind === "download") {
-      if (!document || !latest) return null;
-      const href = documentFileUrl(type, document.id, latest.revision, action.kind === "print");
+      if (!document) return null;
+      if (!latest) {
+        // Issued before printed copies were kept: the server renders a copy marked RECONSTRUCTED COPY.
+        return action.kind === "print" ? <button key={action.label} className="btn" type="button" disabled={locked}
+          title="Issued before copies were stored; marked RECONSTRUCTED COPY"
+          onClick={() => void openPdf(documentPreviewUrl(type, document.id))}>Print (reconstructed copy)</button> : null;
+      }
       return action.kind === "print"
-        ? <a key={action.label} className="btn" href={href} target="_blank" rel="noopener noreferrer">{action.label}</a>
-        : <a key={action.label} className="btn" href={href} download={latest.fileName}>{action.label}</a>;
+        ? <button key={action.label} className="btn" type="button" disabled={locked}
+            onClick={() => void openPdf(documentFileUrl(type, document.id, latest.revision, true), latest.fileName)}>{action.label}</button>
+        : <button key={action.label} className="btn" type="button" disabled={locked}
+            onClick={() => void savePdf(documentFileUrl(type, document.id, latest.revision), latest.fileName)}>{action.label}</button>;
     }
     const blocked = action.kind === "transition" ? action.disabledReason : undefined;
     return <button key={action.label} className="btn" type="button" disabled={locked || !!blocked} title={blocked}
@@ -317,7 +352,12 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               {NOTE_TARGETS[type] && editable && (draft.contactId
                 ? <NoteTargetPicker key={draft.contactId} type={type} contactId={draft.contactId} value={draft.relatedDocumentId}
                     saved={document?.related?.id === draft.relatedDocumentId ? document.related.number : undefined}
-                    onChange={(relatedDocumentId) => setField("relatedDocumentId", relatedDocumentId)} />
+                    required={!draft.allocations.some(({ source }) => source === "scanned")}
+                    onChange={(relatedDocumentId) => setDraft((current) => ({
+                      ...current, relatedDocumentId,
+                      // A credit note is applied in full to the document it corrects: stale typed amounts would be refused.
+                      allocations: relatedDocumentId ? current.allocations.filter(({ source }) => source === "scanned") : current.allocations,
+                    }))} />
                 : <Field label="Corrects *" hint={`Choose the ${contactKind ?? "contact"} first.`}>
                     <select disabled value=""><option value="">Choose the document this corrects</option></select>
                   </Field>)}
@@ -365,7 +405,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               onRemove={() => setDraft((current) => ({ ...current, lines: current.lines.filter(({ key }) => key !== line.key) }))} />)}
           </div> : <EmptyState message="No lines have been added." />}
         </Panel>}
-        {ALLOCATES_TO[type] && (editable && draft.contactId
+        {ALLOCATES_TO[type] && NOTE_TARGETS[type] && draft.relatedDocumentId
+          ? <Panel title="Allocations"><p className="p-5">Applied in full to the document it corrects when issued.</p></Panel>
+          : ALLOCATES_TO[type] && (editable && draft.contactId
           ? <AllocationEditor key={draft.contactId} type={type} contact={{ id: draft.contactId, legalName: contactName ?? "" }}
               allocations={draft.allocations} total={totals.total} onChange={changeAllocation} />
           : <SavedAllocations allocations={draft.allocations} needsContact={editable} />)}
@@ -561,8 +603,8 @@ function DocumentFacts({ base, document }: { base: string; document: TypedDocume
   </Panel>;
 }
 
-function NoteTargetPicker({ type, contactId, value, saved, onChange }: {
-  type: DocumentType; contactId: string; value: string; saved?: string; onChange: (id: string) => void;
+function NoteTargetPicker({ type, contactId, value, saved, required = true, onChange }: {
+  type: DocumentType; contactId: string; value: string; saved?: string; required?: boolean; onChange: (id: string) => void;
 }) {
   const targets = NOTE_TARGETS[type] ?? [];
   const { data, loading, error, refresh } = useResource(async () => {
@@ -570,8 +612,9 @@ function NoteTargetPicker({ type, contactId, value, saved, onChange }: {
     return noteTargetCandidates(type, contactId, lists.flat());
   }, `notes:${type}:${contactId}`);
   const names = targets.map((target) => DOCUMENT_LABELS[target].toLowerCase()).join(" or ");
-  return <Field label="Corrects *" hint={loading ? "Loading issued documents…" : !error && !data?.length ? `No issued ${names} for this contact.` : undefined}>
-    <select required value={value} onChange={(event) => onChange(event.target.value)}>
+  return <Field label={required ? "Corrects *" : "Corrects"} hint={!required ? "Optional: this credit already settles a scanned bill."
+      : loading ? "Loading issued documents…" : !error && !data?.length ? `No issued ${names} for this contact.` : undefined}>
+    <select required={required} value={value} onChange={(event) => onChange(event.target.value)}>
       <SelectOptions value={value} placeholder={`Choose the ${names} this corrects`} fallback={saved}
         options={data?.map((row) => ({
           id: row.id,
@@ -591,8 +634,9 @@ function PrintedCopies({ document }: { document: TypedDocument }) {
       { label: "File name", render: (file) => file.fileName },
       { label: "Size", render: (file) => formatFileSize(file.byteSize) },
       { label: "Created", render: (file) => formatTime(file.createdAt) },
-      { label: "Download", render: (file) => <a href={documentFileUrl(document.type, document.id, file.revision)} download={file.fileName}
-          aria-label={`Download revision ${file.revision}`}>Download</a> },
+      { label: "Download", render: (file) => <button type="button" className="btn small"
+          onClick={() => void download(documentFileUrl(document.type, document.id, file.revision), file.fileName)}
+          aria-label={`Download revision ${file.revision}`}>Download</button> },
     ]} /> : <EmptyState message="A PDF copy is stored when this document is issued. Each copy is kept and never changed." />}
   </Panel>;
 }
