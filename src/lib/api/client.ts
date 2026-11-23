@@ -66,7 +66,8 @@ async function request<T>(path: string, read: (response: Response) => Promise<T>
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), 15000);
+  // An upload (up to 20 MiB) needs far longer than an ordinary request on a slow connection.
+  const timeout = globalThis.setTimeout(() => controller.abort(), init.body instanceof FormData ? 120000 : 15000);
   try {
     const response = await fetch(apiUrl(path), {
       ...init,

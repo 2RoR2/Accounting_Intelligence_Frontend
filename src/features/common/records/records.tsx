@@ -225,7 +225,8 @@ export function RecordsPage({
   const createBackendExport = async () => {
     setExportError("");
     try {
-      const created = await createExport("records", {}, "csv") as { id: string };
+      // Export exactly the records the search and filters show (Codex H2).
+      const created = await createExport("records", { recordIds: records.map((record) => record.id) }, "csv") as { id: string };
       window.open(downloadExport(created.id), "_blank", "noopener,noreferrer");
       const history = await getExports();
       setExports(history); setExportsLoaded(true);
