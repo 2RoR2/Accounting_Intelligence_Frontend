@@ -44,7 +44,7 @@ const newDocument = (role: "accountant" | "admin", type: DocumentType) =>
 
 async function ready(page: Page) {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 60000 });
-  await expect(page.locator("form fieldset")).toBeVisible({ timeout: 60000 });
+  await expect(page.locator("form fieldset").first()).toBeVisible({ timeout: 60000 });
   await expect(page.getByText("Loading form choices…")).toHaveCount(0, { timeout: 30000 });
 }
 
@@ -195,7 +195,7 @@ test("credit note: admin picks the invoice it corrects from a combobox and issue
   await save(page);
   const number = (await page.getByRole("heading", { name: /^Invoice / }).textContent())!.replace("Invoice ", "").trim();
   await page.getByRole("button", { name: "Issue", exact: true }).click();
-  await expect(page.getByText("Issued").first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole("button", { name: "Print", exact: true })).toBeVisible({ timeout: 30000 }); // issued
 
   await page.goto(newDocument("admin", "credit-note"));
   await ready(page);
@@ -210,7 +210,7 @@ test("credit note: admin picks the invoice it corrects from a combobox and issue
   await line(page, 1).getByLabel(/^Unit price/).fill("50");
   await save(page);
   await page.getByRole("button", { name: "Issue", exact: true }).click();
-  await expect(page.getByText("Issued").first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole("button", { name: "Print", exact: true })).toBeVisible({ timeout: 30000 }); // issued
 
   // Inline new customer from the combobox: it is created and chosen.
   await page.goto(newDocument("admin", "quotation"));
@@ -248,6 +248,43 @@ test("phone width: the form fits, the combobox list opens on screen and lines ca
   await expect(line(page, 1).getByLabel(/^Unit price/)).not.toHaveValue("0");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  expect(problems).toEqual([]);
+  await context.close();
+});
+
+test("refused actions are hidden: a converted quotation, a paid invoice; a quotation needs its customer", async ({ browser }) => {
+  const { context, page, problems } = await signedIn(browser, ADMIN!);
+  await page.goto(newDocument("admin", "quotation"));
+  await ready(page);
+  await expect(page.getByRole("combobox", { name: "Customer" })).toHaveAttribute("required", "");
+  await pick(page.getByRole("combobox", { name: "Customer" }), "kuini", /Kuini/);
+  await pick(line(page, 1).getByRole("combobox", { name: "Product" }), "clean", "Site cleaning");
+  await save(page);
+  const quotationUrl = page.url();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByRole("button", { name: "Convert to invoice" }).click();
+  await expect(page).toHaveURL(/type=invoice/, { timeout: 30000 });
+  await ready(page);
+  const invoiceUrl = page.url();
+  await page.getByRole("button", { name: "Issue", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Receive payment" })).toBeVisible({ timeout: 30000 });
+  await page.getByRole("button", { name: "Receive payment" }).click();
+  await expect(page).toHaveURL(/type=payment/, { timeout: 30000 });
+  await ready(page);
+  await page.getByRole("button", { name: "Issue", exact: true }).click(); // a customer payment is printed: admin issues it
+  await expect(page.getByRole("button", { name: "Print", exact: true })).toBeVisible({ timeout: 30000 });
+
+  await page.goto(invoiceUrl);
+  await ready(page);
+  await expect(page.getByText(/Outstanding/)).toContainText("0.00");
+  await expect(page.getByRole("button", { name: "Credit note" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Receive payment" })).toHaveCount(0);
+
+  await page.goto(quotationUrl);
+  await ready(page);
+  await expect(page.getByRole("note").filter({ hasText: "Converted to" })).toContainText(/Invoice /);
+  await expect(page.getByRole("button", { name: "Duplicate" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Convert to invoice" })).toHaveCount(0);
   expect(problems).toEqual([]);
   await context.close();
 });

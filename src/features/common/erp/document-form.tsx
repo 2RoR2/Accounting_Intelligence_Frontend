@@ -34,6 +34,7 @@ import {
 } from "./assisted-entry";
 import { Combobox } from "./combobox";
 import { QuickAddContact, QuickAddProduct } from "./quick-add";
+import { formActions, transfersFrom } from "./form-actions";
 import { ShareLinksPanel } from "./share-links";
 import { TracePanel } from "@/features/common/trace/trace-panel";
 
@@ -47,8 +48,9 @@ type Draft = {
   paymentTerms: string; termDays: number | null; dueDateAuto: boolean;
 };
 
+// A quotation needs its customer to be sent (the API refuses "Send" without one).
 const REQUIRES_CONTACT = new Set<DocumentType>([
-  "invoice", "credit-note", "debit-note", "payment", "refund", "bill", "purchase-credit-note", "purchase-debit-note",
+  "quotation", "invoice", "credit-note", "debit-note", "payment", "refund", "bill", "purchase-credit-note", "purchase-debit-note",
   "purchase-payment", "purchase-refund",
 ]);
 const USES_BANK = new Set<DocumentType>([
@@ -175,7 +177,18 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
 
   const label = DOCUMENT_LABELS[type];
   const status = document?.status ?? "draft";
-  const actions = documentActions(status, type, role).filter((action) => document || action.kind === "save");
+  // A quotation's invoice (not void): "Convert to invoice" again would be refused, so it is replaced by a link to it.
+  const quotationLinks = useResource(async () => {
+    if (!document || type !== "quotation" || (status !== "sent" && status !== "accepted")) return [];
+    const links = transfersFrom(document.id, await documentHistory(type, document.id));
+    const targets = await Promise.all(links.map((link) => getDocument(link.targetType, link.targetId).catch(() => null)));
+    return links.filter((_, index) => targets[index] && targets[index].status !== "void");
+  }, `converted:${document?.id ?? "new"}:${document?.updatedAt ?? ""}`);
+  const converted = quotationLinks.data ?? [];
+  const actions = formActions(documentActions(status, type, role), {
+    outstanding: hasOutstanding(type) ? document?.outstanding : undefined,
+    convertedTo: converted.map(({ targetType }) => targetType),
+  }).filter((action) => document || action.kind === "save");
   const editable = actions.some((action) => action.kind === "save");
   const amountOnly = AMOUNT_ONLY_TYPES.has(type);
   const transfer = type === "bank-transfer";
@@ -437,6 +450,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
         {actions.map(renderAction)}
       </>} />
     {blockedHints.map((hint) => <p key={hint} className="notice info" role="note">{hint}.</p>)}
+    {converted.map((link) => <p key={link.targetId} className="notice info" role="note">
+      Converted to <RelatedDocument base={base} type={link.targetType} id={link.targetId} number={link.targetNumber} />.
+    </p>)}
     {error && !confirmation && <RequestError message={error} />}
     {document?.possibleDuplicates?.length ? <div className="notice warning" role="status">
       Possible duplicate of{" "}
@@ -800,16 +816,19 @@ function NoteTargetPicker({ type, contactId, value, saved, required = true, onCh
     return noteTargetCandidates(type, contactId, lists.flat());
   }, `notes:${type}:${contactId}`);
   const names = targets.map((target) => DOCUMENT_LABELS[target].toLowerCase()).join(" or ");
-  return <Field label={required ? "Corrects *" : "Corrects"} hint={!required ? "Optional: this credit already settles a scanned bill."
-      : loading ? "Loading issued documents…" : !error && !data?.length ? `No issued ${names} for this contact.` : undefined}>
-    <Combobox required={required} value={value} placeholder={`Choose the ${names} this corrects`} fallbackLabel={saved}
-      onChange={(id) => onChange(id)}
-      options={(data ?? []).map((row) => ({
-        id: row.id, label: row.number, keywords: [row.referenceNo],
-        detail: `${formatDate(row.documentDate)} · outstanding ${money(row.outstanding ?? row.amount)}`,
-      }))} />
+  // The error sits outside the Field so the label stays tied to the combobox (Field labels a single child).
+  return <div>
+    <Field label={required ? "Corrects *" : "Corrects"} hint={!required ? "Optional: this credit already settles a scanned bill."
+        : loading ? "Loading issued documents…" : !error && !data?.length ? `No issued ${names} for this contact.` : undefined}>
+      <Combobox required={required} value={value} placeholder={`Choose the ${names} this corrects`} fallbackLabel={saved}
+        loading={loading} onChange={(id) => onChange(id)}
+        options={(data ?? []).map((row) => ({
+          id: row.id, label: row.number, keywords: [row.referenceNo],
+          detail: `${formatDate(row.documentDate)} · outstanding ${money(row.outstanding ?? row.amount)}`,
+        }))} />
+    </Field>
     {error && <RequestError message={error} retry={refresh} />}
-  </Field>;
+  </div>;
 }
 
 function PrintedCopies({ document }: { document: TypedDocument }) {

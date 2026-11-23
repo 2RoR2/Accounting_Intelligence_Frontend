@@ -199,3 +199,26 @@ test("tidyDecimal writes stored prices the way they are typed", async () => {
   assert.equal(tidyDecimal("abc"), "abc");
   assert.equal(productLine(product({ salePrice: "32.5000" }), true).unitPrice, "32.50");
 });
+
+test("formActions hides payments for a settled document and a second conversion of a quotation", async () => {
+  const { formActions, transfersFrom } = await import("../src/features/common/erp/form-actions");
+  const actions = [
+    { kind: "transfer", target: "payment", label: "Receive payment" },
+    { kind: "transfer", target: "credit-note", label: "Credit note" },
+    { kind: "transfer", target: "invoice", label: "Convert to invoice" },
+    { kind: "duplicate", label: "Duplicate" },
+  ] as const;
+  const labels = (list: readonly { label: string }[]) => list.map(({ label }) => label);
+  assert.deepEqual(labels(formActions(actions, { outstanding: "0.00" })), ["Credit note", "Convert to invoice", "Duplicate"]);
+  assert.deepEqual(labels(formActions(actions, { outstanding: "-1" })), ["Credit note", "Convert to invoice", "Duplicate"]);
+  assert.deepEqual(labels(formActions(actions, { outstanding: "10.00" })), labels(actions), "still owed: payment stays");
+  assert.deepEqual(labels(formActions(actions, {})), labels(actions), "outstanding unknown: nothing hidden");
+  assert.deepEqual(labels(formActions(actions, { convertedTo: ["invoice"] })), ["Receive payment", "Credit note", "Duplicate"]);
+  const history = { links: [
+    { linkType: "transfer", sourceId: "q1", sourceType: "quotation", sourceNumber: "QT-1", targetId: "i1", targetType: "invoice", targetNumber: "IV-1" },
+    { linkType: "duplicate", sourceId: "q1", sourceType: "quotation", sourceNumber: "QT-1", targetId: "q2", targetType: "quotation", targetNumber: "QT-2" },
+    { linkType: "transfer", sourceId: "q0", sourceType: "quotation", sourceNumber: "QT-0", targetId: "q1", targetType: "quotation", targetNumber: "QT-1" },
+  ] } as const;
+  assert.deepEqual(transfersFrom("q1", history).map(({ targetNumber }) => targetNumber), ["IV-1"]);
+  assert.deepEqual(transfersFrom("q1", null), []);
+});
