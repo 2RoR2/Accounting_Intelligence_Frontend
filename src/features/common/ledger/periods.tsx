@@ -79,6 +79,7 @@ export function Periods({ canManage }: { canManage: boolean }) {
       {data && <DataTable
         rows={[...data].sort((a, b) => b.periodCode.localeCompare(a.periodCode))}
         rowKey={(period) => period.id}
+        emptyMessage={canManage ? "No periods yet. Use Add period to open an accounting month." : "No periods yet. Ask a local admin to open an accounting month."}
         columns={[
           { label: "Month", render: (period) => period.periodCode },
           { label: "Start", render: (period) => formatDate(period.startsOn) },

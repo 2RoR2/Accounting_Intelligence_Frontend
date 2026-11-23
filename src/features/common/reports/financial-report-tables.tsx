@@ -18,6 +18,9 @@ function StatementTable({ label, report, sections, totals }: {
   sections: FinancialSection[];
   totals: Array<{ label: string; amount: string }>;
 }) {
+  if (sections.every((section) => !section.accounts.length) && totals.every(({ amount }) => Number(amount) === 0)) {
+    return <EmptyState message="No posted balances for these dates. Change the dates or post a transaction first." />;
+  }
   return <ReportTable label={label} columns={["Account", "Amount"]}>
     {sections.map((section) => {
       const { rows, subtotal } = statementRows(section, report);
@@ -43,7 +46,7 @@ const sourceLabels: Record<string, string> = {
 };
 
 function GeneralLedgerTables({ accounts }: GeneralLedger) {
-  if (!accounts.length) return <EmptyState message="No ledger activity or opening balances for these dates." />;
+  if (!accounts.length) return <EmptyState message="No ledger activity or opening balances for these dates. Change the dates or post a journal first." />;
   return <div className="financial-ledger">
     {accounts.map((account) => <section key={account.accountId}>
       <div className="panel-body">
@@ -83,6 +86,7 @@ const ageingSourceLabels: Record<Ageing["rows"][number]["source"], string> = {
 };
 
 function AgeingTables({ buckets, rows, totals }: Ageing) {
+  if (!rows.length) return <EmptyState message="No outstanding items on this date. Choose a different date to see earlier balances." />;
   return <>
     <ReportTable label="Ageing totals" columns={["", ...buckets.map((bucket) => bucketLabels[bucket]), "Total outstanding"]}>
       <tfoot><tr className="report-total">
@@ -110,6 +114,7 @@ function AgeingTables({ buckets, rows, totals }: Ageing) {
 function TaxTable({ note, months, totals }: TaxSummary) {
   return <>
     <div className="panel-body"><p className="notice warning"><strong>{note}</strong></p></div>
+    {months.length === 0 ? <EmptyState message="No recorded tax for these dates. Change the dates or post a document with recorded tax." /> :
     <ReportTable label="Tax summary" columns={["Month", "Output tax", "Input tax", "Net tax"]}>
       <tbody>{months.map((month) => <tr key={month.month}>
         <th scope="row">{month.month}</th>
@@ -123,7 +128,7 @@ function TaxTable({ note, months, totals }: TaxSummary) {
         <td>{money(totals.inputTax)}</td>
         <td>{money(totals.net)}</td>
       </tr></tfoot>
-    </ReportTable>
+    </ReportTable>}
   </>;
 }
 

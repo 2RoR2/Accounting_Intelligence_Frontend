@@ -9430,6 +9430,12 @@ html,body { min-height:100%; background:linear-gradient(135deg,#f4f8fc 0%,#eaf3f
 }
 .sidebar nav{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(103,173,255,.7) transparent}
 .app-shell .sidebar nav { overflow-x:hidden; overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(45,101,159,.72) transparent; }
+.app-shell[data-role="accountant"] .sidebar nav,
+.app-shell[data-role="local-admin"] .sidebar nav {
+  min-height: 0;
+  overscroll-behavior-y: contain;
+  overflow-anchor: none;
+}
 .app-shell .sidebar nav::-webkit-scrollbar { width:8px; height:0; }
 .app-shell .sidebar nav::-webkit-scrollbar-button,
 .app-shell .sidebar nav::-webkit-scrollbar-corner { display:none; width:0; height:0; background:transparent; }

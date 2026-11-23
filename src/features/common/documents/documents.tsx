@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/document.service";
 import { getProcessingJob } from "@/lib/api/processing.service";
 import { ApiError } from "@/lib/api/client";
+import { documentDisplayName } from "@/lib/document-display-name";
 import {
   DataTable,
   ErrorState,
@@ -54,10 +55,10 @@ function NeedsFixing({ id, revision }: { id: string; revision?: number }) {
 
 const reviewSelectionKey = (doc: { id: string; contentRevision?: number }) => `${doc.id}:${doc.contentRevision}`;
 
-export function DocumentList({ user }: { user: User }) {
+export function DocumentList({ user, tab }: { user: User; tab?: string }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
-  const selectedTab = searchParams.get("tab") || "all";
+  const selectedTab = tab ?? (searchParams.get("tab") || "all");
   // Opened from a Today tile: the backend applies the same rule the tile counted with.
   const requestedLane = searchParams.get("lane");
   const lane = isDocumentLane(requestedLane) ? requestedLane : "";
@@ -134,6 +135,11 @@ export function DocumentList({ user }: { user: User }) {
     <>
       <PageHeader
         title={
+          lane === "to-review" ? "To review" :
+          lane ? DOCUMENT_LANES[lane] :
+          selectedTab === "receipts" ? "Expense receipts" :
+          selectedTab === "sales-debit-notes" ? "Debit notes" :
+          selectedTab === "supplier-debit-notes" ? "Supplier debit notes" :
           user.role === "ACCOUNTANT" ? "My documents" : "Company documents"
         }
         description="Everything you have uploaded, from reading to approval."
@@ -167,14 +173,18 @@ export function DocumentList({ user }: { user: User }) {
       <Panel>
         {canBulkSubmit && submitSummary && <p className="notice" role="status">{submitSummary}</p>}
         {canBulkSubmit && submitError && <p className="notice danger" role="alert">{submitError}</p>}
-        {lane && (
-          <p className="today-filter-note" role="status">
-            Showing: <strong>{DOCUMENT_LANES[lane]}</strong> ({visibleDocuments.length}). <Link href={`${base}/documents`}>Show all documents</Link>
-          </p>
-        )}
+        {lane && <nav className="workspace-tabs" aria-label="Review lanes">
+          <Link href={`${base}/documents?lane=to-review`} aria-current={lane === "to-review" ? "page" : undefined}>To review</Link>
+          <Link href={`${base}/documents?lane=ready`} aria-current={lane === "ready" ? "page" : undefined}>Ready to approve</Link>
+          {user.role === "LOCAL_ADMIN"
+            ? <Link href={`${base}/approvals`}>Approval queue</Link>
+            : <Link href={`${base}/documents?lane=waiting-approval`} aria-current={lane === "waiting-approval" ? "page" : undefined}>Sent for approval</Link>}
+          <Link href={`${base}/documents`}>All documents</Link>
+        </nav>}
+        {!lane &&
         <div className="workspace-tabs document-list-tabs" role="tablist" aria-label="Document categories">
           {documentTabs.map(([label, tab]) => <Link key={tab} className={selectedTab === tab ? "active" : ""} href={tab === "all" ? `${base}/documents` : `${base}/documents?tab=${tab}`} role="tab" aria-selected={selectedTab === tab}>{label}</Link>)}
-        </div>
+        </div>}
         <div className="filter-bar">
           <SearchInput
             value={search}
@@ -214,6 +224,9 @@ export function DocumentList({ user }: { user: User }) {
         <DataTable
           rows={visibleDocuments}
           rowKey={(d) => d.id}
+          emptyMessage={search || status || date || amount || business
+            ? "No documents match these filters. Clear a filter to see more documents."
+            : laneEmptyMessage(lane, selectedTab)}
           columns={[
             ...(canBulkSubmit ? [{
               label: "Select",
@@ -242,7 +255,8 @@ export function DocumentList({ user }: { user: User }) {
                     <FileText size={19} />
                   </span>
                   <span>
-                    <strong>{d.name}</strong>
+                    <strong>{documentDisplayName(d, d.name)}</strong>
+                    {d.directionWarning && <small role="note">{d.directionWarning}</small>}
                     <small>{d.code || d.id}</small>
                   </span>
                 </Link>
@@ -270,6 +284,19 @@ export function DocumentList({ user }: { user: User }) {
     </>
   );
 }
+function laneEmptyMessage(lane: string, tab: string) {
+  switch (lane) {
+    case "ready": return "Nothing ready yet. Documents appear here once every check passes.";
+    case "to-review": return "Nothing to review yet. Add a document in Upload & capture.";
+    case "needs-fixing": return "Nothing needs fixing. Documents with a failed check appear in Exceptions.";
+    case "waiting-approval": return "Nothing is waiting for approval. Submit a document from Ready to approve.";
+    default:
+      return tab === "all"
+        ? "No documents yet. Add one in Upload & capture."
+        : "No documents of this type yet. Add a received document in Upload & capture.";
+  }
+}
+
 export function UploadPage({ user }: { user: User }) {
   const input = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();

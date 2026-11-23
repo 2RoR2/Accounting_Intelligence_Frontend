@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { documentDisplayName } from "@/lib/document-display-name";
 import { CheckCircle2, RotateCcw, XCircle, ExternalLink, FileText } from "lucide-react";
 import type { Extraction, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -71,7 +72,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
   }
 
   const rows = (data ?? []).filter(({ doc }) =>
-    `${doc.code ?? ""} ${doc.name} ${doc.supplier ?? ""} ${doc.customer ?? ""}`
+    `${doc.code ?? ""} ${documentDisplayName(doc, doc.name)} ${doc.name} ${doc.supplier ?? ""} ${doc.customer ?? ""}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   ).map((row) => {
@@ -137,7 +138,9 @@ export function ApprovalQueuePage({ user }: { user: User }) {
           </Field>
         </div>
         {rows.length === 0 ? (
-          <div className="panel-body"><p>No documents are waiting for approval.</p></div>
+          <div className="panel-body"><p>{search
+            ? "No documents match this search. Clear it to see the approval queue."
+            : "Nothing is waiting for approval. Documents appear here when an accountant submits them."}</p></div>
         ) : (
           <div className="approval-list">
             {rows.map(({ doc, extraction, reviews, revision, canApprove, selectionKey }) => {
@@ -152,7 +155,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                   <header>
                     <div>
                       <strong>{doc.code || doc.name}</strong>
-                      <Link href={`${base}/documents/${doc.id}`}><FileText size={14} /> {doc.name}</Link>
+                      <Link href={`${base}/documents/${doc.id}`}><FileText size={14} /> {documentDisplayName(doc, doc.name)}</Link>
                     </div>
                     <Badge>{(doc.kind || doc.type || "DOCUMENT").replaceAll("_", " ")}</Badge>
                     {canBulkApprove && <input type="checkbox" aria-label={`Select ${doc.code || doc.name}`} checked={checked}

@@ -50,7 +50,7 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "bank-entries": return <ErpDocumentsPage user={user} group={page} documentId={id} />;
     case "catalog": return <CatalogPage user={user} />;
     case "records": return <RecordsPage user={user} initialRecordId={id} />;
-    case "reports": return <AccountingReportsPage user={user} />;
+    case "reports": return <AccountingReportsPage />;
     // Reports › Performance Evaluation; the effort study keeps its own URL.
     case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "profile": return <ProfilePage user={user} />;

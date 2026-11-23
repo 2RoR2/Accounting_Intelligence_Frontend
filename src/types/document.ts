@@ -1,11 +1,16 @@
+import type { DocumentDisplayName } from "@/lib/document-display-name";
+
 export type DocumentStatus = "UPLOADED" | "QUEUED" | "PROCESSING" | "EXTRACTED" | "VALIDATING" | "EXCEPTION" | "IN_REVIEW" | "CORRECTED" | "VALIDATED" | "STANDARDISED" | "COMPLETED" | "FAILED";
 export type DocumentKind = "INVOICE" | "BILL" | "RECEIPT" | "CREDIT_NOTE" | "DEBIT_NOTE";
-export interface Document {
+export interface Document extends DocumentDisplayName {
   id: string;
   tenantId: string;
   ownerId: string;
   assignedTo: string | null;
   name: string;
+  /** "sales" | "purchase" | "unknown": whose document this is for the company. */
+  direction?: string;
+  directionWarning?: string | null;
   type: string;
   kind?: string;
   code?: string;

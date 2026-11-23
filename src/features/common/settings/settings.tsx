@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import type { User, ValidationRules } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -126,6 +127,20 @@ export function SettingsPage({
         description="Manage workspace behaviour, notifications, and document intake preferences."
       />
       {!profile && user.role === "LOCAL_ADMIN" && <CompanyProfile key={user.id} />}
+      {!profile && user.role !== "SUPER_ADMIN" && (
+        <Panel title="Workspace tools">
+          <div className="panel-body row-actions">
+            <Link className="btn small" href={user.role === "LOCAL_ADMIN" ? "/company/catalog" : "/workspace/catalog"}>Catalog &amp; products</Link>
+            {user.role === "LOCAL_ADMIN" && <>
+              <Link className="btn small" href="/company/catalog?kind=posting-accounts">Posting accounts</Link>
+              <Link className="btn small" href="/company/users">Users</Link>
+              <Link className="btn small" href="/company/validation-rules">Check rules</Link>
+              <Link className="btn small" href="/company/audit">Audit trail</Link>
+              <Link className="btn small" href="/company/system">System</Link>
+            </>}
+          </div>
+        </Panel>
+      )}
       <div className="two-col">
         <Panel title="Account overview" subtitle="Your signed-in workspace identity">
           <div className="panel-body detail-list">

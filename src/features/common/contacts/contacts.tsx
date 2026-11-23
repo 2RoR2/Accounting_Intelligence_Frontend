@@ -65,7 +65,11 @@ function ContactList({ user, base }: { user: User; base: string }) {
       </form>
       {loading ? <LoadingState variant="table" />
         : error || !data ? <ErrorState message={error || "Unable to load contacts."} retry={refresh} />
-          : <DataTable rows={rows} rowKey={(row) => row.id} columns={[
+          : <DataTable rows={rows} rowKey={(row) => row.id}
+            emptyMessage={appliedSearch || data.length
+              ? "No contacts match this view. Change the search or contact type, or select Show inactive."
+              : "No contacts yet. Select New contact to add a customer, supplier or employee."}
+            columns={[
               { label: "Name", render: (row) => <Link className="text-link" href={`${base}/contacts/${encodeURIComponent(row.id)}`}>{row.legalName}</Link> },
               { label: "Type", render: (row) => <span className="badge neutral"><span className="badge-dot" />{kindLabel(row.kind)}</span> },
               { label: "Code", render: (row) => row.code || "—" },

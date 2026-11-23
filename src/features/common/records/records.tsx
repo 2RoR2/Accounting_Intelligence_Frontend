@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { documentDisplayName } from "@/lib/document-display-name";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Download, ShieldCheck } from "lucide-react";
@@ -174,7 +175,7 @@ export function RecordsPage({
   const visibleDetail = detail ?? (!deepLinkDismissed ? linkedRecord : undefined);
   const records = (data?.records ?? []).filter(
     (r) =>
-      `${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
+      `${documentDisplayName(r, "")} ${r.code ?? ""} ${r.id} ${(r.extraction.fields.invoice?.value ?? "")} ${(r.extraction.fields.supplier?.value ?? "")}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!supplier || (r.extraction.fields.supplier?.value ?? "") === supplier) &&
@@ -440,7 +441,7 @@ export function RecordsPage({
                 label: "Record / invoice",
                 render: (r) => (
                   <div>
-                    <strong title={r.id}>{r.code ?? r.id}</strong>
+                    <strong title={r.id}>{documentDisplayName(r, r.code ?? r.id)}</strong>
                     <small>{(r.extraction.fields.invoice?.value ?? "")}</small>
                   </div>
                 ),

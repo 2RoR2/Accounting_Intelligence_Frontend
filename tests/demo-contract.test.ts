@@ -13,14 +13,11 @@ test("report exports escape markup and only mark true numbers as numeric", () =>
   assert.equal(isPlainNumber("25%"), false);
 });
 
-test("reports page keeps document-level rate, per-currency totals and true standardised counts", () => {
+test("Reports lists only reports built from posted books (Plan M8)", () => {
   const source = readFileSync("src/features/common/reports/accounting-reports.tsx", "utf8");
-  assert.match(source, /\["COMPLETED", "STANDARDISED"\]\.includes\(d\.status\)/);
-  assert.doesNotMatch(source, /\["COMPLETED", "VALIDATED", "STANDARDISED"\]/);
-  assert.match(source, /documentsWithExceptions \/ total/);
-  assert.doesNotMatch(source, /open \/ total/);
-  assert.match(source, /currencyTotals\(/);
-  assert.doesNotMatch(source, /acc \+ asNumber/);
+  assert.doesNotMatch(source, /Processing summary|EvaluationPage|getDocuments|Docling|Qwen/);
+  assert.match(source, /FinancialReportView/);
+  assert.match(source, /MonthPack/);
 });
 
 const row = (result: string, extra: Record<string, unknown> = {}) => ({ rule: "R", message: "m", result, ...extra }) as ValidationResult;

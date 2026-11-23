@@ -301,10 +301,12 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
+  emptyMessage,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
+  emptyMessage?: string;
 }) {
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(rows.length / 8));
@@ -352,7 +354,7 @@ export function DataTable<T>({
             ))}
           </tbody>
         </table>
-        {!rows.length && <EmptyState />}
+        {!rows.length && <EmptyState message={emptyMessage} />}
       </div>
       <div className="pagination">
         <span>
