@@ -39,7 +39,7 @@ const SECTIONS: NavSection[] = [
       leaf("Bills", "purchases", "type=bill"),
       leaf("Expense receipts", "documents", "tab=receipts"),
       leaf("Supplier credit notes", "purchases", "type=purchase-credit-note"),
-      leaf("Supplier debit notes", "documents", "tab=supplier-debit-notes"),
+      leaf("Supplier debit notes", "purchases", "type=purchase-debit-note"),
       leaf("Payments made", "purchases", "type=purchase-payment"),
     ] },
     { label: "Bank", page: "bank-accounts", icon: "bank", children: [
