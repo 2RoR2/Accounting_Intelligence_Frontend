@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -83,6 +83,28 @@ const PAGE_TITLES: Record<string, string> = {
   performance: "Processing performance", help: "Help", ledger: "Accounting",
 };
 
+const navScrollPositions = new Map<string, number>();
+const navMenus = new Map<string, Record<string, boolean>>();
+function rememberNavScroll(key: string, top: number) {
+  navScrollPositions.set(key, top);
+  try { window.sessionStorage.setItem(key, String(top)); } catch { /* Storage is optional. */ }
+}
+function savedNavTop(key: string) {
+  const saved = navScrollPositions.get(key);
+  if (saved !== undefined) return saved;
+  try { return Number(window.sessionStorage.getItem(key)) || 0; } catch { return 0; }
+}
+/** Scrolls only the menu (never the page) so the open entry is visible. */
+function revealActive(nav: HTMLElement) {
+  const leaf = nav.querySelector<HTMLElement>("[aria-current='page']");
+  const active = leaf?.getClientRects().length ? leaf : nav.querySelector<HTMLElement>(".nav-item.active");
+  if (!active) return;
+  const box = nav.getBoundingClientRect();
+  const item = active.getBoundingClientRect();
+  if (item.top < box.top + 8) nav.scrollTop -= box.top + 8 - item.top;
+  else if (item.bottom > box.bottom - 8) nav.scrollTop += item.bottom - (box.bottom - 8);
+}
+
 export function AppShell({
   user,
   children,
@@ -108,12 +130,25 @@ export function AppShell({
   const sidebarRef = useRef<HTMLElement>(null);
   const rail = !pinned && !peek;
   const navScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const navKey = `accia-nav-scroll:${user.id}`;
 
   function handleNavScroll() {
+    if (user.role !== "SUPER_ADMIN" && !rail && navRef.current) {
+      rememberNavScroll(navKey, navRef.current.scrollTop);
+    }
     setNavScrolling(true);
     if (navScrollTimer.current) clearTimeout(navScrollTimer.current);
     navScrollTimer.current = setTimeout(() => setNavScrolling(false), 650);
   }
+
+  useLayoutEffect(() => {
+    const saved = navMenus.get(navKey);
+    if (saved) setExpandedMenus(saved);
+    return () => {
+      if (navScrollTimer.current) clearTimeout(navScrollTimer.current);
+    };
+  }, [navKey]);
 
   useEffect(() => {
     if (window.localStorage.getItem("accia-sidebar-pinned") === "0") {
@@ -243,7 +278,7 @@ export function AppShell({
         { label: "Overview", items: [{ label: "Dashboard", page: "dashboard", icon: "today" }] },
         { label: "Workspace", items: adminNav.filter((item) => item[1] !== "dashboard").map(([label, page]) => ({ label, page, icon: "today" as const })) },
       ]
-    : jobNavigation(isCompanyAdmin ? "LOCAL_ADMIN" : "ACCOUNTANT");
+    : jobNavigation();
   const adminIcon = (page: string) => adminNav.find((item) => item[1] === page)?.[2] ?? LayoutDashboard;
   const homeHref = `/${prefix}/dashboard`;
 
@@ -254,6 +289,21 @@ export function AppShell({
   const currentPage = pathname.split("/")[2] ?? "";
   const activeItem = activeNavItem(sections, currentPage, searchParams?.toString() ?? "");
   const activeParent = navParent(sections, activeItem);
+  const activeHref = activeItem ? navHref(prefix, activeItem) : "";
+
+  const restoredNav = useRef("");
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (isAdmin || !nav || !nav.clientHeight) return;
+    const savedMenus = navMenus.get(navKey);
+    if (restoredNav.current !== navKey && savedMenus && expandedMenus !== savedMenus) return;
+    if (!rail && restoredNav.current !== navKey) {
+      nav.scrollTop = savedNavTop(navKey);
+      restoredNav.current = navKey;
+    }
+    if (rail) restoredNav.current = "";
+    revealActive(nav);
+  }, [activeHref, expandedMenus, isAdmin, navKey, open, rail]);
 
   const openExceptions = (data.data?.exceptions ?? []).filter(
     (e) => e.status !== "RESOLVED",
@@ -339,14 +389,14 @@ export function AppShell({
             </span>
           </div>
         </button>
-        <nav className={navScrolling ? "is-scrolling" : ""} onScroll={handleNavScroll}>
+        <nav ref={navRef} className={navScrolling ? "is-scrolling" : ""} onScroll={handleNavScroll}>
           {sections.map((section) => <div className="nav-group" key={section.label || "menu"}>
             {section.label && section.items.length > 1 && <div className="nav-group-heading">{section.label}</div>}
             {section.items.map((item) => {
               const Icon = isAdmin ? adminIcon(item.page) : NAV_ICONS[item.icon];
               const countFor = (entry: typeof item) => entry.count === "exceptions" || (isAdmin && entry.page === "exceptions")
                 ? (openExceptions.length > 0 ? openExceptions.length : undefined)
-                : (entry.count === "approvals" || (isAdmin && entry.page === "approvals")) && (data.data?.pending ?? 0) > 0
+                : isAdmin && entry.page === "approvals" && (data.data?.pending ?? 0) > 0
                   ? data.data?.pending
                   : undefined;
               if (item.children) {
@@ -361,7 +411,11 @@ export function AppShell({
                       <Icon size={18} /><span>{item.label}</span>
                     </Link>
                     <button type="button" className="nav-chevron-button" aria-expanded={expanded} aria-controls={submenuId} aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label}`}
-                      onClick={() => setExpandedMenus((current) => ({ ...current, [item.label]: !expanded }))}>
+                      onClick={() => {
+                        const next = { ...expandedMenus, [item.label]: !expanded };
+                        navMenus.set(navKey, next);
+                        setExpandedMenus(next);
+                      }}>
                       <ChevronDown size={15} className={`nav-chevron ${expanded ? "expanded" : ""}`} aria-hidden="true" />
                     </button>
                   </div>
@@ -394,7 +448,7 @@ export function AppShell({
             }}
           >
             <CircleHelp size={18} />
-            <span>Help & tutorial</span>
+            <span>{isAdmin ? "Help & tutorial" : "Help"}</span>
           </button>
           <Link href="/login" className="nav-item">
             <LogOut size={18} />

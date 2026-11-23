@@ -25,15 +25,28 @@ import {
   Toast,
   formatDate,
 } from "@/components/common/ui";
-import { ruleSentence, ruleTitle, statusLabel } from "@/lib/glossary";
+import { documentKindLabel, ruleSentence, ruleTitle, statusLabel } from "@/lib/glossary";
+import { documentDisplayName } from "@/lib/document-display-name";
 export function ExceptionsPage({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const { data, error, loading, refresh } = useResource(
-    async () => ({
-      exceptions: await getExceptions(user),
-      docs: await getDocuments(user),
-      users: user.role === "LOCAL_ADMIN" ? await getTenantUsers(user) : [user],
-    }),
+    async () => {
+      const [exceptions, docs, users] = await Promise.all([
+        getExceptions(user),
+        getDocuments(user),
+        user.role === "LOCAL_ADMIN" ? getTenantUsers(user) : [user],
+      ]);
+      const byId = new Map(docs.map((doc) => [doc.id, doc]));
+      const rows = exceptions.map((exception) => {
+        const doc = byId.get(exception.documentId);
+        return {
+          ...exception,
+          documentName: doc ? documentDisplayName(doc, doc.name) : exception.documentId,
+          documentType: doc?.type ?? "",
+        };
+      });
+      return { rows, users };
+    },
     user.id,
   );
   // Opened from Today's "Needs fixing" tile (?show=open): only problems not yet resolved.
@@ -41,7 +54,8 @@ export function ExceptionsPage({ user }: { user: User }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [severity, setSeverity] = useState("");
-  const [type, setType] = useState("");
+  const [reason, setReason] = useState("");
+  const [docType, setDocType] = useState("");
   const [assigned, setAssigned] = useState("");
   const [date, setDate] = useState("");
   const [assign, setAssign] = useState("");
@@ -50,11 +64,13 @@ export function ExceptionsPage({ user }: { user: User }) {
   const [toast, setToast] = useState("");
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
+  const exceptions = openOnly ? data.rows.filter((row) => row.status !== "RESOLVED") : data.rows;
+  const term = search.trim().toLowerCase();
   return (
     <>
       <PageHeader
-        title="Needs fixing"
-        description="Documents with a problem to fix before they can be approved. Each line says what to do."
+        title="Exceptions"
+        description="Review documents with failed checks or other problems that need your attention."
       />
       <Panel>
         {openOnly && (
@@ -81,15 +97,22 @@ export function ExceptionsPage({ user }: { user: User }) {
             onChange={setSeverity}
             options={["LOW", "MEDIUM", "HIGH"]}
           />
+          <Filter
+            label="Reasons"
+            value={reason}
+            onChange={setReason}
+            options={[...new Set(exceptions.map((e) => e.type))].sort()}
+            format={(code) => ruleTitle(code)}
+          />
+          <Filter
+            label="Document types"
+            value={docType}
+            onChange={setDocType}
+            options={[...new Set(exceptions.map((e) => e.documentType).filter(Boolean))].sort()}
+            format={documentKindLabel}
+          />
           {user.role === "LOCAL_ADMIN" && (
             <>
-              <Filter
-                label="Problems"
-                value={type}
-                onChange={setType}
-                options={Array.from(new Set(data.exceptions.map((e) => e.type)))}
-                format={(code) => ruleTitle(code)}
-              />
               <select
                 aria-label="Assigned user"
                 value={assigned}
@@ -112,19 +135,20 @@ export function ExceptionsPage({ user }: { user: User }) {
           />
         </div>
         <DataTable
-          rows={data.exceptions.filter(
+          rows={exceptions.filter(
             (e) =>
               (!status || e.status === status) &&
-              (!openOnly || e.status !== "RESOLVED") &&
               (!severity || e.severity === severity) &&
-              (!type || e.type === type) &&
+              (!reason || e.type === reason) &&
+              (!docType || e.documentType === docType) &&
               (!assigned || e.assignedTo === assigned) &&
               (!date || e.createdAt.startsWith(date)) &&
-              (data.docs.find((d) => d.id === e.documentId)?.name ?? "")
-                .toLowerCase()
-                .includes(search.toLowerCase()),
+              e.documentName.toLowerCase().includes(term),
           )}
           rowKey={(e) => e.id}
+          emptyMessage={exceptions.length
+            ? "No exceptions match these filters. Clear a filter to see more exceptions."
+            : "No exceptions to show. Check To review for documents you can work on now."}
           columns={[
             {
               label: "Document",
@@ -133,7 +157,7 @@ export function ExceptionsPage({ user }: { user: User }) {
                   className="document-link"
                   href={`${base}/documents/${e.documentId}`}
                 >
-                  {data.docs.find((d) => d.id === e.documentId)?.name}
+                  {e.documentName}
                 </Link>
               ),
             },
@@ -208,6 +232,7 @@ export function ExceptionsPage({ user }: { user: User }) {
                   await assignException(user, assign, target);
                   setAssign("");
                   setToast("Assigned.");
+                  await refresh();
                 } catch (e) {
                   setFailure((e as Error).message);
                 }

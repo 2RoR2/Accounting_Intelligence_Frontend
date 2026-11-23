@@ -522,6 +522,9 @@ export function MoneyFlowPage({
         <DataTable
           rows={filtered}
           rowKey={(r) => r.id}
+          emptyMessage={rows.length
+            ? "No bank transactions match these filters. Clear a filter to see more transactions."
+            : "No bank transactions yet. Import a statement to see transactions here."}
           columns={[
             { label: "Date", render: (r) => r.postedDate },
             {

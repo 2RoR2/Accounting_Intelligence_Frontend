@@ -51,7 +51,7 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "validation-overview": return <ValidationOverviewPage user={user} />;
     case "validation-rules": return <RulesPage user={user} />;
     // Reports are accounting reports; processing performance moved to /company/performance (linked from System).
-    case "reports": return <AccountingReportsPage user={user} />;
+    case "reports": return <AccountingReportsPage />;
     case "evaluation": return id === "effort-study" ? <EffortStudyPage /> : <EvaluationPage />;
     case "approvals": return <ApprovalQueuePage user={user} />;
     case "ledger": return <LedgerPage canPost />;

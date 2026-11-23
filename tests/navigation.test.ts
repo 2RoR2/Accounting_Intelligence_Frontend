@@ -4,39 +4,34 @@ import { activeNavItem, jobNavigation, navHref, navLeaves, navParent } from "../
 import { isAllowedWorkspaceRoute } from "../src/lib/constants/routes";
 import { roleHome } from "../src/lib/permissions";
 
-const labels = (role: "ACCOUNTANT" | "LOCAL_ADMIN") => jobNavigation(role).flatMap((section) => section.items.map((item) => item.label));
-const children = (role: "ACCOUNTANT" | "LOCAL_ADMIN", group: string) =>
-  jobNavigation(role).flatMap((section) => section.items).find((item) => item.label === group)?.children?.map((item) => item.label);
+const menu = jobNavigation();
+const topLevel = menu.flatMap((section) => section.items);
+const children = (group: string) => topLevel.find((item) => item.label === group)?.children?.map((item) => item.label);
 
-test("the menu follows the team's latest_update layout", () => {
-  for (const role of ["ACCOUNTANT", "LOCAL_ADMIN"] as const) {
-    assert.deepEqual(labels(role), ["Dashboard", "Sales", "Purchases", "Receipts", "Documents", "Review & Exceptions",
-      "Standardised Records", "Bank", "Contacts", "Reports", "Accounting", "Control Panel"]);
-    // Plan L4/L5: typed and approved scanned documents in one list per type; debit notes stay scanned-only.
-    assert.deepEqual(children(role, "Sales"), ["Quotations", "Invoices", "Credit Notes", "Debit Notes", "Customer Payments", "Customer Refunds"]);
-    assert.deepEqual(children(role, "Purchases"), ["Bills", "Supplier Credit Notes", "Supplier Debit Notes", "Supplier Payments", "Supplier Refunds"]);
-    // Transfers between own bank accounts now post through the document module (Plan L6).
-    assert.deepEqual(children(role, "Bank"), ["Money In", "Money Out", "Transfers", "Accounts", "Reconciliation"]);
-    assert.deepEqual(children(role, "Reports"), ["All Reports", "Performance Evaluation"]);
-    assert.deepEqual(children(role, "Accounting"), ["Monthly Ledger", "Journal Entries", "Periods", "Chart of Accounts", "Trial Balance"]);
-  }
-  assert.deepEqual(children("ACCOUNTANT", "Control Panel"), ["Settings", "Catalog", "Products & Services"]);
-  assert.ok(children("LOCAL_ADMIN", "Control Panel")?.includes("Posting accounts"));
+test("the menu follows Plan M3", () => {
+  assert.deepEqual(topLevel.map(({ label }) => label), ["Dashboard", "Inbox", "Sales", "Purchases", "Bank", "Contacts", "Accounting", "Reports", "Settings"]);
+  assert.deepEqual(children("Inbox"), ["Upload & capture", "To review", "Exceptions"]);
+  assert.deepEqual(children("Sales"), ["Quotations", "Invoices", "Credit notes", "Debit notes", "Payments received"]);
+  assert.deepEqual(children("Purchases"), ["Bills", "Expense receipts", "Supplier credit notes", "Supplier debit notes", "Payments made"]);
+  assert.deepEqual(children("Bank"), ["Bank accounts", "Money in", "Money out", "Transfers", "Reconciliation"]);
+  assert.deepEqual(children("Accounting"), ["Chart of accounts", "Journals", "General ledger", "Periods & month-end"]);
+  assert.deepEqual(children("Reports"), ["Financial reports", "Month pack", "Performance evaluation"]);
+  assert.equal(children("Settings"), undefined);
+  assert.equal(navLeaves(menu).filter((item) => item.page === "exceptions").length, 1);
 });
 
 test("every menu entry opens a page that role may open", () => {
   for (const [role, area] of [["ACCOUNTANT", "workspace"], ["LOCAL_ADMIN", "company"]] as const) {
-    for (const item of navLeaves(jobNavigation(role))) {
+    for (const item of navLeaves(menu)) {
       assert.ok(isAllowedWorkspaceRoute([area, item.page], role), `${role} cannot open ${item.page}`);
     }
   }
 });
 
 test("System and the other admin pages are for local admins only", () => {
-  const pages = (role: "ACCOUNTANT" | "LOCAL_ADMIN") => navLeaves(jobNavigation(role)).map((item) => item.page);
   for (const page of ["system", "approvals", "users", "validation-rules", "audit"]) {
-    assert.ok(pages("LOCAL_ADMIN").includes(page));
-    assert.ok(!pages("ACCOUNTANT").includes(page), `accountant sees ${page}`);
+    assert.ok(isAllowedWorkspaceRoute(["company", page], "LOCAL_ADMIN"));
+    assert.ok(!isAllowedWorkspaceRoute(["workspace", page], "ACCOUNTANT"));
   }
   assert.ok(!isAllowedWorkspaceRoute(["workspace", "system"], "ACCOUNTANT"));
 });
@@ -50,20 +45,22 @@ test("the Dashboard is home again; B3's /today URL stays valid while it redirect
 });
 
 test("the highlighted entry follows the page", () => {
-  const menu = jobNavigation("LOCAL_ADMIN");
-  assert.equal(activeNavItem(menu, "documents")?.label, "All Documents");
-  assert.equal(activeNavItem(menu, "documents", "lane=needs-fixing")?.label, "Needs fixing");
-  assert.equal(activeNavItem(menu, "documents", "lane=waiting-approval")?.label, "All Documents");
-  assert.equal(activeNavItem(menu, "purchases", "type=purchase-credit-note")?.label, "Supplier Credit Notes");
-  assert.equal(activeNavItem(menu, "documents", "tab=supplier-debit-notes")?.label, "Supplier Debit Notes");
+  assert.equal(activeNavItem(menu, "documents", "lane=to-review")?.label, "To review");
+  assert.equal(activeNavItem(menu, "documents", "lane=ready")?.label, "To review");
+  assert.equal(activeNavItem(menu, "sales", "type=debit-note")?.label, "Debit notes");
+  assert.equal(activeNavItem(menu, "ledger", "section=general")?.label, "General ledger");
+  assert.equal(activeNavItem(menu, "purchases", "type=purchase-credit-note")?.label, "Supplier credit notes");
+  assert.equal(activeNavItem(menu, "documents", "tab=supplier-debit-notes")?.label, "Supplier debit notes");
+  assert.equal(activeNavItem(menu, "documents", "tab=receipts")?.label, "Expense receipts");
+  assert.equal(activeNavItem(menu, "sales", "type=payment")?.label, "Payments received");
   assert.equal(navParent(menu, activeNavItem(menu, "sales", "type=invoice"))?.label, "Sales");
-  assert.equal(activeNavItem(menu, "records", "category=ACCOUNTS_RECEIVABLE")?.label, "Standardised Records");
-  assert.equal(activeNavItem(menu, "reports")?.label, "All Reports");
-  assert.equal(activeNavItem(menu, "ledger")?.label, "Monthly Ledger");
-  assert.equal(activeNavItem(menu, "ledger", "section=trial")?.label, "Trial Balance");
-  assert.equal(activeNavItem(menu, "ledger", "section=periods")?.label, "Periods");
+  assert.equal(activeNavItem(menu, "reports")?.label, "Financial reports");
+  assert.equal(activeNavItem(menu, "reports", "view=month-pack")?.label, "Month pack");
+  assert.equal(activeNavItem(menu, "evaluation")?.label, "Performance evaluation");
+  assert.equal(activeNavItem(menu, "ledger", "section=journals")?.label, "Journals");
+  assert.equal(activeNavItem(menu, "ledger", "section=periods")?.label, "Periods & month-end");
   assert.equal(activeNavItem(menu, "today")?.label, "Dashboard");
   assert.equal(activeNavItem(menu, "dashboard")?.label, "Dashboard");
-  const receipts = navLeaves(menu).find((item) => item.label === "Receipts");
+  const receipts = navLeaves(menu).find((item) => item.label === "Expense receipts");
   assert.equal(receipts && navHref("company", receipts), "/company/documents?tab=receipts");
 });

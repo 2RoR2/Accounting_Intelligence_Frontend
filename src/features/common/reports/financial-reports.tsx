@@ -123,7 +123,7 @@ export function MonthPack() {
         </select>
       </Field>
       <button type="submit" className="btn" disabled={!selected || downloading}>Download month pack (Excel)</button>
-    </form> : <EmptyState message="No accounting periods are available." />)}
+    </form> : <EmptyState message="No accounting periods yet. Open a period under Accounting, then return here to download its month pack." />)}
     {downloadError && <ReportNotice message={downloadError} />}
   </Panel>;
 }

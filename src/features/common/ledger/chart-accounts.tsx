@@ -56,7 +56,9 @@ export function ChartAccounts({ canEdit }: { canEdit: boolean }) {
         <button className="btn primary" disabled={busy}>Add account</button>
       </form>
     </div>}
-    <DataTable rows={data} rowKey={(row) => row.id} columns={[
+    <DataTable rows={data} rowKey={(row) => row.id}
+      emptyMessage={canEdit ? "No accounts yet. Use Add account to set one up." : "No accounts yet. Ask a local admin to set up the chart of accounts."}
+      columns={[
       { label: "Code", render: (row) => row.code },
       { label: "Name", render: (row) => row.name },
       { label: "Class", render: (row) => row.accountClass },

@@ -11,8 +11,10 @@ import { JournalPostingForm } from "./journal-posting-form";
 import { currencyTotals } from "@/lib/api/document-contract";
 import { MonthlyFinance } from "@/features/common/today/monthly-finance";
 import { Periods } from "./periods";
+import { FinancialReportView } from "@/features/common/reports/financial-reports";
 
 const sections = [
+  ["general", "General ledger"],
   ["monthly", "Monthly ledger"],
   ["trial", "Trial balance"],
   ["journals", "Journal history"],
@@ -43,10 +45,10 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
 
   return <div className="ledger-page">
     <PageHeader title="General Ledger" description="Review journals, periods, settlements, and reconciliation allocations." />
-    {section === "periods"
+    {section === "periods" || section === "general"
       ? <div className="ledger-surface">
         <section className="ledger-browser" aria-label="Ledger sections">{tabs}</section>
-        <Periods canManage={canPost} />
+        {section === "periods" ? <Periods canManage={canPost} /> : <FinancialReportView report="general-ledger" title="Posted ledger activity" />}
       </div>
       : <LedgerActivity base={base} canPost={canPost} section={section} tabs={tabs} />}
   </div>;
@@ -55,7 +57,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
 function LedgerActivity({ base, canPost, section, tabs }: {
   base: string;
   canPost: boolean;
-  section: Exclude<Section, "periods">;
+  section: Exclude<Section, "periods" | "general">;
   tabs: ReactNode;
 }) {
   const [search, setSearch] = useState("");
@@ -147,7 +149,11 @@ function LedgerActivity({ base, canPost, section, tabs }: {
       </Panel>}
       {section === "journals" && <Panel title="Journal history">
         {canPost && <JournalPostingForm onPosted={refresh} />}
-        <DataTable rows={journalRows} rowKey={(r) => r.id} columns={[
+        <DataTable rows={journalRows} rowKey={(r) => r.id}
+          emptyMessage={data.journals.length
+            ? "No journals match these filters. Clear a filter to see more journals."
+            : "No journals yet. Post a document or ask a local admin to post a journal."}
+          columns={[
           { label: "Date", render: (r) => r.date }, { label: "Description", render: (r) => r.description }, { label: "Source", render: (r) => r.sourceType },
           { label: "Debit", render: (r) => r.totalDebit }, { label: "Credit", render: (r) => r.totalCredit }, { label: "Status", render: (r) => r.status },
           ...(canPost ? [{ label: "Actions", render: (journal: Journal) => {

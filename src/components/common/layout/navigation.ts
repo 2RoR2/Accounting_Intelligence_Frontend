@@ -1,12 +1,4 @@
-/**
- * Accountant and local-admin menu: the team's `latest_update` layout (Sales, Purchases, Bank, Reports,
- * Accounting with sub-items), pointed at the pages that exist on `features`.
- *
- * Every entry reuses an existing page; a query string only pre-filters that page. Entries whose
- * `latest_update` page needs the ERP or MyInvois services (Bank Transfers, Control Panel currencies,
- * Cashflow forecast) are left out. The super-admin platform menu is separate and unchanged.
- */
-export type NavRole = "LOCAL_ADMIN" | "ACCOUNTANT";
+/** Plan M menu shared by accountants and local admins. */
 export type NavIcon =
   | "today" | "upload" | "review" | "fix" | "approve" | "bill" | "receipt" | "invoice" | "records"
   | "money-in" | "money-out" | "reconcile" | "contacts" | "accounts" | "reports" | "settings"
@@ -18,12 +10,9 @@ export interface NavItem {
   /** Optional query that pre-filters the page, e.g. "tab=purchase-bills". */
   query?: string;
   icon: NavIcon;
-  /** Shows the open-problems or waiting-approvals count. */
-  count?: "exceptions" | "approvals";
+  count?: "exceptions";
   /** Sub-items: the entry becomes an expandable group (it has no page of its own). */
   children?: NavItem[];
-  /** Local admins only. */
-  adminOnly?: boolean;
 }
 export interface NavSection { label: string; items: NavItem[] }
 
@@ -33,80 +22,51 @@ const leaf = (label: string, page: string, query?: string, extra: Partial<NavIte
 const SECTIONS: NavSection[] = [
   { label: "", items: [
     { label: "Dashboard", page: "dashboard", icon: "today" },
-    // Plan L4/L5: typed documents and approved scanned ones in one list per type (sales/purchases pages).
+    // Plan M3: what KNT receives is captured here; what it issues is typed under Sales.
+    { label: "Inbox", page: "upload", icon: "upload", children: [
+      leaf("Upload & capture", "upload"),
+      leaf("To review", "documents", "lane=to-review"),
+      leaf("Exceptions", "exceptions", undefined, { count: "exceptions" }),
+    ] },
     { label: "Sales", page: "sales", icon: "invoice", children: [
       leaf("Quotations", "sales", "type=quotation"),
       leaf("Invoices", "sales", "type=invoice"),
-      leaf("Credit Notes", "sales", "type=credit-note"),
-      leaf("Debit Notes", "documents", "tab=sales-debit-notes"),
-      leaf("Customer Payments", "sales", "type=payment"),
-      leaf("Customer Refunds", "sales", "type=refund"),
+      leaf("Credit notes", "sales", "type=credit-note"),
+      leaf("Debit notes", "sales", "type=debit-note"),
+      leaf("Payments received", "sales", "type=payment"),
     ] },
     { label: "Purchases", page: "purchases", icon: "bill", children: [
       leaf("Bills", "purchases", "type=bill"),
-      leaf("Supplier Credit Notes", "purchases", "type=purchase-credit-note"),
-      leaf("Supplier Debit Notes", "documents", "tab=supplier-debit-notes"),
-      leaf("Supplier Payments", "purchases", "type=purchase-payment"),
-      leaf("Supplier Refunds", "purchases", "type=purchase-refund"),
+      leaf("Expense receipts", "documents", "tab=receipts"),
+      leaf("Supplier credit notes", "purchases", "type=purchase-credit-note"),
+      leaf("Supplier debit notes", "documents", "tab=supplier-debit-notes"),
+      leaf("Payments made", "purchases", "type=purchase-payment"),
     ] },
-    { label: "Receipts", page: "documents", query: "tab=receipts", icon: "receipt" },
-    { label: "Documents", page: "documents", icon: "review", children: [
-      leaf("All Documents", "documents"),
-      leaf("Upload", "upload"),
-    ] },
-    { label: "Review & Exceptions", page: "exceptions", icon: "fix", children: [
-      leaf("Exceptions", "exceptions", undefined, { count: "exceptions" }),
-      leaf("Documents to check", "documents", "lane=to-review"),
-      leaf("Ready to approve", "documents", "lane=ready"),
-      leaf("Needs fixing", "documents", "lane=needs-fixing"),
-      leaf("Approvals", "approvals", undefined, { count: "approvals", adminOnly: true }),
-    ] },
-    { label: "Standardised Records", page: "records", icon: "records" },
-    { label: "Bank", page: "money-in", icon: "bank", children: [
-      leaf("Money In", "money-in"),
-      leaf("Money Out", "money-out"),
+    { label: "Bank", page: "bank-accounts", icon: "bank", children: [
+      leaf("Bank accounts", "bank-accounts"),
+      leaf("Money in", "money-in"),
+      leaf("Money out", "money-out"),
       leaf("Transfers", "bank-entries", "type=bank-transfer"),
-      leaf("Accounts", "bank-accounts"),
       leaf("Reconciliation", "reconciliation"),
     ] },
     { label: "Contacts", page: "contacts", icon: "contacts" },
-    { label: "Reports", page: "reports", icon: "reports", children: [
-      leaf("All Reports", "reports"),
-      leaf("Performance Evaluation", "evaluation"),
-    ] },
     { label: "Accounting", page: "ledger", icon: "accounts", children: [
-      leaf("Monthly Ledger", "ledger", "section=monthly"),
-      leaf("Journal Entries", "ledger", "section=journals"),
-      leaf("Periods", "ledger", "section=periods"),
-      leaf("Chart of Accounts", "ledger", "section=accounts"),
-      leaf("Trial Balance", "ledger", "section=trial"),
+      leaf("Chart of accounts", "ledger", "section=accounts"),
+      leaf("Journals", "ledger", "section=journals"),
+      leaf("General ledger", "ledger", "section=general"),
+      leaf("Periods & month-end", "ledger", "section=periods"),
     ] },
-    { label: "Control Panel", page: "settings", icon: "settings", children: [
-      leaf("Settings", "settings"),
-      leaf("Catalog", "catalog"),
-      leaf("Products & Services", "catalog", "kind=products"),
-      leaf("Posting accounts", "catalog", "kind=posting-accounts", { adminOnly: true }),
-      leaf("Users", "users", undefined, { adminOnly: true }),
-      leaf("Check rules", "validation-rules", undefined, { adminOnly: true }),
-      leaf("Audit trail", "audit", undefined, { adminOnly: true }),
-      leaf("System", "system", undefined, { adminOnly: true }),
+    { label: "Reports", page: "reports", icon: "reports", children: [
+      leaf("Financial reports", "reports"),
+      leaf("Month pack", "reports", "view=month-pack"),
+      leaf("Performance evaluation", "evaluation"),
     ] },
+    { label: "Settings", page: "settings", icon: "settings" },
   ] },
 ];
 
-const forRole = (role: NavRole) => (item: NavItem) => role === "LOCAL_ADMIN" || !item.adminOnly;
-
-/** The menu for one role. Admin-only entries (approvals, users, rules, audit, System) are left out for accountants. */
-export function jobNavigation(role: NavRole): NavSection[] {
-  const keep = forRole(role);
-  return SECTIONS
-    .map((section) => ({
-      ...section,
-      items: section.items.filter(keep)
-        .map((item) => (item.children ? { ...item, children: item.children.filter(keep) } : item))
-        .filter((item) => !item.children || item.children.length > 0),
-    }))
-    .filter((section) => section.items.length > 0);
+export function jobNavigation(): NavSection[] {
+  return SECTIONS;
 }
 
 /** Every entry that opens a page: plain items and sub-items (groups themselves are not links). */
@@ -115,17 +75,20 @@ export const navLeaves = (sections: NavSection[]) =>
 
 export const navHref = (prefix: string, item: NavItem) => `/${prefix}/${item.page}${item.query ? `?${item.query}` : ""}`;
 
-/**
- * The entry for the current page. An entry with a query wins when the URL carries that query;
- * otherwise the plain entry for the page ("All Documents" for /documents and /documents/<id>);
- * otherwise the first entry for the page (/ledger highlights Monthly Ledger).
- */
+/** Match the selected view, including older URLs for the review and ledger pages. */
 export function activeNavItem(sections: NavSection[], page: string, search: URLSearchParams | string = ""): NavItem | undefined {
   const params = typeof search === "string" ? new URLSearchParams(search) : search;
-  // /today (B3's URL, still linked from older pages) redirects to the Dashboard; while it does, it highlights Dashboard.
-  const items = navLeaves(sections).filter((item) => item.page === page || (page === "today" && item.page === "dashboard"));
+  const leaves = navLeaves(sections);
+  const items = leaves.filter((item) => item.page === page || (page === "today" && item.page === "dashboard"));
   const matches = (item: NavItem) => [...new URLSearchParams(item.query ?? "")].every(([key, value]) => params.get(key) === value);
-  return items.find((item) => item.query && matches(item)) ?? items.find((item) => !item.query) ?? items[0];
+  const exact = items.find((item) => item.query && matches(item)) ?? items.find((item) => !item.query);
+  if (exact) return exact;
+  if (page === "documents" && params.get("tab") === "sales-debit-notes")
+    return leaves.find((item) => item.page === "sales" && item.query === "type=debit-note");
+  if (page === "ledger") return items.find((item) => item.query === "section=general");
+  if (page === "sales") return items.find((item) => item.query === "type=invoice");
+  if (page === "approvals") return leaves.find((item) => item.query === "lane=to-review");
+  return items[0];
 }
 
 /** The group that holds an entry (for opening it and for the breadcrumb). */
