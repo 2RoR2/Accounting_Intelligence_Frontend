@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AMOUNT_ONLY_TYPES, BANK_TYPES, PURCHASE_TYPES, SALES_TYPES } from "../src/lib/api/erp.service";
+import {
+  AMOUNT_ONLY_TYPES, BANK_TYPES, PURCHASE_TYPES, SALES_TYPES, documentFileUrl, documentPreviewUrl,
+} from "../src/lib/api/erp.service";
 import type { DocumentType, ErpDocument } from "../src/lib/api/erp.service";
 import {
-  allocationCandidates, documentActions, documentGroup, documentHref, documentTotals, resolveDocumentType,
+  ONLY_ADMIN_ISSUES, allocationCandidates, documentActions, documentGroup, documentHref, documentStatusLabel, documentTotals,
+  formatFileSize, latestFile, noteTargetCandidates, resolveDocumentType, statusFilterOptions,
 } from "../src/features/common/erp/document-logic";
 
 test("totals round each line half up before applying its discount and tax", () => {
@@ -25,27 +28,28 @@ test("payments, refunds and bank transfers use their amount instead of lines", (
 });
 
 test("accountants can edit and submit drafts but cannot make them ready or void them", () => {
-  assert.deepEqual(documentActions("draft", "invoice", "ACCOUNTANT"), [
+  assert.deepEqual(documentActions("draft", "bill", "ACCOUNTANT"), [
     { kind: "save", label: "Save" },
     { kind: "transition", label: "Submit for approval", status: "pending_approval" },
     { kind: "delete", label: "Delete" },
   ]);
-  assert.deepEqual(documentActions("pending_approval", "invoice", "ACCOUNTANT"), [
+  assert.deepEqual(documentActions("pending_approval", "bill", "ACCOUNTANT"), [
     { kind: "save", label: "Save" },
     { kind: "transition", label: "Back to draft", status: "draft" },
   ]);
-  assert.deepEqual(documentActions("ready", "invoice", "ACCOUNTANT"), [
+  assert.deepEqual(documentActions("ready", "bill", "ACCOUNTANT"), [
     { kind: "duplicate", label: "Duplicate" },
-    { kind: "transfer", label: "Turn into credit note", target: "credit-note" },
-    { kind: "transfer", label: "Turn into customer payment", target: "payment" },
+    { kind: "transfer", label: "Turn into supplier credit note", target: "purchase-credit-note" },
+    { kind: "transfer", label: "Turn into supplier debit note", target: "purchase-debit-note" },
+    { kind: "transfer", label: "Turn into supplier payment", target: "purchase-payment" },
   ]);
-  assert.deepEqual(documentActions("void", "invoice", "ACCOUNTANT"), [{ kind: "duplicate", label: "Duplicate" }]);
+  assert.deepEqual(documentActions("void", "bill", "ACCOUNTANT"), [{ kind: "duplicate", label: "Duplicate" }]);
 });
 
 test("company admins can make posting and record-only documents ready and void ready documents", () => {
   for (const [type, draftLabel, pendingLabel] of [
-    ["invoice", "Post to ledger", "Approve and post"],
-    ["quotation", "Mark ready", "Approve"],
+    ["bill", "Post to ledger", "Approve and post"],
+    ["purchase-order", "Mark ready", "Approve"],
   ] as const) {
     for (const [status, label] of [["draft", draftLabel], ["pending_approval", pendingLabel]] as const) {
       const actions = documentActions(status, type, "LOCAL_ADMIN");
@@ -60,6 +64,7 @@ test("company admins can make posting and record-only documents ready and void r
     { kind: "transition", label: "Void", status: "void" },
     { kind: "duplicate", label: "Duplicate" },
     { kind: "transfer", label: "Turn into supplier credit note", target: "purchase-credit-note" },
+    { kind: "transfer", label: "Turn into supplier debit note", target: "purchase-debit-note" },
     { kind: "transfer", label: "Turn into supplier payment", target: "purchase-payment" },
   ]);
   assert.deepEqual(documentActions("ready", "refund", "LOCAL_ADMIN").map(({ label }) => label), ["Void", "Duplicate"]);
@@ -88,9 +93,9 @@ test("route groups use their defaults and only accept types belonging to that gr
 
 test("only open typed documents for the chosen contact and matching scanned documents can be allocated", () => {
   const contact = { id: "contact-1", legalName: "Awan Sdn Bhd" };
-  for (const [target, payment, credit] of [
-    ["invoice", "payment", "credit-note"],
-    ["bill", "purchase-payment", "purchase-credit-note"],
+  for (const [target, payment, credit, debit] of [
+    ["invoice", "payment", "credit-note", "debit-note"],
+    ["bill", "purchase-payment", "purchase-credit-note", "purchase-debit-note"],
   ] as const) {
     const typed = { type: target, source: "typed", status: "ready", outstanding: "50.00", contactId: contact.id } as const;
     const scanned = { type: target, source: "scanned", status: "approved", outstanding: "25.00", contactName: "AWAN SDN BHD" } as const;
@@ -98,11 +103,110 @@ test("only open typed documents for the chosen contact and matching scanned docu
       { ...typed, id: "open" }, { ...typed, id: "closed", outstanding: "0.00" },
       { ...typed, id: "draft", status: "draft" }, { ...typed, id: "other", contactId: "contact-2" },
       { ...typed, id: "wrong-type", type: "quotation" }, { ...typed, id: "unknown-balance", outstanding: undefined },
+      { ...typed, id: "debit-note", type: debit }, { ...scanned, id: "scanned-debit-note", type: debit },
       { ...scanned, id: "approved-scan" }, { ...scanned, id: "posted-scan", status: "ready" },
       { ...scanned, id: "other-name", contactName: "Another Company" }, { ...scanned, id: "overpaid-scan", outstanding: "-1" },
     ] satisfies (Pick<ErpDocument, "source" | "status" | "outstanding" | "contactId" | "contactName"> & { id: string; type: DocumentType })[];
-    assert.deepEqual(allocationCandidates(payment, contact, rows).map(({ id }) => id), ["open", "approved-scan", "posted-scan"]);
-    assert.deepEqual(allocationCandidates(credit, contact, rows).map(({ id }) => id), ["open"]);
+    assert.deepEqual(allocationCandidates(payment, contact, rows).map(({ id }) => id), ["open", "debit-note", "approved-scan", "posted-scan"]);
+    assert.deepEqual(allocationCandidates(credit, contact, rows).map(({ id }) => id), ["open", "debit-note"]);
     assert.deepEqual(allocationCandidates("refund", contact, rows), []);
   }
+});
+
+test("printed sales documents: accountants draft, only the company admin issues, issued ones are read-only", () => {
+  const accountant = documentActions("draft", "invoice", "ACCOUNTANT");
+  assert.deepEqual(accountant, [
+    { kind: "save", label: "Save" },
+    { kind: "preview", label: "Preview PDF" },
+    { kind: "transition", label: "Submit for approval", status: "pending_approval" },
+    { kind: "transition", label: "Issue", status: "ready", disabledReason: ONLY_ADMIN_ISSUES },
+    { kind: "delete", label: "Delete" },
+  ]);
+  assert.deepEqual(documentActions("draft", "invoice", "LOCAL_ADMIN").find(({ label }) => label === "Issue"),
+    { kind: "transition", label: "Issue", status: "ready" });
+  for (const type of ["invoice", "credit-note", "debit-note", "payment", "purchase-payment", "delivery-order"] as const) {
+    for (const status of ["pending_approval", "ready", "void"] as const) {
+      for (const role of ["ACCOUNTANT", "LOCAL_ADMIN"] as const) {
+        assert.ok(!documentActions(status, type, role).some(({ kind }) => kind === "save"), `${type} ${status} is editable`);
+      }
+    }
+  }
+  const labels = (status: "ready" | "void", type: DocumentType, role: "ACCOUNTANT" | "LOCAL_ADMIN") =>
+    documentActions(status, type, role).map(({ label }) => label);
+  assert.deepEqual(labels("ready", "invoice", "LOCAL_ADMIN"),
+    ["Receive payment", "Credit note", "Debit note", "Void", "Print", "Download PDF", "Duplicate"]);
+  assert.deepEqual(labels("ready", "invoice", "ACCOUNTANT"),
+    ["Receive payment", "Credit note", "Debit note", "Print", "Download PDF", "Duplicate"]);
+  assert.deepEqual(labels("ready", "debit-note", "LOCAL_ADMIN"),
+    ["Receive payment", "Credit note", "Void", "Print", "Download PDF", "Duplicate"]);
+  for (const type of ["credit-note", "payment", "purchase-payment"] as const) {
+    assert.deepEqual(labels("ready", type, "LOCAL_ADMIN"), ["Void", "Print", "Download PDF", "Duplicate"]);
+    assert.deepEqual(labels("ready", type, "ACCOUNTANT"), ["Print", "Download PDF", "Duplicate"]);
+  }
+  assert.deepEqual(documentActions("ready", "invoice", "LOCAL_ADMIN").filter(({ kind }) => kind === "transfer"), [
+    { kind: "transfer", label: "Receive payment", target: "payment" },
+    { kind: "transfer", label: "Credit note", target: "credit-note" },
+    { kind: "transfer", label: "Debit note", target: "debit-note" },
+  ]);
+  assert.deepEqual(labels("void", "invoice", "LOCAL_ADMIN"), ["Print", "Download PDF", "Duplicate"]);
+  // Supplier debit notes are captured, not printed: they keep the ordinary flow.
+  assert.deepEqual(labels("ready", "purchase-debit-note", "LOCAL_ADMIN"),
+    ["Void", "Duplicate", "Turn into supplier credit note", "Turn into supplier payment"]);
+});
+
+test("quotations are sent, then accepted, expired or converted to an invoice by accountants and admins", () => {
+  for (const role of ["ACCOUNTANT", "LOCAL_ADMIN"] as const) {
+    assert.deepEqual(documentActions("draft", "quotation", role), [
+      { kind: "save", label: "Save" },
+      { kind: "preview", label: "Preview PDF" },
+      { kind: "transition", label: "Send", status: "sent" },
+      { kind: "delete", label: "Delete" },
+    ]);
+    assert.deepEqual(documentActions("sent", "quotation", role).filter(({ kind }) => kind === "transition" || kind === "transfer"), [
+      { kind: "transition", label: "Mark accepted", status: "accepted" },
+      { kind: "transition", label: "Mark expired", status: "expired" },
+      { kind: "transfer", label: "Convert to invoice", target: "invoice" },
+      { kind: "transition", label: "Void", status: "void" },
+    ]);
+    assert.deepEqual(documentActions("accepted", "quotation", role).map(({ label }) => label),
+      ["Convert to invoice", "Void", "Print", "Download PDF", "Duplicate"]);
+    assert.deepEqual(documentActions("expired", "quotation", role)[0], { kind: "transition", label: "Send again", status: "sent" });
+  }
+});
+
+test("status labels and filters follow the document type", () => {
+  assert.equal(documentStatusLabel("ready", "invoice"), "Issued");
+  assert.equal(documentStatusLabel("ready", "bill"), "Ready");
+  assert.equal(documentStatusLabel("sent", "quotation"), "Sent");
+  assert.deepEqual(statusFilterOptions("quotation", false), ["draft", "sent", "accepted", "expired", "void"]);
+  assert.deepEqual(statusFilterOptions("invoice", true), ["draft", "pending_approval", "ready", "void", "approved"]);
+  assert.deepEqual(statusFilterOptions("debit-note", false), ["draft", "pending_approval", "ready", "void"]);
+});
+
+test("credit and debit notes correct an issued typed invoice or bill of the same contact", () => {
+  const base = { source: "typed", status: "ready", contactId: "c1" } as const;
+  const rows = [
+    { ...base, id: "iv", type: "invoice" }, { ...base, id: "dn", type: "debit-note" },
+    { ...base, id: "draft", type: "invoice", status: "draft" }, { ...base, id: "other", type: "invoice", contactId: "c2" },
+    { ...base, id: "scan", type: "invoice", source: "scanned" }, { ...base, id: "bill", type: "bill" },
+  ] satisfies (Pick<ErpDocument, "source" | "status" | "contactId"> & { id: string; type: DocumentType })[];
+  assert.deepEqual(noteTargetCandidates("credit-note", "c1", rows).map(({ id }) => id), ["iv", "dn"]);
+  assert.deepEqual(noteTargetCandidates("debit-note", "c1", rows).map(({ id }) => id), ["iv"]);
+  assert.deepEqual(noteTargetCandidates("purchase-credit-note", "c1", rows).map(({ id }) => id), ["bill"]);
+  assert.deepEqual(noteTargetCandidates("debit-note", "", rows), []);
+  assert.deepEqual(noteTargetCandidates("invoice", "c1", rows), []);
+});
+
+test("printed copies open through same-origin API paths and the latest revision is printed", () => {
+  assert.equal(documentPreviewUrl("invoice", "a/b"), "/api/erp/documents/invoice/a%2Fb/preview.pdf");
+  assert.equal(documentFileUrl("invoice", "id1", 2), "/api/erp/documents/invoice/id1/files/2");
+  assert.equal(documentFileUrl("credit-note", "id1", 1, true), "/api/erp/documents/credit-note/id1/files/1?inline=true");
+  const file = (revision: number, reason: "issued" | "void") =>
+    ({ revision, reason, fileName: `f${revision}.pdf`, byteSize: 10, sha256: "x", createdAt: "2026-11-23" });
+  assert.equal(latestFile([file(1, "issued"), file(3, "void"), file(2, "issued")])?.revision, 3);
+  assert.equal(latestFile([]), undefined);
+  assert.equal(latestFile(undefined), undefined);
+  assert.equal(formatFileSize(512), "512 B");
+  assert.equal(formatFileSize(2048), "2.0 KB");
+  assert.equal(formatFileSize(3 * 1024 * 1024), "3.0 MB");
 });
