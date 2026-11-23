@@ -23,18 +23,7 @@ import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } fr
 import { decimalDisplay as money } from "@/lib/api/document-contract";
 import { BankLineActions, BankLineDocumentLink } from "./bank-line-actions";
 import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, isUnallocated } from "./allocation-logic";
-
-type ImportColumn = "posted_date" | "value_date" | "description" | "reference" | "debit" | "credit" | "currency";
-const IMPORT_COLUMNS: Array<{ key: ImportColumn; label: string; required: boolean }> = [
-  { key: "posted_date", label: "Posted date", required: true },
-  { key: "value_date", label: "Value date", required: false },
-  { key: "description", label: "Description", required: true },
-  { key: "reference", label: "Reference", required: false },
-  { key: "debit", label: "Debit (Money Out)", required: true },
-  { key: "credit", label: "Credit (Money In)", required: true },
-  { key: "currency", label: "Currency", required: false },
-];
-
+import { autoMapColumns, headerMatchesField, IMPORT_COLUMNS, importMappingForPreview, type ImportColumn } from "./import-mapping";
 function csvHeaders(text: string): string[] {
   const firstLine = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
   const headers: string[] = [];
@@ -66,52 +55,6 @@ function detectDateFormat(text: string, dateHeader: string): "iso" | "dmy" | "md
   return "";
 }
 
-function guessColumn(headers: string[], key: ImportColumn): string {
-  const normalized = (header: string) => header.toLowerCase().replace(/[^a-z]/g, "");
-  const matches: Record<ImportColumn, string[]> = {
-    posted_date: ["date", "transactiondate", "posteddate", "bookingdate"],
-    value_date: ["valuedate"],
-    description: ["description", "details", "narrative", "transactiondetails", "payee", "merchant"],
-    reference: ["reference", "ref", "transactionreference"],
-    debit: ["debit", "withdrawal", "moneyout"],
-    credit: ["credit", "deposit", "moneyin"],
-    currency: ["currency", "ccy"],
-  };
-  return headers.find((header) => matches[key].includes(normalized(header))) ?? "";
-}
-
-function headerMatchesField(header: string, key: ImportColumn): boolean {
-  const value = header.toLowerCase().replace(/[^a-z]/g, "");
-  const terms: Record<ImportColumn, string[]> = {
-    posted_date: ["date", "transactiondate", "posteddate", "bookingdate"],
-    value_date: ["valuedate"],
-    description: ["description", "details", "narrative", "transactiondetails", "payee", "merchant"],
-    reference: ["reference", "ref", "transactionreference"],
-    debit: ["debit", "withdrawal", "moneyout", "payment", "amount"],
-    credit: ["credit", "deposit", "moneyin", "receipt", "amount"],
-    currency: ["currency", "ccy"],
-  };
-  return terms[key].some((term) => value === term || value.includes(term));
-}
-
-function autoMapColumns(headers: string[]): Record<ImportColumn, string> {
-  const result = {} as Record<ImportColumn, string>;
-  const used = new Set<string>();
-  for (const { key } of IMPORT_COLUMNS) {
-    const candidates = headers.filter((header) => headerMatchesField(header, key));
-    const match = guessColumn(headers, key) || (candidates.length === 1 ? candidates[0] : "");
-    result[key] = match && !used.has(match) ? match : "";
-    if (result[key]) used.add(result[key]);
-  }
-  const amountHeader = headers.find((header) => /^(amount|value|transactionamount)$/i.test(header.replace(/[^a-z]/gi, "")));
-  if (amountHeader) {
-    // A signed Amount column is intentionally mapped to both semantic sides;
-    // the backend then uses the sign to populate exactly one side per row.
-    result.debit = amountHeader;
-    result.credit = amountHeader;
-  }
-  return result;
-}
 
 export function ReconciliationPage({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
@@ -202,20 +145,7 @@ export function ReconciliationPage({ user }: { user: User }) {
     setBusy(true);
     setActionError("");
     try {
-      const effectiveMapping = { ...importMapping };
-      for (const { key } of IMPORT_COLUMNS) {
-        if (!effectiveMapping[key]) {
-          const candidates = importHeaders.filter((header) => headerMatchesField(header, key));
-          if (candidates.length === 1) effectiveMapping[key] = candidates[0];
-        }
-      }
-      const amountHeader = importHeaders.find((header) => /^(amount|value|transactionamount)$/i.test(header.replace(/[^a-z]/gi, "")));
-      if (amountHeader) {
-        // A single signed Amount column is one source field for both sides.
-        // The backend uses its sign to populate exactly one side per row.
-        effectiveMapping.debit = amountHeader;
-        effectiveMapping.credit = amountHeader;
-      }
+      const effectiveMapping = importMappingForPreview(importMapping, importHeaders);
       const missing = IMPORT_COLUMNS.filter(({ key, required }) => required && !effectiveMapping[key]).map(({ label }) => label);
       if (missing.length) throw new Error(`Choose a column for: ${missing.join(", ")}.`);
       const mapping = Object.fromEntries(Object.entries(effectiveMapping).filter(([, header]) => header)) as Record<string, string>;
