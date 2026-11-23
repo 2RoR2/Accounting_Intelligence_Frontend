@@ -1,0 +1,197 @@
+/*
+ * Dark theme, surfaces that kept a light background or low-contrast text (WCAG AA, 4.5:1 for text).
+ * Loaded after theme.css. Tokens match theme.css: page #071a36, card #0c2a52, inset #102f57 / #163f70,
+ * text #ecf5ff, muted text #b9d5f2, border rgba(157,202,255,.3), accent #67adff.
+ */
+
+/* Legacy light tokens: anything still reading var(--ink), var(--muted), var(--border) or var(--surface) follows the theme. */
+.app-shell.theme-dark {
+  --ink: #ecf5ff;
+  --muted: #b9d5f2;
+  --border: rgba(157, 202, 255, 0.3);
+  --border-subtle: rgba(157, 202, 255, 0.18);
+  --surface: #102f57;
+  --role-accent-soft: rgba(103, 173, 255, 0.16);
+  --role-accent-strong: #cfe3ff;
+  --glass-surface: rgba(12, 42, 82, 0.72);
+  --glass-surface-strong: rgba(12, 42, 82, 0.9);
+  --glass-border: rgba(157, 202, 255, 0.3);
+}
+
+/* Primary buttons: the bright accent needs dark text (white on #67adff is 2.3:1). */
+.app-shell.theme-dark :is(.btn.primary, button.primary, a.primary),
+.app-shell.theme-dark :is(.btn.primary, button.primary, a.primary) * { color: #071a36 !important; }
+.app-shell.theme-dark :is(.btn.primary, button.primary, a.primary):disabled { background: #3a5f8e !important; border-color: #3a5f8e !important; opacity: 1 !important; }
+.app-shell.theme-dark :is(.btn.primary, button.primary, a.primary):disabled,
+.app-shell.theme-dark :is(.btn.primary, button.primary, a.primary):disabled * { color: #f0f6ff !important; }
+/* Secondary buttons that sit on a card, and disabled ones. */
+.app-shell.theme-dark .content .btn:not(.primary):disabled,
+.app-shell.theme-dark .content button:disabled:not(.primary) { color: #c4d9ef !important; border-color: rgba(157, 202, 255, 0.34) !important; opacity: 1 !important; }
+
+/* Small brand tiles: white on #3c92f7 is 3.2:1, so deepen the blue. */
+.app-shell.theme-dark .workspace-avatar { background: #1a63c4 !important; color: #fff !important; }
+.app-shell.theme-dark .topbar-right .notification-badge { background: #1f6fd6 !important; border-color: #071a36 !important; color: #fff !important; }
+.app-shell.theme-dark .topbar .avatar,
+.app-shell.theme-dark .topbar .company-avatar { background: #dcecff !important; color: #0b4f9c !important; border-color: #9dcaff !important; }
+.app-shell.theme-dark .topbar .icon-btn:not(.notification) { background: #102f57 !important; border: 1px solid rgba(157, 202, 255, 0.42) !important; color: #f5f9ff !important; }
+.app-shell.theme-dark .topbar .icon-btn:not(.notification) svg { color: #f5f9ff !important; stroke: #f5f9ff !important; }
+.app-shell.theme-dark .topbar .icon-btn:not(.notification):hover { background: #1a4b82 !important; border-color: #9dcaff !important; }
+.app-shell.theme-dark .topbar-right :is(.theme-toggle, .help-trigger) { background: #102f57 !important; border: 1px solid rgba(157, 202, 255, 0.42) !important; color: #f5f9ff !important; }
+.app-shell.theme-dark .topbar-right :is(.theme-toggle, .help-trigger) svg { color: #f5f9ff !important; stroke: #f5f9ff !important; }
+.app-shell.theme-dark .topbar-right :is(.theme-toggle, .help-trigger):hover { background: #1a4b82 !important; border-color: #9dcaff !important; }
+.app-shell.theme-dark .topbar-right .notification.icon-btn { color: #f5f9ff; }
+
+/* Tabs and chips. */
+.app-shell.theme-dark .workspace-tabs button { color: #cce3ff !important; }
+.app-shell.theme-dark .workspace-tabs button.active { color: #9dcaff !important; border-bottom-color: #67adff !important; }
+.app-shell.theme-dark .reports-page .report-tabs button { background: #102f57 !important; border-color: rgba(157, 202, 255, 0.34) !important; color: #e6f0ff !important; }
+.app-shell.theme-dark .reports-page .report-tabs button:hover { background: #1a4b82 !important; border-color: #9dcaff !important; }
+.app-shell.theme-dark .reports-page .report-tabs button.active { background: #67adff !important; border-color: #9dcaff !important; color: #071a36 !important; }
+.app-shell.theme-dark .review-only-toggle { background: #102f57 !important; border-color: rgba(157, 202, 255, 0.42) !important; color: #e6f0ff !important; }
+.app-shell.theme-dark .review-only-toggle * { color: #e6f0ff !important; }
+.app-shell.theme-dark .biz-toggle button { color: #e6f0ff !important; }
+.app-shell.theme-dark .biz-toggle button.active { background: #67adff !important; color: #071a36 !important; }
+
+/* Report and ledger tables: header, subtotal and total rows were #f7faff. */
+.app-shell.theme-dark .reports-page .report-total :is(th, td),
+.app-shell.theme-dark tfoot.report-total :is(th, td),
+.app-shell.theme-dark .biz-table :is(thead th, .biz-total-row th, .biz-total-row td) { background: #163f70 !important; color: #f5f9ff !important; border-color: rgba(157, 202, 255, 0.28) !important; }
+.app-shell.theme-dark .data-table thead th { background: #163f70 !important; color: #ecf5ff !important; }
+.app-shell.theme-dark .data-table small { color: #b9d5f2 !important; }
+.app-shell.theme-dark .positive-value { color: #6ee7a8 !important; }
+.app-shell.theme-dark .negative-value { color: #ff9daa !important; }
+
+/* Dashboard cards (the lower half of the dashboard stayed white with pale text). */
+.app-shell.theme-dark .dashboard-reference-panel { background: #0c2a52 !important; border-color: rgba(157, 202, 255, 0.3) !important; box-shadow: none; color: #ecf5ff; }
+.app-shell.theme-dark .dashboard-reference-panel-heading h2 { color: #f5f9ff !important; }
+.app-shell.theme-dark .dashboard-reference-panel-heading strong { color: #f5f9ff !important; }
+.app-shell.theme-dark .dashboard-reference-panel-heading small,
+.app-shell.theme-dark .dashboard-panel-help,
+.app-shell.theme-dark .dashboard-chart-note { color: #b9d5f2 !important; }
+.app-shell.theme-dark .dashboard-reference-panel-heading a { color: #9dcaff !important; }
+.app-shell.theme-dark .dashboard-reference-panel-heading select { background: #163f70 !important; border-color: rgba(157, 202, 255, 0.42) !important; color: #f5f9ff !important; }
+.app-shell.theme-dark .monthly-summary-grid > div { background: #102f57 !important; border-color: rgba(157, 202, 255, 0.28) !important; }
+.app-shell.theme-dark .monthly-summary-grid span { color: #b9d5f2 !important; }
+.app-shell.theme-dark .monthly-summary-grid strong { color: #f5f9ff !important; }
+.app-shell.theme-dark .monthly-ledger-head { color: #b9d5f2 !important; border-bottom-color: rgba(157, 202, 255, 0.3) !important; }
+.app-shell.theme-dark .monthly-ledger-row { color: #e6f0ff !important; border-bottom-color: rgba(157, 202, 255, 0.2) !important; }
+.app-shell.theme-dark .monthly-ledger-row span { color: #e6f0ff !important; }
+.app-shell.theme-dark .monthly-ledger-row strong { color: #f5f9ff !important; }
+.app-shell.theme-dark .monthly-ledger-row strong.positive-value { color: #6ee7a8 !important; }
+.app-shell.theme-dark .monthly-ledger-row strong.negative-value { color: #ff9daa !important; }
+.app-shell.theme-dark .monthly-ledger-row:hover { background: #163f70 !important; }
+.app-shell.theme-dark .dashboard-reference-panel :is(p, span, small, li, dd, dt, label) { color: #d9eaff; }
+.app-shell.theme-dark .dashboard-reference-panel :is(strong, b, h3) { color: #f5f9ff; }
+.app-shell.theme-dark .kpi-invoice { background: linear-gradient(110deg, #0a6aa8, #07568f) !important; }
+.app-shell.theme-dark .kpi-bill { background: linear-gradient(110deg, #1e5db2, #12418f) !important; }
+
+/* Bank anomaly banner and other pale alert surfaces. */
+.app-shell.theme-dark .bank-anomaly-overview { background: #0c2a52 !important; border-color: rgba(157, 202, 255, 0.34) !important; color: #ecf5ff !important; box-shadow: none !important; }
+.app-shell.theme-dark .bank-anomaly-overview :is(h2, strong, span, li, small) { color: #ecf5ff !important; }
+.app-shell.theme-dark .bank-anomaly-overview p { color: #b9d5f2 !important; }
+.app-shell.theme-dark .bank-anomaly-overview-kicker { color: #9dcaff !important; }
+.app-shell.theme-dark .bank-anomaly-overview-count { background: #4a2430 !important; border-color: #ff9daa !important; }
+.app-shell.theme-dark .bank-anomaly-overview-count :is(strong, span) { color: #ffe8ec !important; }
+
+/* Upload tile and progress tracks. */
+.app-shell.theme-dark .upload-icon { background: #163f70 !important; border-color: #67adff !important; color: #67adff !important; box-shadow: none !important; }
+.app-shell.theme-dark .upload-icon svg { color: #9dcaff !important; stroke: #9dcaff !important; }
+.app-shell.theme-dark :is(.progress-track, .upload-progress-track) { background: #163f70 !important; }
+
+/* Muted helper text that is a plain element on a card. */
+.app-shell.theme-dark .content :is(.muted, .hint, .field-hint, .help-text, .table-empty, .loading-state) { color: #b9d5f2 !important; }
+.app-shell.theme-dark :is(.empty-state, .empty, .chart-empty-state, .widget-empty) { background: transparent; color: #b9d5f2; border-color: rgba(157, 202, 255, 0.3); }
+.app-shell.theme-dark :is(.empty-state, .empty, .chart-empty-state, .widget-empty) strong { color: #f5f9ff; }
+
+/* Popovers from the top bar. */
+.app-shell.theme-dark :is(.notification-panel, .profile-menu, .new-document-menu-list, .dropdown-menu) { background: #0c2a52 !important; border: 1px solid rgba(157, 202, 255, 0.42) !important; color: #ecf5ff !important; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45) !important; }
+.app-shell.theme-dark :is(.notification-panel, .profile-menu, .new-document-menu-list, .dropdown-menu) :is(strong, span, a, button, li) { color: #ecf5ff !important; border-color: rgba(157, 202, 255, 0.24) !important; }
+.app-shell.theme-dark :is(.notification-panel, .profile-menu, .new-document-menu-list, .dropdown-menu) :is(small, p) { color: #b9d5f2 !important; }
+.app-shell.theme-dark :is(.notification-panel, .profile-menu, .new-document-menu-list, .dropdown-menu) :is(a, button):hover { background: #1a4b82 !important; }
+.app-shell.theme-dark .toast { background: #12345f !important; color: #ecf5ff !important; border: 1px solid rgba(157, 202, 255, 0.42) !important; }
+
+/* Skip link, profile caption, loading screen, ledger summary card 3 (white on #3c92f7 is 3.2:1). */
+.app-shell.theme-dark .skip-link:focus { background: #67adff !important; color: #071a36 !important; }
+.app-shell.theme-dark .profile-text :is(small, span) { color: #b9d5f2 !important; }
+html[data-theme="dark"] .loading-state, html[data-theme="dark"] .loading-state * { color: #cfe3ff; }
+.app-shell.theme-dark:has(.ledger-browser) .stats-grid .stat-card:nth-child(3),
+.app-shell.theme-dark:has(.ledger-browser) .stats-grid .stat-card:nth-child(3) * { color: #08254a !important; }
+
+/* Sign-in, registration and activation pages: they sit outside the app shell, so follow html[data-theme="dark"]. */
+html[data-theme="dark"] .home-wash.auth-wash { background: radial-gradient(circle at 50% 8%, #123f73, transparent 46%), linear-gradient(145deg, #071a36, #0b2d55 58%, #071a36) !important; color: #ecf5ff; }
+html[data-theme="dark"] .auth-wash .hp-header { background: rgba(7, 26, 54, 0.9) !important; border-color: rgba(157, 202, 255, 0.28) !important; }
+html[data-theme="dark"] .auth-wash .hp-header :is(a, span, strong, button) { color: #ecf5ff !important; }
+html[data-theme="dark"] .auth-wash .auth-hero { background: #0c2a52 !important; border: 1px solid rgba(157, 202, 255, 0.3) !important; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4) !important; color: #ecf5ff; }
+html[data-theme="dark"] .auth-wash .auth-card { background: #102f57 !important; border-color: rgba(157, 202, 255, 0.34) !important; box-shadow: none !important; color: #ecf5ff; }
+html[data-theme="dark"] .auth-wash .auth-hero :is(h1, h2, h3) { color: #f5f9ff !important; }
+html[data-theme="dark"] .auth-wash .auth-hero > div > :is(h1, h1 span) { color: #f5f9ff !important; }
+html[data-theme="dark"] .auth-wash :is(.hp-lead, .hp-copy, .hp-quiet, .form-bottom, .auth-card > p:not(.hp-eyebrow), .welcome-state > p:not(.hp-eyebrow), .password-setup p, .password-checks-title) { color: #cfe3ff !important; }
+html[data-theme="dark"] .auth-wash .hp-eyebrow { color: #9dcaff !important; }
+html[data-theme="dark"] .auth-wash .field label { color: #9dcaff !important; }
+html[data-theme="dark"] .auth-wash .field small { color: #b9d5f2 !important; }
+html[data-theme="dark"] .auth-wash .field :is(input, select, textarea) { background: #163f70 !important; border-color: rgba(157, 202, 255, 0.5) !important; color: #f5f9ff !important; }
+html[data-theme="dark"] .auth-wash .field :is(input, select, textarea)::placeholder { color: #b9d5f2 !important; opacity: 1; }
+html[data-theme="dark"] .auth-wash .field :is(input, select, textarea):focus { border-color: #9dcaff !important; box-shadow: 0 0 0 3px rgba(103, 173, 255, 0.4) !important; }
+html[data-theme="dark"] .auth-wash :is(a:not(.btn), .form-link, .auth-back-link) { color: #9dcaff !important; }
+html[data-theme="dark"] .auth-wash .password-input-wrap button { color: #cfe3ff !important; background: transparent !important; }
+html[data-theme="dark"] .auth-wash .btn.primary { background: #67adff !important; border-color: #67adff !important; color: #071a36 !important; box-shadow: none !important; }
+html[data-theme="dark"] .auth-wash .btn.primary * { color: #071a36 !important; }
+html[data-theme="dark"] .auth-wash .btn:not(.primary) { background: #163f70 !important; border-color: rgba(157, 202, 255, 0.5) !important; color: #f5f9ff !important; }
+html[data-theme="dark"] .auth-wash .password-setup { background: #0c2a52 !important; border-color: rgba(157, 202, 255, 0.3) !important; color: #ecf5ff !important; }
+html[data-theme="dark"] .auth-wash .password-setup :is(li, span, strong) { color: #cfe3ff !important; }
+html[data-theme="dark"] .auth-wash .auth-preview-panel { background: linear-gradient(145deg, #1a63c4, #12418f) !important; }
+html[data-theme="dark"] .auth-wash .auth-preview-panel > :is(p, h2) { color: #fff !important; }
+html[data-theme="dark"] .auth-wash .auth-preview-dashboard > div { background: #0c2a52 !important; border: 1px solid rgba(157, 202, 255, 0.34); }
+html[data-theme="dark"] .auth-wash .auth-preview-dashboard :is(span, strong, p, b) { color: #ecf5ff !important; }
+html[data-theme="dark"] .auth-wash .auth-preview-dashboard :is(small, span:first-child) { color: #9dcaff !important; }
+
+/* "We couldn't complete that request" and sign-in-required gate pages. */
+html[data-theme="dark"] .access-gate { background: #071a36 !important; color: #ecf5ff; }
+html[data-theme="dark"] .access-gate-message h1 { color: #f5f9ff !important; }
+html[data-theme="dark"] .access-gate-message p { color: #cfe3ff !important; }
+html[data-theme="dark"] .access-gate-illustration::before { background: #4a2430 !important; }
+html[data-theme="dark"] .access-gate-window { background: #0c2a52 !important; border-color: #67adff !important; }
+html[data-theme="dark"] .access-gate-window::before { background: #1a4b82 !important; }
+html[data-theme="dark"] .access-gate-window i { background: #3a5f8e !important; }
+html[data-theme="dark"] .access-gate .error-box { background: #4a2430 !important; border-color: #ff9daa !important; color: #ffe8ec !important; }
+html[data-theme="dark"] .access-gate .error-box * { color: #ffe8ec !important; }
+html[data-theme="dark"] .access-gate .error-box .btn { background: #163f70 !important; border-color: rgba(157, 202, 255, 0.5) !important; color: #f5f9ff !important; }
+html[data-theme="dark"] .access-gate .btn.primary, html[data-theme="dark"] .access-gate .access-gate-login { background: #67adff !important; color: #071a36 !important; }
+
+/* Dialogs: every Modal is a bare <dialog aria-label>, so the old `dialog.modal` rules never matched them. */
+.app-shell.theme-dark dialog { background: #0c2a52 !important; color: #ecf5ff !important; border: 1px solid rgba(157, 202, 255, 0.42) !important; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6) !important; }
+.app-shell.theme-dark dialog::backdrop { background: rgba(2, 10, 24, 0.7) !important; }
+.app-shell.theme-dark dialog .modal-heading { background: #163f70 !important; border-bottom: 1px solid rgba(157, 202, 255, 0.35) !important; }
+.app-shell.theme-dark dialog .modal-heading h2 { color: #fff !important; }
+.app-shell.theme-dark dialog .modal-heading .icon-btn { background: #102f57 !important; border: 1px solid #9dcaff !important; color: #fff !important; }
+.app-shell.theme-dark dialog .modal-heading .icon-btn svg { color: #fff !important; stroke: #fff !important; }
+.app-shell.theme-dark dialog :is(label, p, span, strong, li, dd, dt, h3, h4, th, td) { color: #ecf5ff; }
+.app-shell.theme-dark dialog :is(small, .text-xs, .field small, dt, .muted) { color: #b9d5f2 !important; }
+.app-shell.theme-dark dialog .field-required { color: #ff9daa !important; }
+.app-shell.theme-dark dialog :is(input, select, textarea) { background: #163f70 !important; border-color: rgba(157, 202, 255, 0.5) !important; color: #f5f9ff !important; }
+.app-shell.theme-dark dialog :is(input, select, textarea)::placeholder { color: #b9d5f2 !important; opacity: 1; }
+.app-shell.theme-dark dialog .modal-actions { background: #0c2a52 !important; border-top: 1px solid rgba(157, 202, 255, 0.3) !important; }
+.app-shell.theme-dark dialog .info-box { background: #12345f !important; border-color: rgba(157, 202, 255, 0.34) !important; color: #ecf5ff !important; }
+.app-shell.theme-dark dialog .info-box * { color: #ecf5ff !important; }
+.app-shell.theme-dark dialog .btn:not(.primary) { background: #102f57 !important; border-color: rgba(157, 202, 255, 0.48) !important; color: #f5f9ff !important; }
+.app-shell.theme-dark dialog .avatar { background: #dcecff !important; color: #0b4f9c !important; }
+.app-shell.theme-dark dialog :is(table, .detail-list) :is(th, td, dt, dd) { border-color: rgba(157, 202, 255, 0.24) !important; }
+.app-shell.theme-dark dialog :is(.combo-list) { background: #0c2a52 !important; }
+
+/* Profile button hover (the generic button hover turned it #2469aa, which dims the caption). */
+.app-shell.theme-dark .topbar .profile-button:hover { background: #1a4b82 !important; border-color: transparent !important; }
+
+/* Malaysia day/night clock chip on the dashboard header: a light chip on a dark page. */
+.app-shell.theme-dark .malaysia-day-night-copy { background: rgba(12, 42, 82, 0.88) !important; border-color: rgba(157, 202, 255, 0.45) !important; }
+.app-shell.theme-dark .malaysia-day-night-copy * { color: #ecf5ff !important; }
+
+/* Remaining stragglers found by the contrast audit. */
+.app-shell.theme-dark .dashboard-page .workspace-dashboard-header .malaysia-day-night-copy { background: rgba(12, 42, 82, 0.9) !important; border-color: rgba(157, 202, 255, 0.5) !important; }
+.app-shell.theme-dark .dashboard-page .workspace-dashboard-header .malaysia-day-night-copy :is(strong, span, small) { color: #ecf5ff !important; }
+.app-shell.theme-dark .content .avatar, .app-shell.theme-dark .content .company-avatar { background: #dcecff !important; color: #0b4f9c !important; border-color: #9dcaff !important; }
+.app-shell.theme-dark .audit-role { background: rgba(103, 173, 255, 0.16) !important; border-color: rgba(157, 202, 255, 0.5) !important; color: #dcecff !important; }
+.app-shell.theme-dark .field-required, html[data-theme="dark"] .auth-wash .field-required { color: #ff9daa !important; }
+/* Dashboard / validation metric tiles: the light end of the ramp needs dark text, the mid-blues a deeper fill. */
+.app-shell.theme-dark :is(.dashboard-widget-metrics, .validation-overview-page) .widget-metric-grid a:nth-child(2) { background: linear-gradient(145deg, #2369ae 0%, #2a74c6 100%) !important; }
+.app-shell.theme-dark :is(.dashboard-widget-metrics, .validation-overview-page) .widget-metric-grid a:nth-child(2) :is(strong, span, small) { color: #fff !important; }
+.app-shell.theme-dark :is(.dashboard-widget-metrics, .validation-overview-page) .widget-metric-grid a:nth-child(n+3) :is(strong, span, small) { color: #071a36 !important; }

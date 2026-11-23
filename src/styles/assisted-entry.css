@@ -32,3 +32,21 @@
 .lines-footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 20px 18px; }
 .lines-footer small { color: var(--muted, #526176); }
 .totals-grid dd { font-variant-numeric: tabular-nums; }
+
+/* Dark theme: the type-or-pick dropdown, contact card and line sums. */
+.app-shell.theme-dark .combo-list { background: #0c2a52; border-color: rgba(157, 202, 255, 0.42); box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5); color: #ecf5ff; }
+.app-shell.theme-dark .combo-list li { color: #ecf5ff; }
+.app-shell.theme-dark .combo-list li[aria-selected="true"] { background: #1a4b82; box-shadow: inset 3px 0 0 #67adff; }
+.app-shell.theme-dark .combo-list li:hover { background: #163f70; }
+.app-shell.theme-dark .combo-label { color: #f5f9ff; }
+.app-shell.theme-dark .combo-detail { color: #b9d5f2; }
+.app-shell.theme-dark .combo-list li[aria-selected="true"] .combo-detail { color: #e6f0ff; }
+.app-shell.theme-dark .combo-create { border-top-color: rgba(157, 202, 255, 0.28); color: #9dcaff; }
+.app-shell.theme-dark .combo-create .combo-label { color: #9dcaff; }
+.app-shell.theme-dark .combo-empty { color: #b9d5f2; }
+.app-shell.theme-dark .contact-card { background: #102f57; border-color: rgba(157, 202, 255, 0.3); color: #ecf5ff; }
+.app-shell.theme-dark .contact-card dt { color: #b9d5f2; }
+.app-shell.theme-dark .contact-card dd { color: #f5f9ff; }
+.app-shell.theme-dark .line-amount > span { color: #9dcaff; }
+.app-shell.theme-dark .line-amount output, .app-shell.theme-dark .totals-grid dd { color: #f5f9ff; }
+.app-shell.theme-dark .lines-footer small { color: #b9d5f2; }
