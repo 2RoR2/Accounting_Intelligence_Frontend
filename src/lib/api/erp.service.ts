@@ -79,55 +79,74 @@ export const removeCatalogEntry = (kind: CatalogKind, id: string) =>
   api<{ id: string; isActive: false }>(`/api/erp/catalog/${seg(kind)}/${seg(id)}`, json("DELETE"));
 
 // ---------------------------------------------------------------- documents (L4/L5)
-export const SALES_TYPES = ["quotation", "sales-order", "delivery-order", "invoice", "credit-note", "payment", "refund"] as const;
-export const PURCHASE_TYPES = ["purchase-order", "goods-received", "bill", "purchase-credit-note", "purchase-payment", "purchase-refund"] as const;
+export const SALES_TYPES = ["quotation", "sales-order", "delivery-order", "invoice", "credit-note", "debit-note", "payment", "refund"] as const;
+export const PURCHASE_TYPES = ["purchase-order", "goods-received", "bill", "purchase-credit-note", "purchase-debit-note", "purchase-payment",
+  "purchase-refund"] as const;
 export const BANK_TYPES = ["money-in", "money-out", "bank-transfer"] as const;
 export type DocumentType = (typeof SALES_TYPES)[number] | (typeof PURCHASE_TYPES)[number] | (typeof BANK_TYPES)[number]
   | "journal-entry" | "stock-adjustment" | "stock-transfer" | "contra" | "deemed-payment" | "store-order" | "minipos-order";
 /** Types that post a journal when they become ready; the others are records only. */
-export const POSTING_TYPES: ReadonlySet<DocumentType> = new Set(["invoice", "credit-note", "payment", "refund", "bill",
-  "purchase-credit-note", "purchase-payment", "purchase-refund", "money-in", "money-out", "bank-transfer", "journal-entry"]);
+export const POSTING_TYPES: ReadonlySet<DocumentType> = new Set(["invoice", "credit-note", "debit-note", "payment", "refund", "bill",
+  "purchase-credit-note", "purchase-debit-note", "purchase-payment", "purchase-refund", "money-in", "money-out", "bank-transfer", "journal-entry"]);
 /** Types that hold an amount (and allocations) instead of priced lines. */
 export const AMOUNT_ONLY_TYPES: ReadonlySet<DocumentType> = new Set(["payment", "refund", "purchase-payment", "purchase-refund", "bank-transfer"]);
-/** The invoice/bill a payment or credit note can be allocated to. */
-export const ALLOCATES_TO: Partial<Record<DocumentType, "invoice" | "bill">> = {
-  payment: "invoice", "credit-note": "invoice", "purchase-payment": "bill", "purchase-credit-note": "bill",
+/** What a payment or credit note can be allocated to; the first type is also the scanned list it can settle. */
+export const ALLOCATES_TO: Partial<Record<DocumentType, readonly ["invoice" | "bill", ...DocumentType[]]>> = {
+  payment: ["invoice", "debit-note"], "credit-note": ["invoice", "debit-note"],
+  "purchase-payment": ["bill", "purchase-debit-note"], "purchase-credit-note": ["bill", "purchase-debit-note"],
 };
+/** The issued document a credit or debit note corrects (sent as relatedDocumentId; required by the API). */
+export const NOTE_TARGETS: Partial<Record<DocumentType, readonly DocumentType[]>> = {
+  "credit-note": ["invoice", "debit-note"], "debit-note": ["invoice"],
+  "purchase-credit-note": ["bill", "purchase-debit-note"], "purchase-debit-note": ["bill"],
+};
+/** Documents the company prints and sends: edited only as drafts; issuing stores a PDF copy that never changes. */
+export const PRINTED_TYPES: ReadonlySet<DocumentType> = new Set(["quotation", "invoice", "credit-note", "debit-note", "payment",
+  "purchase-payment", "delivery-order"]);
 /** Lists that also show approved scanned documents (source "scanned"). */
-export const SCANNED_LIST_TYPES: ReadonlySet<DocumentType> = new Set(["invoice", "bill", "credit-note", "purchase-credit-note"]);
+// Plan M: captured documents are purchases only; Sales lists hold typed documents.
+export const SCANNED_LIST_TYPES: ReadonlySet<DocumentType> = new Set(["bill", "purchase-credit-note"]);
 /** What a document can be turned into (the backend's TRANSFERS). */
 export const TRANSFERS: Partial<Record<DocumentType, DocumentType[]>> = {
   quotation: ["sales-order", "delivery-order", "invoice"], "sales-order": ["delivery-order", "invoice"], "delivery-order": ["invoice"],
-  invoice: ["credit-note", "payment"], "purchase-order": ["goods-received", "bill"], "goods-received": ["bill"],
-  bill: ["purchase-credit-note", "purchase-payment"],
+  invoice: ["credit-note", "debit-note", "payment", "delivery-order"], "debit-note": ["credit-note", "payment"],
+  "purchase-order": ["goods-received", "bill"], "goods-received": ["bill"],
+  bill: ["purchase-credit-note", "purchase-debit-note", "purchase-payment"],
+  "purchase-debit-note": ["purchase-credit-note", "purchase-payment"],
 };
 export const DOCUMENT_LABELS: Record<DocumentType, string> = {
   quotation: "Quotation", "sales-order": "Sales order", "delivery-order": "Delivery order", invoice: "Invoice",
-  "credit-note": "Credit note", payment: "Customer payment", refund: "Customer refund", "purchase-order": "Purchase order",
+  "credit-note": "Credit note", "debit-note": "Debit note", payment: "Customer payment", refund: "Customer refund", "purchase-order": "Purchase order",
   "goods-received": "Goods received", bill: "Bill", "purchase-credit-note": "Supplier credit note",
-  "purchase-payment": "Supplier payment", "purchase-refund": "Supplier refund", "money-in": "Money in", "money-out": "Money out",
+  "purchase-debit-note": "Supplier debit note",  "purchase-payment": "Supplier payment", "purchase-refund": "Supplier refund", "money-in": "Money in", "money-out": "Money out",
   "bank-transfer": "Bank transfer", "journal-entry": "Journal entry", "stock-adjustment": "Stock adjustment",
   "stock-transfer": "Stock transfer", contra: "Contra", "deemed-payment": "Deemed payment", "store-order": "Store order",
   "minipos-order": "MiniPOS order",
 };
 
-export type DocumentStatus = "draft" | "pending_approval" | "ready" | "void";
+/** Quotations go draft -> sent -> accepted / expired; the other types draft -> (pending_approval ->) ready. */
+export type DocumentStatus = "draft" | "pending_approval" | "ready" | "void" | "sent" | "accepted" | "expired";
+/** taxCode is a label only: the tax amount on the line is typed, never calculated. */
 export type DocumentLine = {
   itemId?: string | null; description: string; quantity: string; unitPrice: string; discount?: string; tax?: string;
-  accountId?: string | null; debit?: string; credit?: string;
+  taxCode?: string | null; accountId?: string | null; debit?: string; credit?: string;
 };
-export type DocumentAllocation = { targetId: string; source: "typed" | "scanned"; amount: string };
+export type DocumentAllocation = { targetId: string; source: "typed" | "scanned"; amount: string; targetNumber?: string | null };
 type Common = {
   id: string; type: DocumentType; number: string; contactId?: string | null; contactName?: string | null;
   documentDate?: string | null; dueDate?: string | null; currency: string; referenceNo?: string | null;
   subtotal: string; taxAmount: string; amount: string; outstanding?: string; posts: boolean; posted: boolean;
-  journalId?: string | null; createdAt: string; updatedAt: string;
+  journalId?: string | null; createdAt: string; updatedAt: string; displayName?: string | null; contactCode?: string | null;
 };
+export type DocumentFile = { revision: number; reason: "issued" | "void"; fileName: string; byteSize: number; sha256: string; createdAt: string };
+export type PossibleDuplicate = { id: string; number: string; status: DocumentStatus; documentDate: string; amount: string; reason: string };
 export type TypedDocument = Common & {
   source: "typed"; status: DocumentStatus; contactKind?: ContactKind | null; description?: string | null;
   bankAccountId?: string | null; lines: DocumentLine[]; allocations: DocumentAllocation[]; tags: string[];
   fields: Record<string, unknown>; reversalJournalId?: string | null; postedAt?: string | null; voidReason?: string | null;
   voidedAt?: string | null; paymentStatus?: "unpaid" | "partly_paid" | "paid" | "void"; idempotent?: boolean;
+  relatedDocumentId?: string | null; related?: { id: string; type: DocumentType; number: string; status: DocumentStatus } | null;
+  printed?: boolean; files?: DocumentFile[]; possibleDuplicates?: PossibleDuplicate[];
 };
 /** An approved scanned document shown in the same list; "ready" once its journal is posted. */
 export type ScannedDocument = Common & {
@@ -139,7 +158,7 @@ export type DocumentInput = {
   number?: string | null; contactId?: string | null; contactName?: string | null; documentDate?: string; dueDate?: string | null;
   currency?: string; referenceNo?: string | null; description?: string | null; status?: "draft" | "pending_approval" | "ready";
   amount?: string | null; bankAccountId?: string | null; lines?: DocumentLine[]; allocations?: DocumentAllocation[];
-  tags?: string[]; fields?: Record<string, unknown>;
+  tags?: string[]; fields?: Record<string, unknown>; relatedDocumentId?: string | null;
 };
 export type DocumentHistory = {
   events: { id: string; eventType: string; fromStatus?: string | null; toStatus?: string | null; reason?: string | null; actorName?: string | null; createdAt: string }[];
@@ -158,13 +177,20 @@ export const updateDocument = (type: DocumentType, id: string, input: Partial<Do
   api<TypedDocument>(`/api/erp/documents/${seg(type)}/${seg(id)}`, json("PATCH", input));
 export const deleteDocument = (type: DocumentType, id: string) =>
   api<{ id: string; deleted: true }>(`/api/erp/documents/${seg(type)}/${seg(id)}`, json("DELETE"));
-/** "ready" posts a financial document (company admin only); "void" of a posted one adds a reversal journal. */
+/** "ready" posts a financial document (company admin only) and stores its printed copy; "void" of a posted one adds a
+ * reversal journal. Quotations take sent / accepted / expired / void instead ("ready" means "sent"). */
 export const transitionDocument = (type: DocumentType, id: string, status: DocumentStatus, reason?: string) =>
   api<TypedDocument>(`/api/erp/documents/${seg(type)}/${seg(id)}/transition`, json("POST", { status, reason }));
 export const duplicateDocument = (type: DocumentType, id: string) =>
   api<TypedDocument>(`/api/erp/documents/${seg(type)}/${seg(id)}/duplicate`, json("POST"));
 export const transferDocument = (type: DocumentType, id: string, targetType: DocumentType) =>
   api<TypedDocument>(`/api/erp/documents/${seg(type)}/${seg(id)}/transfer`, json("POST", { targetType }));
+const documentPath = (type: DocumentType, id: string) => `/api/erp/documents/${seg(type)}/${seg(id)}`;
+/** Same-origin paths (the Next.js /api rewrite), so the session cookies go with a plain link or new tab. */
+export const documentPreviewUrl = (type: DocumentType, id: string) => `${documentPath(type, id)}/preview.pdf`;
+export const documentFileUrl = (type: DocumentType, id: string, revision: number, inline = false) =>
+  `${documentPath(type, id)}/files/${seg(String(revision))}${inline ? "?inline=true" : ""}`;
+export const listDocumentFiles = (type: DocumentType, id: string) => get<{ items: DocumentFile[] }>(`${documentPath(type, id)}/files`);
 export const documentHistory = (type: DocumentType, id: string) =>
   get<DocumentHistory>(`/api/erp/documents/${seg(type)}/${seg(id)}/history`);
 /** L5: post an approved scanned invoice/bill/credit note through the same rule (posts once on either path). */

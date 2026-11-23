@@ -8,10 +8,12 @@ import {
 } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  DOCUMENT_LABELS, SCANNED_LIST_TYPES, getSharingStatus, listDocuments, postScannedRecord,
+  DOCUMENT_LABELS, SALES_TYPES, SCANNED_LIST_TYPES, getSharingStatus, listDocuments, postScannedRecord,
   type DocumentType, type ErpDocument,
 } from "@/lib/api/erp.service";
-import { DOCUMENT_STATUSES, documentHref, hasOutstanding, type DocumentGroup } from "./document-logic";
+import {
+  documentHref, documentStatusLabel, hasOutstanding, statusFilterOptions, type DocumentGroup,
+} from "./document-logic";
 
 type DocumentListProps = { base: string; group: DocumentGroup; type: DocumentType; canPost: boolean };
 type Filters = NonNullable<Parameters<typeof listDocuments>[1]> & { page: number };
@@ -45,8 +47,8 @@ export function DocumentList({ base, group, type, canPost }: DocumentListProps) 
         <Field label="Status">
           <select value={filters.status ?? ""} onChange={(event) => filter({ status: (event.target.value || undefined) as Filters["status"] })}>
             <option value="">All</option>
-            {Object.entries(DOCUMENT_STATUSES).filter(([status]) => status !== "approved" || showsScanned)
-              .map(([status, name]) => <option key={status} value={status}>{name}</option>)}
+            {statusFilterOptions(type, showsScanned)
+              .map((status) => <option key={status} value={status}>{documentStatusLabel(status, type)}</option>)}
           </select>
         </Field>
         <Field label="Date from"><input type="date" value={filters.dateFrom ?? ""} onChange={(event) => filter({ dateFrom: event.target.value })} /></Field>
@@ -103,15 +105,21 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
   </div>;
 
   const columns: Column<ErpDocument>[] = [
-    { label: "Number", render: (row) => <strong>{row.number}</strong> },
+    { label: "Number", render: (row) => <>
+      <strong>{row.number}</strong>
+      {row.source === "typed" && row.displayName && <div className="text-xs text-slate-500">{row.displayName}</div>}
+    </> },
     { label: "Date", render: (row) => formatDate(row.documentDate) },
     { label: "Contact", render: (row) => row.contactName || "—" },
     { label: "Source", render: (row) => <Badge>{row.source === "typed" ? "Typed" : "Scanned"}</Badge> },
     { label: "Amount", render: (row) => money(row.amount) },
   ];
-  if (hasOutstanding(type)) columns.push({ label: "Outstanding", render: (row) => row.outstanding == null ? "—" : money(row.outstanding) });
+  if (hasOutstanding(type)) columns.push(
+    { label: "Outstanding", render: (row) => row.outstanding == null ? "—" : money(row.outstanding) },
+    { label: "Payment", render: (row) => row.source === "typed" && row.paymentStatus ? <StatusBadge status={row.paymentStatus} /> : "—" },
+  );
   columns.push(
-    { label: "Status", render: (row) => <StatusBadge status={DOCUMENT_STATUSES[row.status]} /> },
+    { label: "Status", render: (row) => <StatusBadge status={documentStatusLabel(row.status, type)} /> },
     { label: "Ledger", render: (row) => !row.posts ? "Record only" : row.posted ? "Posted" : "Not posted" },
     { label: "Action", render: (row) => row.source === "typed"
       ? <Link className="btn small" href={documentHref(base, group, type, row.id)}>View</Link>
@@ -132,7 +140,7 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
           {columns.map(({ label, render }) => <td key={label}>{render(row)}</td>)}
         </tr>)}</tbody>
       </table>
-    </div> : <EmptyState message="No documents match these filters." />}
+    </div> : <EmptyState message={hasFilters(filters) ? "No documents match these filters. Clear a filter to see the rest." : emptyHint(type)} />}
     <div className="filter-bar" aria-label="Document pages">
       <button className="btn small" type="button" disabled={data.page <= 1 || !!postingId} onClick={() => onPage(data.page - 1)}>Previous</button>
       <span>Page {data.page} · {data.total} {data.total === 1 ? "result" : "results"}</span>
@@ -140,4 +148,15 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
         onClick={() => { if (data.nextPage != null) onPage(data.nextPage); }}>Next</button>
     </div>
   </>;
+}
+
+const hasFilters = (filters: Filters) => Object.entries(filters).some(([key, value]) => key !== "page" && key !== "pageSize" && !!value && value !== "all");
+
+/** B4 (from S2): an empty list says what to do next. */
+function emptyHint(type: DocumentType) {
+  const label = DOCUMENT_LABELS[type].toLowerCase();
+  if (type === "payment" || type === "purchase-payment") return `No ${label}s yet. Record one against an invoice or bill with New.`;
+  if ((SALES_TYPES as readonly string[]).includes(type)) return `No ${label}s yet. Create one with New: what you issue is typed here, not uploaded.`;
+  if (type === "bank-transfer") return "No transfers yet. Record a move between your own bank accounts with New.";
+  return `No ${label}s yet. Captured documents appear here after you approve them in the Inbox.`;
 }
