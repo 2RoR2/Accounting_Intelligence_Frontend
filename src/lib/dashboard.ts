@@ -2,15 +2,13 @@
  * Dashboard (plan v3, R0): the team's dashboard layout filled with the Today figures (B3).
  *
  * Every figure comes from `todayTiles` (the tested mapping of `GET /api/home/summary`); this module
- * only decides where each one goes: four headline numbers, an "Attention needed" list in working
- * order, the money due, and one sentence for the greeting banner.
+ * only decides where each one goes: an "Attention needed" list in working order (each line carries its
+ * count), the money due, and one sentence for the greeting banner.
  */
 import { type HomeSummary, type TileId, type TodayRole, type TodayTileView, todayTiles } from "./today";
 
 export interface DashboardView {
-  /** The four headline numbers, in working order. */
-  kpis: TodayTileView[];
-  /** Work waiting for a person, in working order; only tiles with something to do. */
+  /** Work waiting for a person, in working order, each with its count; only tiles with something to do. */
   attention: TodayTileView[];
   /** Bills due soon, overdue bills, customers overdue. */
   money: TodayTileView[];
@@ -20,10 +18,6 @@ export interface DashboardView {
   allClear: boolean;
 }
 
-const KPI_IDS: Record<TodayRole, TileId[]> = {
-  ACCOUNTANT: ["toReview", "needsFixing", "readyToApprove", "bankToMatch"],
-  LOCAL_ADMIN: ["toReview", "needsFixing", "waitingApproval", "bankToMatch"],
-};
 const WORK_IDS: TileId[] = ["toReview", "needsFixing", "readyToApprove", "waitingApproval", "bankToMatch", "journalsToPost",
   "paymentsToPost"];
 const MONEY_IDS: TileId[] = ["billsDueSoon", "billsOverdue", "invoicesOverdue"];
@@ -45,7 +39,7 @@ export function dashboardView(summary: HomeSummary, role: TodayRole): DashboardV
     : things === 0
       ? "Some figures are not available yet, so this page cannot say everything is done."
       : unknown ? `${needs} Some figures are not available yet.` : needs;
-  return { kpis: pick(KPI_IDS[role]), attention, money: pick(MONEY_IDS), headline, allClear };
+  return { attention, money: pick(MONEY_IDS), headline, allClear };
 }
 
 /** How often an open Dashboard refreshes its figures while the tab is visible. */

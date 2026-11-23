@@ -1,0 +1,61 @@
+/* Dashboard layout: panels the user can reorder (drag handle, move buttons, Reset layout).
+   Only theme tokens (--ui-*) are used, so light and dark both follow the theme. */
+
+/* Reset layout, in the filter strip */
+.dash-layout-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 12px; margin-left: auto; }
+.dash-layout-hint { color: var(--ui-text-2); font-size: 12px; }
+.dash-reset-layout { display: inline-flex; align-items: center; gap: 6px; }
+.dash-reset-layout[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+/* The panels: one column (stacked in the saved order) on tablet and phone, two on a wide screen */
+.dash-widgets { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: stretch; min-width: 0; }
+.dash-widget { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.dash-widget > :not(.dash-widget-tools) { flex: 1 1 auto; min-width: 0; }
+/* Older rules show a grab cursor on the whole panel; only the handle drags. */
+.dash-widget .dashboard-reference-panel { cursor: auto; }
+.dash-widget .dashboard-reference-kpi { cursor: pointer; }
+
+/* The handle bar sits on the panel's top edge, clear of the panel's own heading and links */
+.dash-widget-tools {
+  position: absolute; top: -15px; right: 16px; z-index: 3; display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface); color: var(--ui-text-2);
+  box-shadow: var(--ui-shadow); opacity: .6; transition: opacity .15s ease;
+}
+.dash-widget:hover .dash-widget-tools, .dash-widget:focus-within .dash-widget-tools, .dash-widget.is-dragging .dash-widget-tools { opacity: 1; }
+.dash-widget-grip, .dash-widget-step {
+  display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: inherit; cursor: pointer;
+}
+.dash-widget-grip { cursor: grab; touch-action: none; }
+.dash-widget-grip:active { cursor: grabbing; }
+.dash-widget-grip:hover, .dash-widget-step:hover { background: var(--ui-surface-2); color: var(--ui-primary); }
+.dash-widget-grip:focus-visible, .dash-widget-step:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
+.dash-widget-step[aria-disabled="true"] { opacity: .35; cursor: default; }
+.dash-widget-step[aria-disabled="true"]:hover { background: transparent; color: inherit; }
+.dash-grip-dots { display: grid; grid-template-columns: repeat(2, 3px); gap: 3px; }
+.dash-grip-dots i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+
+/* While dragging: the moved panel dims, the panel under the pointer shows where the drop lands */
+.dash-widget.is-dragging > :not(.dash-widget-tools) { opacity: .45; }
+.dash-widget::after { content: ""; position: absolute; left: 0; right: 0; height: 4px; border-radius: 3px; background: var(--ui-primary); opacity: 0; pointer-events: none; }
+.dash-widget.drop-before::after { top: -11px; opacity: 1; }
+.dash-widget.drop-after::after { bottom: -11px; opacity: 1; }
+.dash-widget.drop-before > :not(.dash-widget-tools), .dash-widget.drop-after > :not(.dash-widget-tools) { outline: 2px dashed var(--ui-primary); outline-offset: 3px; }
+
+.dash-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (min-width: 1101px) {
+  .dash-widgets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-widget[data-span="full"] { grid-column: 1 / -1; }
+  /* Side by side: the drop marker is a vertical bar on the left or right edge */
+  .dash-widget[data-span="half"]::after { top: 0; bottom: 0; left: auto; right: auto; width: 4px; height: auto; }
+  .dash-widget[data-span="half"].drop-before::after { left: -11px; }
+  .dash-widget[data-span="half"].drop-after::after { right: -11px; }
+}
+@media (max-width: 1100px) {
+  .dash-widget-tools { opacity: 1; }
+  .dash-layout-hint { display: none; }
+}
+@media (pointer: coarse) {
+  .dash-widget-grip, .dash-widget-step { min-width: 36px; height: 36px; }
+}
