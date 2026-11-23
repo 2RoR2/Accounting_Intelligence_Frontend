@@ -8,6 +8,7 @@ import {
   getBusinessSummary,
   type BusinessSummary,
   type SummaryOverdue,
+  type SummaryOwed,
   type SummaryParty,
   type SummaryProduct,
   type SummaryResult,
@@ -39,6 +40,14 @@ function Headline({ result, view }: { result: SummaryResult; view: View }) {
   </section>;
 }
 
+/** Open items and the books differ by payments posted on account and not yet matched to an invoice or bill. */
+function Unallocated({ owed, noun }: { owed: SummaryOwed; noun: "invoices" | "bills" }) {
+  if (Number(owed.unallocated) === 0) return null;
+  return <p className="biz-muted">
+    Open {noun} {money(owed.openItems)}, less {money(owed.unallocated)} unallocated payments
+  </p>;
+}
+
 function Position({ result }: { result: SummaryResult }) {
   const { bank, receivables, payables, asOf } = result.position;
   return <section className="biz-position" aria-label="Where the business stands">
@@ -52,6 +61,7 @@ function Position({ result }: { result: SummaryResult }) {
     </Panel>
     <Panel title="Owed to us" subtitle="Customers still to pay" className="biz-card">
       <p className="biz-total">{money(receivables.total)}</p>
+      <Unallocated owed={receivables} noun="invoices" />
       <p className={Number(receivables.overdue) > 0 ? "biz-overdue" : "biz-muted"}>
         {Number(receivables.overdue) > 0
           ? `${money(receivables.overdue)} overdue (${receivables.overdueCount} ${receivables.overdueCount === 1 ? "invoice" : "invoices"})`
@@ -60,6 +70,7 @@ function Position({ result }: { result: SummaryResult }) {
     </Panel>
     <Panel title="Owed by us" subtitle="Suppliers we still owe" className="biz-card">
       <p className="biz-total">{money(payables.total)}</p>
+      <Unallocated owed={payables} noun="bills" />
       <p className={Number(payables.overdue) > 0 ? "biz-overdue" : "biz-muted"}>
         {Number(payables.overdue) > 0
           ? `${money(payables.overdue)} overdue (${payables.overdueCount} ${payables.overdueCount === 1 ? "bill" : "bills"})`
