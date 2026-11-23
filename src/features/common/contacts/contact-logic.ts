@@ -3,6 +3,7 @@
  * turning the contact form into the backend's ContactInput. No React, no network.
  */
 import type { Contact, ContactInput, ContactKind } from "@/lib/api/erp.service";
+import { MAX_PAYMENT_TERM_DAYS } from "@/features/common/erp/line-defaults";
 import type { Document } from "@/types";
 
 export const CONTACT_KINDS: readonly ContactKind[] = ["customer", "supplier", "employee"];
@@ -64,6 +65,8 @@ export type ContactForm = {
   postcode: string;
   state: string;
   remarks: string;
+  /** Payment terms in days (customers and suppliers); stored as fields.paymentTermDays and used to suggest a due date. */
+  paymentTermDays: string;
   defaultExpenseAccountId?: string;
 };
 
@@ -72,7 +75,7 @@ export const FORM_FIELD_KEYS = ["tin", "sstNumber", "remarks"] as const;
 
 export function emptyContactForm(kind: ContactKind = "customer"): ContactForm {
   return { kind, legalName: "", code: "", registrationNumber: "", tin: "", sstNumber: "", email: "", phone: "",
-    address: "", city: "", postcode: "", state: "", remarks: "" };
+    address: "", city: "", postcode: "", state: "", remarks: "", paymentTermDays: "" };
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value : value === null || value === undefined ? "" : String(value));
@@ -93,6 +96,7 @@ export function contactToForm(contact: Contact): ContactForm {
     postcode: text(contact.postcode),
     state: text(contact.state),
     remarks: text(fields.remarks),
+    paymentTermDays: text(fields.paymentTermDays),
     ...(contact.kind === "supplier" && { defaultExpenseAccountId: contact.defaultExpenseAccountId ?? "" }),
   };
 }
@@ -110,6 +114,9 @@ export function buildContactInput(form: ContactForm, existingFields: Record<stri
     if (value) fields[key] = value;
     else delete fields[key];
   }
+  const days = form.paymentTermDays.trim();
+  if (form.kind !== "employee" && /^\d+$/.test(days)) fields.paymentTermDays = Number(days);
+  else delete fields.paymentTermDays;
   return {
     kind: form.kind,
     legalName: form.legalName.trim(),
@@ -129,10 +136,13 @@ export function buildContactInput(form: ContactForm, existingFields: Record<stri
 }
 
 /** Plain-language problems with the form, or an empty list when it can be sent. */
-export function contactFormProblems(form: Pick<ContactForm, "legalName" | "email">): string[] {
+export function contactFormProblems(form: Pick<ContactForm, "legalName" | "email"> & { paymentTermDays?: string }): string[] {
   const problems: string[] = [];
   if (!form.legalName.trim()) problems.push("Enter the contact's legal name.");
   if (!isValidEmail(form.email)) problems.push("Enter a valid email address, or leave it blank.");
+  const days = (form.paymentTermDays ?? "").trim();
+  if (days && !(/^\d+$/.test(days) && Number(days) <= MAX_PAYMENT_TERM_DAYS))
+    problems.push(`Payment terms must be a whole number of days from 0 to ${MAX_PAYMENT_TERM_DAYS}.`);
   return problems;
 }
 

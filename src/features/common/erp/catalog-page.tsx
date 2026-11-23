@@ -26,6 +26,7 @@ const tabStyle = (active: boolean): CSSProperties => ({
 });
 
 const KIND_HELP: Partial<Record<VisibleCatalogKind, string>> = {
+  "tax-code": "Tax codes are labels offered on document lines. Tax is never calculated: the tax amount is typed as shown on the document.",
   currency: "MYR is the company currency. Rates are for reference; only MYR documents post to the ledger.",
   tag: "Tags are shared with scanned documents. Deleting a tag removes it.",
   "custom-field": "Custom fields add extra boxes to contacts, products and documents. Deleting a field removes it.",
@@ -119,6 +120,8 @@ function kindColumns(kind: VisibleCatalogKind): Column<CatalogEntry>[] {
   const code: Column<CatalogEntry> = { label: "Code", render: (row) => dash(row.code) };
   switch (kind) {
     case "payment-term": return [name, code, { label: "Days", render: (row) => dash(row.data.days) }];
+    case "tax-code": return [{ label: "Tax code", render: (row) => <strong>{dash(row.code)}</strong> },
+      { label: "Description", render: (row) => row.name }];
     case "payment-method": return [name, {
       label: "Type", render: (row) => PAYMENT_METHOD_LABELS[row.data.type as keyof typeof PAYMENT_METHOD_LABELS] ?? dash(row.data.type),
     }];
@@ -209,6 +212,13 @@ function CatalogEntryModal({ kind, entry, accounts, onClose, onSaved }: {
     case "payment-term":
       fields = <>{nameField}{codeField}<Field label="Days *" hint="Days after the document date that payment is due (0 to 365).">
         {input("days", { type: "number", min: 0, max: 365, step: 1, inputMode: "numeric" })}</Field></>;
+      break;
+    case "tax-code":
+      fields = <>
+        <Field label="Tax code *" hint="The label printed on the line, for example SST-10 or SV-8. A label only: it is never used to calculate tax.">
+          <input value={form.code} maxLength={40} onChange={(e) => set("code", e.target.value)} /></Field>
+        <Field label="Description *">{input("name", { maxLength: 300 })}</Field>
+      </>;
       break;
     case "payment-method":
       fields = <>{nameField}<Field label="Type *"><select value={form.type} onChange={(e) => set("type", e.target.value)}>

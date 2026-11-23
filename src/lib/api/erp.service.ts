@@ -40,16 +40,19 @@ export type ProductKind = "inventory" | "non-inventory" | "service" | "bundle";
 export type Product = {
   id: string; name: string; sku?: string | null; kind: ProductKind; unit: string; salePrice: string; purchasePrice: string;
   quantity: string; groupName?: string | null; incomeAccountId?: string | null; expenseAccountId?: string | null;
+  /** A label from the tax-code catalog; filled on a line when the product is chosen. The tax amount is still typed. */
+  defaultTaxCode?: string | null;
   fields: Record<string, unknown>; isActive: boolean; createdAt: string; updatedAt: string;
 };
 export type ProductInput = {
   name: string; sku?: string | null; kind: ProductKind; unit: string; salePrice: string; purchasePrice: string;
   quantity?: string; groupName?: string | null; incomeAccountId?: string | null; expenseAccountId?: string | null;
+  defaultTaxCode?: string | null;
   fields?: Record<string, unknown>;
 };
 /** Kinds the menu shows; the API also keeps the other latest_update kinds (coupons, price levels, ...). */
-export const VISIBLE_CATALOG_KINDS = ["payment-term", "payment-method", "currency", "bank-account", "tag", "category",
-  "location", "custom-field", "number-format"] as const;
+export const VISIBLE_CATALOG_KINDS = ["payment-term", "payment-method", "tax-code", "currency", "bank-account", "tag",
+  "category", "location", "custom-field", "number-format"] as const;
 export type CatalogKind = (typeof VISIBLE_CATALOG_KINDS)[number] | "product-group" | "coupon" | "content-page" | "price-level"
   | "asset-type" | "form-design" | "fixed-asset" | "store-setting";
 export type CatalogEntry = {

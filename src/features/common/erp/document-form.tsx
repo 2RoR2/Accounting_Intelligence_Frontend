@@ -23,6 +23,10 @@ import {
   documentStatusLabel, documentTotals, fileReasonLabel, formatFileSize, hasOutstanding, latestFile, noteTargetCandidates,
   type DocumentAction, type DocumentGroup,
 } from "./document-logic";
+import {
+  changeDocumentDate, chooseContactTerms, chooseTerms, copiedLines, editDueDate, lastDocumentWithLines, lineFromProduct,
+  taxCodeChoices, type SelectChoice, type TermsState,
+} from "./line-defaults";
 import { ShareLinksPanel } from "./share-links";
 
 type FormProps = { base: string; group: DocumentGroup; type: DocumentType; role: User["role"] };
@@ -31,6 +35,8 @@ type Draft = {
   number: string; contactId: string; documentDate: string; dueDate: string; currency: string; referenceNo: string;
   description: string; bankAccountId: string; toBankAccountId: string; amount: string; relatedDocumentId: string;
   lines: DraftLine[]; allocations: DocumentAllocation[];
+  /** Payment terms text (saved with the document and printed), the days behind it, and whether the due date follows them. */
+  paymentTerms: string; termDays: number | null; dueDateAuto: boolean;
 };
 
 const REQUIRES_CONTACT = new Set<DocumentType>([
@@ -62,8 +68,16 @@ function makeDraft(document: TypedDocument | null): Draft {
     relatedDocumentId: document?.relatedDocumentId ?? "",
     lines: document?.lines.map((value, key) => ({ key, value })) ?? [],
     allocations: document?.allocations ?? [],
+    paymentTerms: typeof document?.fields.paymentTerms === "string" ? document.fields.paymentTerms : "",
+    termDays: null,
+    dueDateAuto: !document?.dueDate,
   };
 }
+
+const termsOf = ({ documentDate, dueDate, paymentTerms, termDays, dueDateAuto }: Draft): TermsState =>
+  ({ documentDate, dueDate, paymentTerms, termDays, auto: dueDateAuto });
+const withTerms = (draft: Draft, { documentDate, dueDate, paymentTerms, termDays, auto }: TermsState): Draft =>
+  ({ ...draft, documentDate, dueDate, paymentTerms, termDays, dueDateAuto: auto });
 
 function documentInput(type: DocumentType, draft: Draft, document: TypedDocument | null): DocumentInput {
   const input: DocumentInput = {
@@ -88,6 +102,13 @@ function documentInput(type: DocumentType, draft: Draft, document: TypedDocument
     const fields = { ...document?.fields };
     if (draft.toBankAccountId) fields.toBankAccountId = draft.toBankAccountId;
     else delete fields.toBankAccountId;
+    input.fields = fields;
+  }
+  if (hasOutstanding(type)) {
+    // Printed as "Terms" on the document; the other saved fields are kept as they are.
+    const fields = { ...document?.fields };
+    if (draft.paymentTerms.trim()) fields.paymentTerms = draft.paymentTerms.trim();
+    else delete fields.paymentTerms;
     input.fields = fields;
   }
   return input;
@@ -128,6 +149,8 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const [busy, setBusy] = useState(false);
   const [navigating, startNavigation] = useTransition();
   const [error, setError] = useState("");
+  const [copying, setCopying] = useState(false);
+  const [copyNote, setCopyNote] = useState("");
   const [confirmation, setConfirmation] = useState<"delete" | "void" | null>(null);
   const [voidReason, setVoidReason] = useState("");
   // Duplicate matches the user has already seen; issuing stops once when a save reveals a new one (Codex review P2).
@@ -150,10 +173,15 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const products = useResource(async () => amountOnly ? [] : listProducts(), `products:${type}`);
   const accounts = useResource(async () => amountOnly ? [] : getLedgerAccounts(), `accounts:${type}`);
   const banks = useResource(async () => USES_BANK.has(type) ? listCatalog("bank-account") : [], `banks:${type}`);
+  const taxCodes = useResource(async () => amountOnly ? [] : listCatalog("tax-code"), `tax-codes:${type}`);
+  const paymentTerms = useResource(async () => hasOutstanding(type) ? listCatalog("payment-term") : [], `payment-terms:${type}`);
   const lookups = [
     { label: "Contacts", resource: contacts }, { label: "Products", resource: products },
     { label: "Ledger accounts", resource: accounts }, { label: "Bank accounts", resource: banks },
+    { label: "Tax codes", resource: taxCodes }, { label: "Payment terms", resource: paymentTerms },
   ];
+  const taxChoices = taxCodeChoices(taxCodes.data ?? []);
+  const activeTerms = (paymentTerms.data ?? []).filter((term) => term.isActive);
   const selectedContact = contacts.data?.find(({ id }) => id === draft.contactId);
   const contactName = selectedContact?.legalName ?? (document?.contactId === draft.contactId ? document?.contactName : null);
 
@@ -173,6 +201,30 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     setDraft((current) => ({
       ...current, lines: [...current.lines, { key, value: { description: "", quantity: "1", unitPrice: "0" } }],
     }));
+  }
+
+  /** Adds the lines of the contact's latest saved document of this type; the user can still change every one. */
+  async function copyLastLines() {
+    if (!draft.contactId || copying) return;
+    setCopying(true);
+    setCopyNote("");
+    setError("");
+    try {
+      const page = await listDocuments(type, { contactId: draft.contactId, source: "typed", pageSize: 20 });
+      const last = lastDocumentWithLines(page.items, document?.id);
+      if (!last) {
+        setCopyNote(`No earlier ${label.toLowerCase()} with lines for this ${contactKind}.`);
+        return;
+      }
+      const room = 500 - draft.lines.length;
+      const added = copiedLines(last.lines).slice(0, Math.max(room, 0)).map((value) => ({ key: nextLine.current++, value }));
+      setDraft((current) => ({ ...current, lines: [...current.lines, ...added] }));
+      setCopyNote(added.length ? `Copied ${added.length} line${added.length === 1 ? "" : "s"} from ${last.number}.` : "A document can have at most 500 lines.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to copy the lines.");
+    } finally {
+      setCopying(false);
+    }
   }
 
   function changeAllocation(allocation: DocumentAllocation) {
@@ -343,7 +395,12 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               {contactKind && <Field label={`${contactLabel}${REQUIRES_CONTACT.has(type) ? " *" : ""}`}>
                 <select value={draft.contactId} required={REQUIRES_CONTACT.has(type)} onChange={(event) => {
                   const contactId = event.target.value;
-                  setDraft((current) => ({ ...current, contactId, allocations: [], relatedDocumentId: "" }));
+                  const picked = contacts.data?.find(({ id }) => id === contactId);
+                  setCopyNote("");
+                  setDraft((current) => {
+                    const next = { ...current, contactId, allocations: [], relatedDocumentId: "" };
+                    return hasOutstanding(type) ? withTerms(next, chooseContactTerms(termsOf(next), picked, paymentTerms.data ?? [])) : next;
+                  });
                 }}>
                   <SelectOptions value={draft.contactId} placeholder={`Choose a ${contactKind}`} fallback={contactName}
                     options={contacts.data?.map(({ id, legalName }) => ({ id, label: legalName }))} />
@@ -366,9 +423,22 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
                   onChange={(event) => setField("number", event.target.value)} />
               </Field>
               <Field label="Document date *"><input type="date" required value={draft.documentDate}
-                onChange={(event) => setField("documentDate", event.target.value)} /></Field>
-              {hasOutstanding(type) && <Field label="Due date"><input type="date" value={draft.dueDate}
-                onChange={(event) => setField("dueDate", event.target.value)} /></Field>}
+                onChange={(event) => {
+                  const documentDate = event.target.value;
+                  setDraft((current) => withTerms(current, changeDocumentDate(termsOf(current), documentDate)));
+                }} /></Field>
+              {hasOutstanding(type) && <Field label="Payment terms" hint="Choosing terms sets the due date from the document date.">
+                <select value={draft.paymentTerms} onChange={(event) => {
+                  const term = activeTerms.find(({ name }) => name === event.target.value) ?? null;
+                  setDraft((current) => withTerms({ ...current, paymentTerms: event.target.value }, chooseTerms(termsOf(current), term)));
+                }}>
+                  <SelectOptions value={draft.paymentTerms} placeholder="No payment terms" fallback={draft.paymentTerms}
+                    options={activeTerms.map(({ name }) => ({ id: name, label: name }))} />
+                </select>
+              </Field>}
+              {hasOutstanding(type) && <Field label="Due date" hint={draft.dueDateAuto && draft.termDays !== null ? "Follows the payment terms until you change it." : undefined}>
+                <input type="date" value={draft.dueDate}
+                  onChange={(event) => { const dueDate = event.target.value; setDraft((current) => withTerms(current, editDueDate(termsOf(current), dueDate))); }} /></Field>}
               <Field label={type === "bill" ? "Supplier invoice no." : "Reference no."}>
                 <input value={draft.referenceNo} maxLength={200} onChange={(event) => setField("referenceNo", event.target.value)} />
               </Field>
@@ -395,11 +465,16 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               onChange={(event) => setField("description", event.target.value)} /></Field>
           </div>
         </Panel>
-        {!amountOnly && <Panel title="Lines" action={editable && <button className="btn small" type="button"
-          disabled={draft.lines.length >= 500} onClick={addLine}>Add line</button>}>
+        {!amountOnly && <Panel title="Lines" action={editable && <>
+          {contactKind && <button className="btn small" type="button" disabled={!draft.contactId || copying || draft.lines.length >= 500}
+            title={draft.contactId ? undefined : `Choose the ${contactKind} first`} onClick={() => void copyLastLines()}>
+            Copy lines from last {label.toLowerCase()}</button>}
+          <button className="btn small" type="button" disabled={draft.lines.length >= 500} onClick={addLine}>Add line</button>
+        </>}>
+          {copyNote && <p className="notice info mx-5 mt-3" role="status">{copyNote}</p>}
           {draft.lines.length ? <div className="divide-y divide-slate-200">
             {draft.lines.map((line, index) => <LineFields key={line.key} line={line.value} index={index} editable={editable}
-              products={products.data ?? []} accounts={accounts.data ?? []}
+              products={products.data ?? []} accounts={accounts.data ?? []} taxChoices={taxChoices}
               sales={group === "sales"} requiresAccount={type === "money-in" || type === "money-out"}
               onChange={(changes) => changeLine(line.key, changes)}
               onRemove={() => setDraft((current) => ({ ...current, lines: current.lines.filter(({ key }) => key !== line.key) }))} />)}
@@ -454,8 +529,8 @@ function SelectOptions({ value, placeholder, fallback, options = [] }: {
   </>;
 }
 
-function LineFields({ line, index, editable, products, accounts, sales, requiresAccount, onChange, onRemove }: {
-  line: DocumentLine; index: number; editable: boolean; products: Product[]; accounts: LedgerAccount[];
+function LineFields({ line, index, editable, products, accounts, taxChoices, sales, requiresAccount, onChange, onRemove }: {
+  line: DocumentLine; index: number; editable: boolean; products: Product[]; accounts: LedgerAccount[]; taxChoices: SelectChoice[];
   sales: boolean; requiresAccount: boolean; onChange: (changes: Partial<DocumentLine>) => void; onRemove: () => void;
 }) {
   const fields = [
@@ -472,9 +547,8 @@ function LineFields({ line, index, editable, products, accounts, sales, requires
       <Field label="Product">
         <select value={line.itemId ?? ""} onChange={(event) => {
           const product = products.find(({ id }) => id === event.target.value);
-          onChange(product
-            ? { itemId: product.id, description: product.name, unitPrice: sales ? product.salePrice : product.purchasePrice }
-            : { itemId: null });
+          // Fills the description, price, account and tax-code label the product carries; each can still be changed.
+          onChange(product ? lineFromProduct(product, sales) : { itemId: null });
         }}>
           <SelectOptions value={line.itemId ?? ""} placeholder="No product" fallback={line.description}
             options={products.map(({ id, name, sku }) => ({ id, label: sku ? `${sku} · ${name}` : name }))} />
@@ -486,8 +560,11 @@ function LineFields({ line, index, editable, products, accounts, sales, requires
           onChange={(event) => onChange({ [key]: event.target.value })} />
       </Field>)}
       {/* Tax is never calculated: the code is a label and the amount is typed as shown on the document. */}
-      <Field label="Tax code" hint="A label only, e.g. SST-10 or SV-8">
-        <input value={line.taxCode ?? ""} maxLength={40} onChange={(event) => onChange({ taxCode: event.target.value || null })} />
+      <Field label="Tax code" hint={taxChoices.length || line.taxCode ? "A label only; it does not calculate tax" : "No tax codes yet. Add them under Catalog › Tax codes."}>
+        <select value={line.taxCode ?? ""} onChange={(event) => onChange({ taxCode: event.target.value || null })}>
+          <SelectOptions value={line.taxCode ?? ""} placeholder="No tax code" fallback={`${line.taxCode} (not in the catalog)`}
+            options={taxChoices} />
+        </select>
       </Field>
       <Field label="Tax amount" hint="Typed as recorded; not calculated">
         <input type="number" min="0" step="0.01" value={line.tax ?? ""} onChange={(event) => onChange({ tax: event.target.value })} />
