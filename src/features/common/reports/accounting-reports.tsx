@@ -2,6 +2,7 @@
 import { useId, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { FinancialReportView, MonthPack } from "./financial-reports";
+import { StatementOfAccountReport } from "@/features/common/contacts/contact-statement";
 import { PageHeader } from "@/components/common/ui";
 
 /**
@@ -15,6 +16,7 @@ const reportTabs = [
   ["receivables-ageing", "Receivables ageing"],
   ["payables-ageing", "Payables ageing"],
   ["tax-summary", "Tax summary"],
+  ["statement-of-account", "Statement of account"],
 ] as const;
 
 export function AccountingReportsPage() {
@@ -72,7 +74,9 @@ export function AccountingReportsPage() {
       tabIndex={0}
       hidden={active !== index}
     >
-      {active === index && <FinancialReportView report={key} title={title} />}
+      {active === index && (key === "statement-of-account"
+        ? <StatementOfAccountReport />
+        : <FinancialReportView report={key} title={title} />)}
     </div>)}
   </div>;
 }

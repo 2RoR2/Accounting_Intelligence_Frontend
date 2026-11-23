@@ -12,6 +12,7 @@ import {
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import type { User } from "@/types";
 import { buildContactInput, contactFormProblems, contactToForm, historyActionLabel, kindLabel, relatedDocuments, type ContactForm } from "./contact-logic";
+import { ContactStatementPanel } from "./contact-statement";
 
 const message = (reason: unknown, fallback: string) => (reason instanceof Error && reason.message ? reason.message : fallback);
 
@@ -28,8 +29,9 @@ export function ContactDetail({ user, contactId, base }: { user: User; contactId
   const [notice, setNotice] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
 
-  const back = <Link className="back-link" href={`${base}/contacts`}><ArrowLeft size={16} aria-hidden="true" /> Back to contacts</Link>;
+  const back =<Link className="back-link" href={`${base}/contacts`}><ArrowLeft size={16} aria-hidden="true" /> Back to contacts</Link>;
   if (loading) return <>{back}<LoadingState variant="form" /></>;
   if (error || !data) return <>{back}<ErrorState message={error || "Unable to load this contact."} retry={refresh} /></>;
   const { contact } = data;
@@ -81,12 +83,21 @@ export function ContactDetail({ user, contactId, base }: { user: User; contactId
       eyebrow={`${kindLabel(contact.kind)}${contact.isActive ? "" : " · Inactive"}`}
       title={contact.legalName}
       description={contact.code ? `Contact code ${contact.code}` : undefined}
-      actions={<button type="button" className={contact.isActive ? "btn danger" : "btn"} disabled={busy} onClick={() => void toggleActive()}>
-        {contact.isActive ? "Deactivate" : "Reactivate"}
-      </button>}
+      actions={<>
+        {contact.kind !== "employee" && <button type="button" className="btn" aria-expanded={showStatement}
+          aria-controls="contact-statement" onClick={() => setShowStatement((shown) => !shown)}>
+          {showStatement ? "Hide statement" : "Statement of account"}
+        </button>}
+        <button type="button" className={contact.isActive ? "btn danger" : "btn"} disabled={busy} onClick={() => void toggleActive()}>
+          {contact.isActive ? "Deactivate" : "Reactivate"}
+        </button>
+      </>}
     />
     {notice && <div className="notice success" role="status">{notice}</div>}
     {failure && <div className="notice danger" role="alert">{failure}</div>}
+    {showStatement && contact.kind !== "employee" && <div id="contact-statement">
+      <ContactStatementPanel contactId={contact.id} />
+    </div>}
     {/* Keyed on the saved version so the form shows what the backend stored after each save. */}
     <ContactEditor key={`${contact.id}:${contact.updatedAt}`} contact={contact} busy={busy} onSave={(form) => void save(form)} />
     <Panel title="History" subtitle="Changes made to this contact.">
