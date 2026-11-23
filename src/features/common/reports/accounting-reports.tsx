@@ -1,6 +1,7 @@
 "use client";
 import { useId, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
+import { BusinessSummaryPage } from "./business-summary";
 import { FinancialReportView, MonthPack } from "./financial-reports";
 import { PageHeader } from "@/components/common/ui";
 
@@ -18,7 +19,8 @@ const reportTabs = [
 ] as const;
 
 export function AccountingReportsPage() {
-  const monthPack = useSearchParams().get("view") === "month-pack";
+  const view = useSearchParams().get("view");
+  const monthPack = view === "month-pack";
   const [active, setActive] = useState(0);
   const id = useId();
   const tabId = (index: number) => `${id}-tab-${index}`;
@@ -37,6 +39,8 @@ export function AccountingReportsPage() {
     event.preventDefault();
     document.getElementById(tabId(next))?.focus();
   }
+
+  if (view === "business-summary") return <BusinessSummaryPage />;
 
   if (monthPack) {
     return <div className="dashboard-page reports-page">
