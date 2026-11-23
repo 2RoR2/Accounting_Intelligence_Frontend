@@ -2,7 +2,9 @@
 import { useState } from "react";
 import { Badge, DataTable, ErrorState, Field, LoadingState, Modal, Panel, SearchInput, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { createProduct, deactivateProduct, listProducts, updateProduct, type Product, type ProductKind } from "@/lib/api/erp.service";
+import {
+  createProduct, deactivateProduct, listCatalog, listProducts, updateProduct, type CatalogEntry, type Product, type ProductKind,
+} from "@/lib/api/erp.service";
 import { getLedgerAccounts, type LedgerAccount } from "@/lib/api/ledger.service";
 import {
   PRODUCT_KINDS, PRODUCT_KIND_LABELS, accountLabel, accountsOfType, errorMessage, formToProductInput, productToForm,
@@ -17,11 +19,12 @@ export function ProductsPanel({ userId }: { userId: string }) {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [actionError, setActionError] = useState("");
   const { data, error, loading, refresh } = useResource(async () => {
-    const [products, accounts] = await Promise.all([
+    const [products, accounts, taxCodes] = await Promise.all([
       listProducts({ search: search.trim() || undefined, kind: kind || undefined, includeInactive: showInactive }),
       getLedgerAccounts().catch(() => [] as LedgerAccount[]),
+      listCatalog("tax-code").catch(() => [] as CatalogEntry[]),
     ]);
-    return { products, accounts };
+    return { products, accounts, taxCodes };
   }, `erp-products:${userId}:${search.trim()}:${kind}:${showInactive}`);
 
   const deactivate = async (product: Product) => {
@@ -61,19 +64,20 @@ export function ProductsPanel({ userId }: { userId: string }) {
       { label: "Purchase price", render: (row) => money(row.purchasePrice) },
       { label: "Income account", render: (row) => accountCode(row.incomeAccountId) },
       { label: "Expense account", render: (row) => accountCode(row.expenseAccountId) },
+      { label: "Tax code", render: (row) => row.defaultTaxCode || "—" },
       { label: "Status", render: (row) => <Badge>{row.isActive ? "ACTIVE" : "INACTIVE"}</Badge> },
       { label: "Actions", render: (row) => <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" className="btn small" onClick={() => setEditing(row)}>Edit</button>
         {row.isActive && <button type="button" className="btn small" onClick={() => void deactivate(row)}>Deactivate</button>}
       </div> },
     ]} />
-    {editing && <ProductModal product={editing === "new" ? null : editing} accounts={data.accounts}
+    {editing && <ProductModal product={editing === "new" ? null : editing} accounts={data.accounts} taxCodes={data.taxCodes}
       onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refresh(); }} />}
   </Panel>;
 }
 
-function ProductModal({ product, accounts, onClose, onSaved }: {
-  product: Product | null; accounts: LedgerAccount[]; onClose: () => void; onSaved: () => void;
+function ProductModal({ product, accounts, taxCodes, onClose, onSaved }: {
+  product: Product | null; accounts: LedgerAccount[]; taxCodes: CatalogEntry[]; onClose: () => void; onSaved: () => void;
 }) {
   const [form, setForm] = useState<ProductForm>(() => productToForm(product));
   const [failure, setFailure] = useState("");
@@ -123,6 +127,13 @@ function ProductModal({ product, accounts, onClose, onSaved }: {
           <select value={form.expenseAccountId} onChange={(e) => set("expenseAccountId", e.target.value)}>
             <option value="">Default</option>
             {expense.map((account) => <option key={account.id} value={account.id}>{accountLabel(account)}</option>)}
+          </select></Field>
+        <Field label="Tax code" hint="Optional. Filled on a document line with this product; the tax amount is still typed, never calculated.">
+          <select value={form.defaultTaxCode} onChange={(e) => set("defaultTaxCode", e.target.value)}>
+            <option value="">No tax code</option>
+            {form.defaultTaxCode && !taxCodes.some((entry) => entry.code === form.defaultTaxCode) &&
+              <option value={form.defaultTaxCode}>{form.defaultTaxCode}</option>}
+            {taxCodes.map((entry) => <option key={entry.id} value={entry.code ?? ""}>{entry.code} · {entry.name}</option>)}
           </select></Field>
       </div>
       <div className="modal-actions">

@@ -15,14 +15,14 @@ export type VisibleCatalogKind = (typeof VISIBLE_CATALOG_KINDS)[number];
 export type CatalogTab = VisibleCatalogKind | "products" | "posting-accounts";
 
 export const CATALOG_LABELS: Record<CatalogTab, string> = {
-  "payment-term": "Payment terms", "payment-method": "Payment methods", currency: "Currencies",
+  "payment-term": "Payment terms", "payment-method": "Payment methods", "tax-code": "Tax codes", currency: "Currencies",
   "bank-account": "Bank accounts", tag: "Tags", category: "Categories", location: "Locations",
   "custom-field": "Custom fields", "number-format": "Number formats", products: "Products & services",
   "posting-accounts": "Posting accounts",
 };
 /** One entry's name in a sentence, e.g. "New payment term". */
 export const CATALOG_SINGULAR: Record<VisibleCatalogKind, string> = {
-  "payment-term": "payment term", "payment-method": "payment method", currency: "currency",
+  "payment-term": "payment term", "payment-method": "payment method", "tax-code": "tax code", currency: "currency",
   "bank-account": "bank account", tag: "tag", category: "category", location: "location",
   "custom-field": "custom field", "number-format": "number format",
 };
@@ -65,7 +65,7 @@ export type CatalogForm = {
 
 /** The `data` keys each kind's form edits; any other keys in an entry's data are kept unchanged on save. */
 const DATA_KEYS: Record<VisibleCatalogKind, string[]> = {
-  "payment-term": ["days"], "payment-method": ["type"], currency: ["symbol", "rate", "rateDate"],
+  "payment-term": ["days"], "payment-method": ["type"], "tax-code": [], currency: ["symbol", "rate", "rateDate"],
   "bank-account": ["accountNumber", "bankName"], tag: ["color"], category: [], location: [],
   "custom-field": ["fieldType", "options", "required"], "number-format": ["documentType", "prefix", "padding"],
 };
@@ -144,10 +144,16 @@ const isIsoDate = (value: string) => {
 const integerIn = (value: string, min: number, max: number) =>
   INTEGER.test(value.trim()) && Number(value) >= min && Number(value) <= max;
 
+export const TAX_CODE_MAX_LENGTH = 40;
+
 /** The first problem with a form, in plain words, or null when it can be saved. */
 export function validateCatalogForm(kind: VisibleCatalogKind, form: CatalogForm): string | null {
-  if (!form.name.trim()) return kind === "custom-field" ? "Enter a label." : "Enter a name.";
+  if (!form.name.trim()) return kind === "custom-field" ? "Enter a label." : kind === "tax-code" ? "Enter a description." : "Enter a name.";
   switch (kind) {
+    case "tax-code":
+      if (!form.code.trim() || form.code.trim().length > TAX_CODE_MAX_LENGTH)
+        return `Enter the tax code, 1 to ${TAX_CODE_MAX_LENGTH} characters, for example SST-10 or SV-8.`;
+      break;
     case "payment-term":
       if (!integerIn(form.days, 0, 365)) return "Days must be a whole number from 0 to 365.";
       break;
@@ -206,7 +212,7 @@ export const PRODUCT_KIND_LABELS: Record<ProductKind, string> = {
 
 export type ProductForm = {
   name: string; sku: string; kind: ProductKind; unit: string; salePrice: string; purchasePrice: string;
-  incomeAccountId: string; expenseAccountId: string;
+  incomeAccountId: string; expenseAccountId: string; defaultTaxCode: string;
   /** Kept from the product being edited so a save does not clear them. */
   keep: Pick<ProductInput, "quantity" | "groupName" | "fields">;
 };
@@ -216,6 +222,7 @@ export function productToForm(product?: Product | null): ProductForm {
     name: product?.name ?? "", sku: product?.sku ?? "", kind: product?.kind ?? "service", unit: product?.unit ?? "unit",
     salePrice: product?.salePrice ?? "0.00", purchasePrice: product?.purchasePrice ?? "0.00",
     incomeAccountId: product?.incomeAccountId ?? "", expenseAccountId: product?.expenseAccountId ?? "",
+    defaultTaxCode: product?.defaultTaxCode ?? "",
     keep: product ? { quantity: product.quantity, groupName: product.groupName ?? null, fields: product.fields ?? {} } : {},
   };
 }
@@ -226,6 +233,7 @@ export function formToProductInput(form: ProductForm): ProductInput {
     name: form.name.trim(), sku: optional(form.sku), kind: form.kind, unit: form.unit.trim(),
     salePrice: form.salePrice.trim() || "0", purchasePrice: form.purchasePrice.trim() || "0",
     incomeAccountId: form.incomeAccountId || null, expenseAccountId: form.expenseAccountId || null,
+    defaultTaxCode: optional(form.defaultTaxCode),
   };
 }
 
@@ -237,6 +245,7 @@ export function validateProductForm(form: ProductForm): string | null {
   if (!form.unit.trim()) return "Enter a unit, for example unit, hour or kg.";
   if (form.unit.trim().length > 40) return "Unit must be at most 40 characters.";
   if (form.sku.trim().length > 120) return "SKU must be at most 120 characters.";
+  if (form.defaultTaxCode.trim().length > TAX_CODE_MAX_LENGTH) return `Tax code must be at most ${TAX_CODE_MAX_LENGTH} characters.`;
   for (const [label, value] of [["Sale price", form.salePrice], ["Purchase price", form.purchasePrice]] as const) {
     if (value.trim() && !PRICE.test(value.trim())) return `${label} must be zero or more, with up to four decimal places.`;
   }

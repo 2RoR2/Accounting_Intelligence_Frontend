@@ -7,7 +7,7 @@ import { DataTable, ErrorState, Field, LoadingState, PageHeader, Panel, StatusBa
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments } from "@/lib/api/document.service";
 import {
-  contactHistory, deactivateContact, getContact, reactivateContact, updateContact, type Contact,
+  contactHistory, deactivateContact, getContact, listCatalog, reactivateContact, updateContact, type Contact,
 } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import type { User } from "@/types";
@@ -133,6 +133,8 @@ function ContactEditor({ contact, busy, onSave }: { contact: Contact; busy: bool
         <Field label="Registration no.">{input("registrationNumber")}</Field>
         <Field label="TIN" hint="Tax identification number.">{input("tin")}</Field>
         <Field label="SST registration no.">{input("sstNumber")}</Field>
+        {contact.kind !== "employee" && <PaymentTermsField contact={contact} value={form.paymentTermDays} busy={busy}
+          onChange={(paymentTermDays) => setForm((current) => ({ ...current, paymentTermDays }))} />}
         {contact.kind === "supplier" && <DefaultExpenseAccount
           contact={contact}
           value={form.defaultExpenseAccountId ?? ""}
@@ -166,6 +168,22 @@ function ContactEditor({ contact, busy, onSave }: { contact: Contact; busy: bool
       </div>
     </Panel>
   </form>;
+}
+
+/** The payment terms new documents for this contact start with (from the Payment terms catalog); the due date is suggested from them. */
+function PaymentTermsField({ contact, value, busy, onChange }: {
+  contact: Contact; value: string; busy: boolean; onChange: (value: string) => void;
+}) {
+  const { data, loading, error } = useResource(() => listCatalog("payment-term"), `payment-terms:${contact.id}`);
+  const terms = (data ?? []).filter((term) => Number.isInteger(term.data.days));
+  const saved = value && !terms.some((term) => String(term.data.days) === value);
+  return <Field label="Payment terms" hint="New invoices and bills for this contact start with these terms and a matching due date. Leave blank for none.">
+    <select value={value} disabled={busy || loading || !!error} onChange={(event) => onChange(event.target.value)}>
+      <option value="">No default terms</option>
+      {saved && <option value={value}>{value} days</option>}
+      {terms.map((term) => <option key={term.id} value={String(term.data.days)}>{term.name} ({String(term.data.days)} days)</option>)}
+    </select>
+  </Field>;
 }
 
 function DefaultExpenseAccount({ contact, value, busy, onChange }: {
