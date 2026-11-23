@@ -14,7 +14,7 @@ export function EvaluationPage() {
     <Panel title="Latest benchmark">
       {loading && <LoadingState />}
       {error && <ErrorState message={error} retry={refresh} />}
-      {data === null && <EmptyState message="Not measured yet" />}
+      {data === null && <EmptyState message="Not measured yet. Results appear here once an extraction benchmark has been run." />}
       {data && <dl className="panel-body detail-list">
         <div><dt>Data</dt><dd>synthetic data · Hold-out set</dd></div>
         <div><dt>Engine</dt><dd>Lite extraction</dd></div>
