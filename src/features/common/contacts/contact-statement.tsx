@@ -25,6 +25,12 @@ const blankZero = (value: string) => (Number(value) === 0 ? "" : money(value));
 
 export function StatementTable({ statement }: { statement: ContactStatement }) {
   const { lines, ageing } = statement;
+  // What separates the ageing's open items from the closing balance (the backend sends each amount).
+  const adjustments = ([
+    ["Payments and credits not allocated to an item", -Number(ageing.unallocatedCredits)],
+    ["Matched payments not yet posted (still owed)", Number(ageing.unpostedPayments ?? 0)],
+    ["Scanned documents: total above the amount due shown", Number(ageing.amountDueBelowTotal ?? 0)],
+  ] as Array<[string, number]>).filter(([, amount]) => amount !== 0);
   return <>
     <div className="table-scroll" role="region" aria-label="Statement of account" tabIndex={0}>
       <table>
@@ -68,10 +74,9 @@ export function StatementTable({ statement }: { statement: ContactStatement }) {
         </tr></tbody>
       </table>
     </div>
-    {(Number(ageing.unallocatedCredits) !== 0 || !ageing.reconciles) && <div className="panel-body">
-      {Number(ageing.unallocatedCredits) !== 0 && <p>
-        Payments and credits not allocated to an item: {money(-Number(ageing.unallocatedCredits))} · Balance {money(ageing.balance)}
-      </p>}
+    {(adjustments.length > 0 || !ageing.reconciles) && <div className="panel-body">
+      {adjustments.map(([label, amount]) => <p key={label}>{label}: {money(amount)}</p>)}
+      {adjustments.length > 0 && <p><strong>Balance {money(ageing.balance)}</strong></p>}
       {!ageing.reconciles && <p className="notice danger" role="alert">
         The ageing differs from the closing balance by {money(ageing.difference)}. Review this contact’s documents.
       </p>}

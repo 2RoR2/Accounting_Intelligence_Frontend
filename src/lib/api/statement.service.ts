@@ -36,6 +36,10 @@ export type ContactStatement = {
     totals: Record<StatementBucket, string>;
     openItems: string;
     unallocatedCredits: string;
+    /** Matched payments not posted yet: still owed in the ledger, already deducted by the ageing. */
+    unpostedPayments?: string;
+    /** Scanned documents whose extracted amount due (used by the ageing) is below the posted total. */
+    amountDueBelowTotal?: string;
     balance: string;
     reconciles: boolean;
     difference: string;

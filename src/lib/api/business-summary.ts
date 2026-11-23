@@ -12,7 +12,11 @@ export type SummaryOverdue = {
   daysOverdue: number;
 };
 export type SummaryOwed = {
+  /** The receivables / payables control account, as on the balance sheet. */
   total: string;
+  /** The open invoices or bills; they exceed the total by payments posted on account and not yet allocated. */
+  openItems: string;
+  unallocated: string;
   overdue: string;
   overdueCount: number;
   openCount: number;
