@@ -42,7 +42,7 @@ function Headline({ result, view }: { result: SummaryResult; view: View }) {
 
 /** Open items and the books differ by payments posted on account and not yet matched to an invoice or bill. */
 function Unallocated({ owed, noun }: { owed: SummaryOwed; noun: "invoices" | "bills" }) {
-  if (Number(owed.unallocated) === 0) return null;
+  if (!owed.unallocated || Number(owed.unallocated) === 0) return null;  // older backend: field absent
   return <p className="biz-muted">
     Open {noun} {money(owed.openItems)}, less {money(owed.unallocated)} unallocated payments
   </p>;
