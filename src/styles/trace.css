@@ -28,7 +28,9 @@
 
 .global-search { position: relative; flex: 0 1 300px; min-width: 150px; margin-left: auto; margin-right: 12px; }
 .global-search-field { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 34px; border: 1px solid var(--border, #dfe5ed); border-radius: 8px; background: var(--surface, #f6f8fb); }
-.global-search-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
+/* `.app-shell input` (theme pass) sets its background with !important: match it so the field is not a white box inside the pill. */
+.global-search-field input,
+.app-shell .global-search-field input { flex: 1; min-width: 0; min-height: 0; height: auto; padding: 0; border: 0; outline: 0; background: transparent !important; box-shadow: none !important; color: inherit; font: inherit; }
 .global-search-field:focus-within { border-color: var(--role-accent, #3c92f7); }
 .global-search-results {
   position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px); max-height: min(70vh, 520px); overflow: auto;
