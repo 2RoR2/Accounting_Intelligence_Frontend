@@ -24,7 +24,8 @@ const KPI_IDS: Record<TodayRole, TileId[]> = {
   ACCOUNTANT: ["toReview", "needsFixing", "readyToApprove", "bankToMatch"],
   LOCAL_ADMIN: ["toReview", "needsFixing", "waitingApproval", "bankToMatch"],
 };
-const WORK_IDS: TileId[] = ["toReview", "needsFixing", "readyToApprove", "waitingApproval", "bankToMatch", "journalsToPost"];
+const WORK_IDS: TileId[] = ["toReview", "needsFixing", "readyToApprove", "waitingApproval", "bankToMatch", "journalsToPost",
+  "paymentsToPost"];
 const MONEY_IDS: TileId[] = ["billsDueSoon", "billsOverdue", "invoicesOverdue"];
 
 export function dashboardView(summary: HomeSummary, role: TodayRole): DashboardView {
