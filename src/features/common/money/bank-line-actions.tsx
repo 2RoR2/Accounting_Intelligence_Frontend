@@ -9,14 +9,15 @@ import { decimalDisplay } from "@/lib/api/document-contract";
 import { listCatalog } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import {
-  getMoneyTransactionDetail, postBankPayment, recordBankExpense, searchMatchRecords,
+  getBankPaymentPreview, getMoneyTransactionDetail, postBankPayment, recordBankExpense, searchMatchRecords,
   type BankPaymentPosting, type ManualMatchRecord,
 } from "@/lib/api/money.service";
 import type { User } from "@/types";
 import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
 import {
-  allocationCents, allocationTotals, canAllocateBankLine, canMatchRecord, canPostBankPayment, defaultAllocation,
-  isUnallocated, MATCH_LIMIT, needsBankAccountChoice, needsBankMatchRefresh, submitBankAllocations,
+  allocationCents, allocationTotals, bankPaymentNotPosted, canAllocateBankLine, canMatchRecord, canPostBankPayment,
+  defaultAllocation, isUnallocated, MATCH_LIMIT, needsBankAccountChoice, needsBankMatchRefresh, PAYMENT_WAITING_FOR_ADMIN,
+  submitBankAllocations,
 } from "./allocation-logic";
 
 type RunBankAction = (action: () => Promise<string>, fallback: string, resetDraft?: () => void) => Promise<void>;
@@ -34,6 +35,20 @@ export function BankLineDocumentLink({ line, base }: { line: BankMoneyTransactio
   return line.relatedDocumentId
     ? <Link href={`${base}/documents/${line.relatedDocumentId}`}>{line.relatedDocumentCode || "Open document"}</Link>
     : "—";
+}
+
+/** The payment journal lines, as previewed before posting or as posted. */
+export function PaymentJournalTable({ lines, currency }: { lines: BankPaymentPosting["lines"]; currency?: string | null }) {
+  return <DataTable
+    rows={lines.map((entry, index) => ({ ...entry, index }))}
+    rowKey={(entry) => String(entry.index)}
+    columns={[
+      { label: "Account", render: (entry) => `${entry.code} ${entry.name}` },
+      { label: "Description", render: (entry) => entry.description },
+      { label: "Debit", render: (entry) => bankLineMoney(entry.debit, currency) },
+      { label: "Credit", render: (entry) => bankLineMoney(entry.credit, currency) },
+    ]}
+  />;
 }
 
 export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }: {
@@ -89,6 +104,10 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
   const canAllocate = canManage && canAllocateBankLine(line);
   const canPost = canPostBankPayment(user.role, line);
   const disabled = busy || refreshRequired;
+  // A local admin sees the journal before posting it; the preview never writes anything.
+  const preview = useResource(() => canPost ? getBankPaymentPreview(line.id) : Promise.resolve(undefined),
+    `payment-preview:${line.id}:${line.allocatedAmount}:${line.paymentPosted ? 1 : 0}:${canPost ? 1 : 0}`);
+  const waitingForAdmin = !canPost && !payment && bankPaymentNotPosted(line);
   function postPayment() {
     if (!canPost || disabled) return;
     void run(async () => {
@@ -112,20 +131,24 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
         try { await reloadLine(); } finally { onBusyChange(false); }
       }}>Reload bank line</button>
     </div>}
-    {(canPost || line.paymentPosted || payment) && <section className="transaction-review-section">
+    {(canPost || line.paymentPosted || payment || waitingForAdmin) && <section className="transaction-review-section">
       <div className="transaction-review-section-heading"><h3>Ledger payment</h3></div>
       {(line.paymentPosted || payment) && <p role="status">Payment posted</p>}
-      {payment && payment.lines.length > 0 && <DataTable
-        rows={payment.lines.map((entry, index) => ({ ...entry, index }))}
-        rowKey={(entry) => String(entry.index)}
-        columns={[
-          { label: "Account", render: (entry) => `${entry.code} ${entry.name}` },
-          { label: "Description", render: (entry) => entry.description },
-          { label: "Debit", render: (entry) => bankLineMoney(entry.debit, line.currency) },
-          { label: "Credit", render: (entry) => bankLineMoney(entry.credit, line.currency) },
-        ]}
-      />}
-      {canPost && <button type="button" className="btn primary" disabled={disabled} onClick={postPayment}>Post payment to ledger</button>}
+      {waitingForAdmin && <p role="status"><strong>{PAYMENT_WAITING_FOR_ADMIN}.</strong> The match is saved. The payment
+        reaches the ledger when a local admin posts it from &quot;Bank payments to post&quot; on the Dashboard.</p>}
+      {payment && payment.lines.length > 0 && <PaymentJournalTable lines={payment.lines} currency={line.currency} />}
+      {canPost && !payment && <>
+        {preview.loading && !preview.data && <p role="status">Loading the payment journal…</p>}
+        {preview.error && <p className="notice danger" role="alert">{preview.error}</p>}
+        {preview.data && !preview.data.canPost && <p className="notice danger" role="alert">
+          Cannot post this payment now: {preview.data.blockedReason}</p>}
+        {preview.data?.canPost && <>
+          <p>Journal to post on {preview.data.journalDate} (period {preview.data.periodCode}):</p>
+          <PaymentJournalTable lines={preview.data.lines} currency={line.currency} />
+        </>}
+      </>}
+      {canPost && <button type="button" className="btn primary" disabled={disabled || preview.data?.canPost === false}
+        onClick={postPayment}>Post payment to ledger</button>}
     </section>}
     {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
     {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}

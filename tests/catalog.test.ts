@@ -16,7 +16,7 @@ const form = (kind: Parameters<typeof entryToForm>[0], overrides: Partial<Catalo
   ({ ...entryToForm(kind), ...overrides });
 
 test("tabs: every kind has a label, unknown or missing kind falls back to payment terms", () => {
-  assert.deepEqual(CATALOG_TABS.map((tab) => CATALOG_LABELS[tab]), ["Payment terms", "Payment methods", "Currencies",
+  assert.deepEqual(CATALOG_TABS.map((tab) => CATALOG_LABELS[tab]), ["Payment terms", "Payment methods", "Tax codes", "Currencies",
     "Bank accounts", "Tags", "Categories", "Locations", "Custom fields", "Number formats", "Products & services", "Posting accounts"]);
   assert.equal(parseCatalogTab(null), "payment-term");
   assert.equal(parseCatalogTab("coupon"), "payment-term");
@@ -110,7 +110,7 @@ test("products: form round trip keeps fields, validation of prices", () => {
   const input = formToProductInput({ ...productToForm(product), salePrice: "300" });
   assert.deepEqual(input, {
     quantity: "0", groupName: "Services", fields: { colour: "blue" }, name: "Consulting", sku: "C-1", kind: "service",
-    unit: "hour", salePrice: "300", purchasePrice: "0.00", incomeAccountId: "inc-1", expenseAccountId: null,
+    unit: "hour", salePrice: "300", purchasePrice: "0.00", incomeAccountId: "inc-1", expenseAccountId: null, defaultTaxCode: null,
   });
   assert.equal(validateProductForm(productToForm(product)), null);
   assert.match(validateProductForm({ ...productToForm(product), name: "" }) ?? "", /name/);

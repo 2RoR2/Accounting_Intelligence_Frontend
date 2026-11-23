@@ -6,7 +6,8 @@ import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
 import { BankLineActions, BankLineDocumentLink, bankLineMoney } from "./bank-line-actions";
-import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, initialBankCandidateId, isUnallocated } from "./allocation-logic";
+import { TracePanel } from "@/features/common/trace/trace-panel";
+import { BANK_MATCH_LABELS, bankLineStatusLabel, bankMatchStatus, canReviewBankCandidate, initialBankCandidateId, isUnallocated } from "./allocation-logic";
 import type { User } from "@/types";
 import type {
   BankMoneyTransactionDetail,
@@ -540,7 +541,7 @@ export function MoneyFlowPage({
             {
               label: "Verification",
               render: (r) => <>
-                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(r)]}</Badge>
+                <Badge>{r.status === "needs_review" ? BANK_MATCH_LABELS[bankMatchStatus(r)] : bankLineStatusLabel(r)}</Badge>
                 {r.paymentPosted && <> <Badge>Payment posted</Badge></>}
               </>,
             },
@@ -659,7 +660,7 @@ export function MoneyFlowPage({
               </div>
               <div>
                 <span>Verification</span>
-                <Badge>{BANK_MATCH_LABELS[bankMatchStatus(detail)]}</Badge>
+                <Badge>{detail.status === "needs_review" ? BANK_MATCH_LABELS[bankMatchStatus(detail)] : bankLineStatusLabel(detail)}</Badge>
               </div>
               <div>
                 <span>Related record</span>
@@ -754,6 +755,7 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
+            {detail.status === "matched" && <TracePanel base={base} type="bank-transaction" id={detail.id} />}
           </div>
         </Modal>
       )}

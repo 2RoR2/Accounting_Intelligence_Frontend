@@ -12,6 +12,7 @@ import { currencyTotals } from "@/lib/api/document-contract";
 import { MonthlyFinance } from "@/features/common/today/monthly-finance";
 import { Periods } from "./periods";
 import { FinancialReportView } from "@/features/common/reports/financial-reports";
+import { TracePanel } from "@/features/common/trace/trace-panel";
 
 const sections = [
   ["general", "General ledger"],
@@ -65,7 +66,9 @@ function LedgerActivity({ base, canPost, section, tabs }: {
   section: Exclude<Section, "periods" | "general">;
   tabs: ReactNode;
 }) {
-  const [search, setSearch] = useState("");
+  // A link from a trace or search result names the journal (?q=<id>); the list filters on it.
+  const [search, setSearch] = useState(useSearchParams().get("q") ?? "");
+  const [traceTarget, setTraceTarget] = useState<Journal | null>(null);
   const [status, setStatus] = useState("");
   const [source, setSource] = useState("");
   const [amount, setAmount] = useState("");
@@ -161,6 +164,7 @@ function LedgerActivity({ base, canPost, section, tabs }: {
           columns={[
           { label: "Date", render: (r) => r.date }, { label: "Description", render: (r) => r.description }, { label: "Source", render: (r) => r.sourceType },
           { label: "Debit", render: (r) => r.totalDebit }, { label: "Credit", render: (r) => r.totalCredit }, { label: "Status", render: (r) => r.status },
+          { label: "Trace", render: (journal: Journal) => <button type="button" className="btn small" onClick={() => setTraceTarget(journal)}>Trace</button> },
           ...(canPost ? [{ label: "Actions", render: (journal: Journal) => {
             if (journal.sourceType === "erp_document") return "Void the document instead";
             if (journal.sourceType === "document" || journal.sourceType === "adjustment") return "Posted from a scanned document";
@@ -171,6 +175,9 @@ function LedgerActivity({ base, canPost, section, tabs }: {
             }}>Reverse</button>;
           } }] : []),
         ]} />
+        {traceTarget && <Modal title={`Journal: ${traceTarget.description}`} onClose={() => setTraceTarget(null)}>
+          <TracePanel base={base} type="journal" id={traceTarget.id} />
+        </Modal>}
         {canPost && reverseTarget && <Modal title="Reverse journal" onClose={(event?: SyntheticEvent) => {
           if (reversing) event?.preventDefault();
           else setReverseTarget(null);

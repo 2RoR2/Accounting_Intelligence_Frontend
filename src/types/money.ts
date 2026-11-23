@@ -69,6 +69,8 @@ export interface BankMoneyTransaction {
   status: BankTransactionStatus;
   matchStatus: MatchStatus;
   paymentPosted?: boolean;
+  /** Matched to records whose payment is not in the ledger yet (any role sees it; a local admin posts it). */
+  paymentPending?: boolean;
   canPostPayment?: boolean;
   bankAccountRef?: string | null;
   relatedRecordId?: string | null;

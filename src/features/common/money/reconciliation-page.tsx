@@ -10,6 +10,7 @@ import {
   confirmBankImport,
   decideMatch,
   discardBankImportPreview,
+  getBankPaymentPreview,
   inspectBankStatement,
   getMoneyTransactionDetail,
   getMoneyTransactions,
@@ -18,11 +19,16 @@ import {
   createReconciliationPeriod,
   completeReconciliationPeriod,
   type BankImportPreview,
+  type BankPaymentPosting,
+  type BankPaymentPreview,
 } from "@/lib/api/money.service";
 import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } from "@/types";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
-import { BankLineActions, BankLineDocumentLink } from "./bank-line-actions";
-import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, isUnallocated } from "./allocation-logic";
+import { BankLineActions, BankLineDocumentLink, PaymentJournalTable } from "./bank-line-actions";
+import {
+  bankLineStatusLabel, bankPaymentNotPosted, canReviewBankCandidate, isUnallocated,
+  PAYMENT_NOT_POSTED, PAYMENT_WAITING_FOR_ADMIN,
+} from "./allocation-logic";
 import { autoMapColumns, headerMatchesField, IMPORT_COLUMNS, importMappingForPreview, type ImportColumn } from "./import-mapping";
 function csvHeaders(text: string): string[] {
   const firstLine = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
@@ -56,8 +62,11 @@ function detectDateFormat(text: string, dateHeader: string): "iso" | "dmy" | "md
 }
 
 
+type MatchPreview = { candidateId: string; preview?: BankPaymentPreview; error?: string };
+
 export function ReconciliationPage({ user }: { user: User }) {
-  const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+  const admin = user.role === "LOCAL_ADMIN";
+  const base = admin ? "/company" : "/workspace";
   const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
   const { data, loading, error, refresh } = useResource(
@@ -87,17 +96,22 @@ export function ReconciliationPage({ user }: { user: User }) {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [reviewRow, setReviewRow] = useState<BankMoneyTransactionDetail | null>(null);
   const [openingReview, setOpeningReview] = useState(false);
+  // The journal "Confirm and post payment" would write for the proposed match (local admins only).
+  const [matchPreview, setMatchPreview] = useState<MatchPreview | null>(null);
+  const [postedPayment, setPostedPayment] = useState<{ lineId: string; payment: BankPaymentPosting } | null>(null);
   // Show every confirmed bank row. Rows without an exact candidate still need
   // to be visible so the user can see what was imported and review it.
   const rows = useMemo(() => (data ?? []).flat(), [data]);
   const selectedRow = rows.find((row) => row.id === selectedRowId);
   // Opened from Today's "Bank lines to match" tile (?status=unmatched): rows not yet matched or ignored.
   const unmatchedOnly = searchParams.get("status") === "unmatched";
+  // Opened from the Dashboard's "Bank payments to post" tile (?status=to-post): matched lines whose payment waits.
+  const toPostOnly = searchParams.get("status") === "to-post";
   const visibleRows = useMemo(() => rows.filter((row) => {
     const text = `${row.description} ${row.reference ?? ""} ${row.postedDate}`.toLowerCase();
     return (!transactionSearch || text.includes(transactionSearch.toLowerCase())) && (transactionView === "all" || row.direction === transactionView) && (!accountFilter || row.bankAccountRef === accountFilter) && (!periodFilter || (row.postedDate ? row.postedDate.startsWith(periodFilter) : false))
-      && (!unmatchedOnly || bankLineToMatch(row));
-  }), [rows, transactionSearch, transactionView, accountFilter, periodFilter, unmatchedOnly]);
+      && (!unmatchedOnly || bankLineToMatch(row)) && (!toPostOnly || bankPaymentNotPosted(row));
+  }), [rows, transactionSearch, transactionView, accountFilter, periodFilter, unmatchedOnly, toPostOnly]);
   const totals = useMemo(() => visibleRows.reduce((result, row) => {
     const currency = row.currency ?? "MYR";
     const bucket = result[currency] ?? { moneyIn: 0, moneyOut: 0 };
@@ -186,6 +200,8 @@ export function ReconciliationPage({ user }: { user: User }) {
       const line = await getMoneyTransactionDetail(user, id);
       if (!line) throw new Error("The bank line could not be found.");
       setReviewRow(line);
+      setPostedPayment(null);
+      void loadMatchPreview(line);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Unable to load the bank line.");
     } finally {
@@ -193,12 +209,29 @@ export function ReconciliationPage({ user }: { user: User }) {
     }
   }
 
-  async function decide(candidate: BankReconciliationCandidate, decision: "confirm" | "reject") {
+  async function loadMatchPreview(line: BankMoneyTransactionDetail) {
+    const candidate = (line.candidates ?? []).find((item) => canReviewBankCandidate(line, item));
+    setMatchPreview(admin && candidate ? { candidateId: candidate.id } : null);
+    if (!admin || !candidate) return;
+    try {
+      const preview = await getBankPaymentPreview(line.id, candidate.id);
+      setMatchPreview({ candidateId: candidate.id, preview });
+    } catch (e) {
+      setMatchPreview({ candidateId: candidate.id, error: e instanceof Error ? e.message : "Unable to load the payment journal." });
+    }
+  }
+
+  async function decide(candidate: BankReconciliationCandidate, decision: "confirm" | "reject", postPayment = false) {
     if (busy || busyId) return;
     setBusyId(candidate.id); setNotice(""); setActionError("");
     try {
-      await decideMatch(user, candidate.id, decision, candidate.revision, decision === "reject" ? "Rejected during reconciliation review" : undefined);
-      setNotice(decision === "confirm" ? "Match confirmed." : "Candidate rejected.");
+      const result = await decideMatch(user, candidate.id, decision, candidate.revision,
+        decision === "reject" ? "Rejected during reconciliation review" : undefined, { postPayment });
+      if (postPayment && reviewRow && result?.payment) setPostedPayment({ lineId: reviewRow.id, payment: result.payment });
+      setNotice(decision === "reject" ? "Candidate rejected."
+        : postPayment ? "Match confirmed and payment posted to the ledger."
+          : admin ? `Match confirmed. ${PAYMENT_NOT_POSTED}: post the payment below when you are ready.`
+            : `Match confirmed. ${PAYMENT_WAITING_FOR_ADMIN}.`);
       if (reviewRow && decision === "confirm") {
         const updated = await getMoneyTransactionDetail(user, reviewRow.id).catch(() => undefined);
         setReviewRow(updated ?? null);
@@ -258,6 +291,7 @@ export function ReconciliationPage({ user }: { user: User }) {
     </Panel>}
     {activeTab === "transactions" && <Panel title="Transactions" subtitle="Imported from bank statements. Review and reconcile each transaction.">
       {unmatchedOnly && <p className="today-filter-note" role="status">Showing: <strong>bank lines not matched or classified yet</strong>. <Link href={`${base}/reconciliation`}>Show all bank lines</Link></p>}
+      {toPostOnly && <p className="today-filter-note" role="status">Showing: <strong>matched bank lines whose payment is not posted yet</strong>. <Link href={`${base}/reconciliation`}>Show all bank lines</Link></p>}
       <div className="bank-transaction-toolbar"><SearchInput value={transactionSearch} onChange={setTransactionSearch} placeholder="Search transactions" /><div className="bank-transaction-filters">{([['all','All'],['money_in','Money In'],['money_out','Money Out']] as const).map(([value,label]) => <button key={value} className={transactionView === value ? "active" : ""} onClick={() => setTransactionView(value)}>{label}</button>)}</div><span className="bank-transaction-count">{visibleRows.length} transactions</span></div>
       <div className="bank-transaction-workspace">
         <div className="bank-transaction-list">
@@ -265,7 +299,7 @@ export function ReconciliationPage({ user }: { user: User }) {
             key={row.id} disabled={openingReview} onClick={() => setSelectedRowId(row.id)}>
             <span>{row.postedDate}</span><strong>{row.description || "Bank transaction"}</strong>
             <b className={row.direction === "money_in" ? "in" : "out"}>{row.direction === "money_in" ? "+" : "-"}{money(row.amount, row.currency)}</b>
-            <Badge>{row.status === "needs_review" ? "Needs review" : BANK_MATCH_LABELS[bankMatchStatus(row)]}</Badge>
+            <Badge>{bankLineStatusLabel(row)}</Badge>
           </button>)}
         </div>
         <aside className="bank-transaction-detail">{selectedRow ? <>
@@ -276,8 +310,9 @@ export function ReconciliationPage({ user }: { user: User }) {
             <button className="btn primary" type="button" disabled={openingReview} onClick={() => void openReview(selectedRow.id)}>
               {openingReview ? "Opening review…" : "Open review"}
             </button>
-            <span>{BANK_MATCH_LABELS[bankMatchStatus(selectedRow)]}</span>
+            <span>{bankLineStatusLabel(selectedRow)}</span>
             {selectedRow.paymentPosted && <Badge>Payment posted</Badge>}
+            {bankPaymentNotPosted(selectedRow) && <Badge>{admin ? "Ready to post" : PAYMENT_WAITING_FOR_ADMIN}</Badge>}
           </div>
         </> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside>
       </div>
@@ -330,7 +365,7 @@ export function ReconciliationPage({ user }: { user: User }) {
             <div>
               <span>{reviewRow.direction === "money_in" ? "Money In" : "Money Out"}</span>
               <strong>{money(reviewRow.amount, reviewRow.currency)}</strong>
-              <small>{BANK_MATCH_LABELS[bankMatchStatus(reviewRow)]}</small>
+              <small>{bankLineStatusLabel(reviewRow)}</small>
             </div>
           </div>
 
@@ -352,15 +387,27 @@ export function ReconciliationPage({ user }: { user: User }) {
               <Link className="btn small" href={`${base}/records/${reviewCandidate.recordId}`}>View standardised record</Link>
               {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
             </div>
-            {canReviewBankCandidate(reviewRow, reviewCandidate) && <div className="reconciliation-review-actions">
-              <button className="btn primary" type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)} onClick={() => void decide(reviewCandidate, "confirm")}>Confirm match</button>
-              <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
-            </div>}
+            {canReviewBankCandidate(reviewRow, reviewCandidate) && <>
+              <MatchPaymentPreview admin={admin} currency={reviewRow.currency}
+                preview={matchPreview?.candidateId === reviewCandidate.id ? matchPreview : undefined} />
+              <div className="reconciliation-review-actions">
+                {admin && <button className="btn primary" type="button"
+                  disabled={busy || !!busyId || !isUnallocated(reviewRow) || matchPreview?.candidateId !== reviewCandidate.id || !matchPreview.preview?.canPost}
+                  onClick={() => void decide(reviewCandidate, "confirm", true)}>Confirm and post payment</button>}
+                <button className={admin ? "btn" : "btn primary"} type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)}
+                  onClick={() => void decide(reviewCandidate, "confirm")}>{admin ? "Confirm match only" : "Confirm match"}</button>
+                <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
+              </div>
+            </>}
           </section>) : <section className="reconciliation-match-record">
             <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3></div>
             <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
           </section>}
 
+          {postedPayment?.lineId === reviewRow.id && <section className="transaction-review-section">
+            <div className="transaction-review-section-heading"><h3>Posted payment journal</h3></div>
+            <PaymentJournalTable lines={postedPayment.payment.lines} currency={reviewRow.currency} />
+          </section>}
           {reviewRow.recordedDocumentId && <p>Original document <BankLineDocumentLink line={reviewRow} base={base} /></p>}
           <BankLineActions user={user} line={reviewRow} busy={busy || !!busyId} onBusyChange={setBusy}
             onLineLoaded={(line) => { setReviewRow(line); void refresh(); }} />
@@ -424,4 +471,24 @@ export function ReconciliationPage({ user }: { user: User }) {
       </Modal>
     )}
   </div>;
+}
+
+/** The confirm step: the journal "Confirm and post payment" writes (admins), or who posts it (accountants). */
+function MatchPaymentPreview({ admin, currency, preview }: { admin: boolean; currency: string | null; preview?: MatchPreview }) {
+  if (!admin) {
+    return <p className="reconciliation-review-empty-copy">After you confirm, the payment waits for a local admin to post it
+      to the ledger. The line then shows &quot;{PAYMENT_WAITING_FOR_ADMIN}&quot;.</p>;
+  }
+  return <section className="transaction-review-section">
+    <div className="transaction-review-section-heading"><h3>Payment journal</h3></div>
+    {!preview?.preview && !preview?.error && <p role="status">Loading the payment journal…</p>}
+    {preview?.error && <p className="notice danger" role="alert">{preview.error}</p>}
+    {preview?.preview && !preview.preview.canPost && <p className="notice danger" role="alert">
+      Cannot post this payment now: {preview.preview.blockedReason} You can still confirm the match only; the line then
+      waits in &quot;Bank payments to post&quot;.</p>}
+    {preview?.preview?.canPost && <>
+      <p>&quot;Confirm and post payment&quot; saves the match and posts this journal on {preview.preview.journalDate} (period {preview.preview.periodCode}).</p>
+      <PaymentJournalTable lines={preview.preview.lines} currency={currency} />
+    </>}
+  </section>;
 }

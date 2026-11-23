@@ -58,7 +58,9 @@ export async function decideMatch(
   decision: "confirm" | "reject",
   expectedRevision: number,
   reason?: string,
-): Promise<{ id: string; candidateId: string; decision: string; settlementId: string | null }> {
+  options?: { postPayment?: boolean },
+): Promise<{ id: string | null; candidateId: string; decision: string; settlementId: string | null;
+  alreadyConfirmed?: boolean; payment?: BankPaymentPosting }> {
   return api(`/api/bank/reconciliation/candidates/${encodeURIComponent(candidateId)}/decision`, {
     method: "POST",
     body: JSON.stringify({
@@ -66,6 +68,8 @@ export async function decideMatch(
       decision: decision === "confirm" ? "confirmed" : "rejected",
       expectedRevision,
       ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      // Confirm and post in one step (local admins): the match and its payment journal are saved together.
+      ...(options?.postPayment ? { postPayment: true } : {}),
     }),
   });
 }
@@ -87,6 +91,19 @@ type PaymentJournalLine = {
 };
 
 export type BankPaymentPosting = { journalId: string; lines: PaymentJournalLine[]; idempotent: boolean };
+
+/** The journal "Post payment" would write, without posting; canPost=false carries the reason (closed period, role). */
+export type BankPaymentPreview = {
+  canPost: boolean;
+  blockedReason: string | null;
+  journalDate: string | null;
+  periodCode: string | null;
+  lines: PaymentJournalLine[];
+};
+
+export const getBankPaymentPreview = (id: string, candidateId?: string) =>
+  get<BankPaymentPreview>(`/api/bank/transactions/${encodeURIComponent(id)}/payment-preview${
+    candidateId ? `?candidateId=${encodeURIComponent(candidateId)}` : ""}`);
 
 export const postBankPayment = (id: string, journalDate?: string) =>
   api<BankPaymentPosting>(`/api/bank/transactions/${encodeURIComponent(id)}/post-payment`, json("POST", { journalDate }));

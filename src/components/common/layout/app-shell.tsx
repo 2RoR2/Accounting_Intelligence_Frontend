@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { activeNavItem, jobNavigation, navHref, navParent, type NavIcon, type NavSection } from "./navigation";
 import { ruleSentence } from "@/lib/glossary";
+import { GlobalSearch } from "./global-search";
 import type { User } from "@/types";
 import { logout } from "@/lib/api/auth.service";
 import { getAuditLogs } from "@/lib/api/audit.service";
@@ -498,6 +499,7 @@ export function AppShell({
               {activeItem?.label ?? PAGE_TITLES[currentPage] ?? (isAdmin ? "Overview" : "Dashboard")}
             </strong>
           </div>
+          {!isAdmin && <GlobalSearch base={`/${prefix}`} />}
           <div className="topbar-right">
             <button type="button" className="theme-toggle btn small" aria-label={`Theme: ${themePreference}. Click to change`} title="Change theme" onClick={cycleTheme}>
               {darkMode ? <Sun size={15} /> : <Moon size={15} />}
