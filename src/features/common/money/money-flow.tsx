@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { BankAnomalyChart } from "@/features/common/money/bank-anomaly-chart";
 import { BankAnomalyOverview } from "@/features/common/money/bank-anomaly-overview";
 import { BankLineActions, BankLineDocumentLink, bankLineMoney } from "./bank-line-actions";
+import { TracePanel } from "@/features/common/trace/trace-panel";
 import { BANK_MATCH_LABELS, bankMatchStatus, canReviewBankCandidate, initialBankCandidateId, isUnallocated } from "./allocation-logic";
 import type { User } from "@/types";
 import type {
@@ -754,6 +755,7 @@ export function MoneyFlowPage({
                 <Trash2 size={14} /> Ignore row
               </button>
             </div>
+            {detail.status === "matched" && <TracePanel base={base} type="bank-transaction" id={detail.id} />}
           </div>
         </Modal>
       )}

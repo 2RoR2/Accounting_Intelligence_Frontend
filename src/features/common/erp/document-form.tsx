@@ -24,6 +24,7 @@ import {
   type DocumentAction, type DocumentGroup,
 } from "./document-logic";
 import { ShareLinksPanel } from "./share-links";
+import { TracePanel } from "@/features/common/trace/trace-panel";
 
 type FormProps = { base: string; group: DocumentGroup; type: DocumentType; role: User["role"] };
 type DraftLine = { key: number; value: DocumentLine };
@@ -423,6 +424,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     {document && (document.printed || !!document.files?.length) && <PrintedCopies document={document} />}
     {document && <ShareLinksPanel user={{ role }} type={type} document={document} />}
     {document && <HistoryPanel key={`${document.id}:${document.updatedAt}`} base={base} document={document} />}
+    {document && <TracePanel key={`trace:${document.id}:${document.updatedAt}`} base={base} type={document.type} id={document.id} />}
     {confirmation && <Modal title={confirmation === "delete" ? "Delete draft" : "Void document"} onClose={() => setConfirmation(null)}>
       <form onSubmit={(event) => {
         event.preventDefault();
