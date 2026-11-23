@@ -217,7 +217,7 @@
 .dashboard-cashflow-chart:after { content:"Inflow  •  Outflow"; position:absolute; left:4px; top:2px; color:#536b83; font-size:11px; }
 .dashboard-cashflow-chart > span { position:relative; }
 .dashboard-edit-mode .dashboard-reference-panel { min-height:120px; }
-.app-shell:not(.theme-dark) .sidebar .nav-chevron { margin-left: auto; color: #a2a9b7 !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-chevron { margin-left: auto; color: #174f86 !important; }
 .app-shell:not(.theme-dark) .sidebar .nav-chevron-button {
   display: grid !important;
   place-items: center !important;
@@ -225,27 +225,66 @@
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
-  color: #a2a9b7 !important;
+  color: #174f86 !important;
 }
-.app-shell:not(.theme-dark) .sidebar .nav-chevron-button:hover { color: #6457d8 !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-chevron-button:hover { color: #073d78 !important; }
 .app-shell:not(.theme-dark) .sidebar .nav-chevron.expanded { transform: rotate(180deg); }
 .app-shell:not(.theme-dark) .sidebar .nav-submenu {
   margin: -2px 0 4px 30px !important;
   padding: 3px 0 5px 15px !important;
-  border-left: 1px solid #e5e8ef !important;
+  border-left: 1px solid rgba(23,79,134,.38) !important;
 }
 .app-shell:not(.theme-dark) .sidebar .nav-subitem {
   display: block !important;
   padding: 8px 10px !important;
-  color: #8993a7 !important;
-  font-size: 12px !important;
-  line-height: 1.2 !important;
+  font-size: 13px !important;
+  line-height: 1.25 !important;
   text-decoration: none !important;
 }
-.app-shell:not(.theme-dark) .sidebar .nav-subitem:hover { color: #5d51c8 !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-subitem:not(.active) { color: #12345d !important; }
+.app-shell:not(.theme-dark) .sidebar .nav-subitem:not(.active):hover { color: #073d78 !important; }
 /* Review fixes: cashflow bars stay inside the panel; submenu text stays readable on the dark theme's sidebar. */
 .dashboard-cashflow-chart { overflow-x: auto; overflow-y: hidden; }
 .app-shell.theme-dark .sidebar .nav-subitem:not(.active) { color: rgba(226, 236, 248, .86) !important; }
 .app-shell.theme-dark .sidebar .nav-subitem:not(.active):hover,
 .app-shell.theme-dark .sidebar .nav-subitem:not(.active):focus-visible { color: #fff !important; background: rgba(255, 255, 255, .1) !important; }
 .app-shell.theme-dark .nav-chevron-button { color: rgba(226, 236, 248, .86); }
+
+/* UI/theme pass: notices, table fit, ledger tabs and the phone top bar use the app's blue palette. */
+.notice { display:block; margin:0 0 14px; padding:11px 14px; border:1px solid #c5def7; border-left:4px solid #3c92f7; border-radius:10px; background:#f1f7ff; color:#12345d; font-size:13px; line-height:1.45; }
+.notice.info { border-color:#c5def7; border-left-color:#3c92f7; background:#f1f7ff; color:#12345d; }
+.notice.success { border-color:#b9e3cc; border-left-color:#1f9d63; background:#effaf4; color:#145a3a; }
+.notice.warning { border-color:#efc36b; border-left-color:#d99a27; background:#fff8e9; color:#71420b; }
+.notice.danger { border-color:#f2c4c9; border-left-color:#c63d4d; background:#fff5f6; color:#8f2a36; }
+.notice.mb-4 { margin-bottom:16px; }
+.notice.mt-2 { margin-top:8px; }
+.app-shell.theme-dark .notice { background:#12345f !important; border-color:rgba(157,202,255,.34) !important; border-left-color:#67adff !important; color:#ecf5ff !important; }
+.app-shell.theme-dark .notice.success { background:#12402f !important; border-left-color:#4cc38a !important; }
+.app-shell.theme-dark .notice.warning { background:#513b16 !important; border-left-color:#f0b457 !important; color:#ffe6a8 !important; }
+.app-shell.theme-dark .notice.danger { background:#4a2430 !important; border-left-color:#ff9daa !important; color:#ffe8ec !important; }
+
+/* Tables: tighter side padding on desktop so common lists fit the card; narrow tables do not force a scroll. */
+@media (min-width: 761px) {
+  .table-scroll th, .table-scroll td { padding-left:10px; padding-right:10px; }
+  .table-scroll :is(th, td):first-child { padding-left:22px; }
+  .table-scroll :is(th, td):last-child { padding-right:22px; }
+}
+.table-scroll table:not(:has(th:nth-child(4))) { min-width:0; }
+
+.ledger-tabs button { flex:0 0 auto; }
+
+@media (max-width: 760px) {
+  .app-shell .topbar { gap:8px; padding:0 10px; }
+  .app-shell .topbar-left { flex:1 1 0; min-width:0; gap:6px; overflow:hidden; }
+  .app-shell .topbar-left .breadcrumb-home,
+  .app-shell .topbar-left .crumb-divider,
+  .app-shell .topbar-left > span { display:none; }
+  .app-shell .topbar-left strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+  .app-shell .topbar-right { flex:0 0 auto; gap:6px; }
+  .app-shell .topbar-right .profile-text { display:none; }
+}
+.dashboard-mini-chart:not(.pnl-chart) span { background:#34a56f; }
+.reports-page .report-total :is(th, td) { background:#f7faff; }
+@media (min-width: 761px) {
+  .table-scroll td:has(small) { white-space:normal; min-width:160px; max-width:380px; }
+}

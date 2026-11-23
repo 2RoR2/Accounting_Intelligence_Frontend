@@ -23,6 +23,11 @@ const sections = [
   ["accounts", "Chart of accounts"],
 ] as const;
 type Section = (typeof sections)[number][0];
+/** Page title follows the sidebar entry that opened the section. */
+const LEDGER_TITLES: Partial<Record<Section, string>> = {
+  accounts: "Chart of accounts", journals: "Journals", general: "General ledger", periods: "Periods & month-end",
+  monthly: "Monthly ledger", trial: "Trial balance", allocations: "Settlement allocations",
+};
 
 function amountKey(value: string) {
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
@@ -44,7 +49,7 @@ export function LedgerPage({ canPost }: { canPost: boolean }) {
   </nav>;
 
   return <div className="ledger-page">
-    <PageHeader title="General Ledger" description="Review journals, periods, settlements, and reconciliation allocations." />
+    <PageHeader title={LEDGER_TITLES[section] ?? "Accounting"} description="Review journals, periods, settlements, and reconciliation allocations." />
     {section === "periods" || section === "general"
       ? <div className="ledger-surface">
         <section className="ledger-browser" aria-label="Ledger sections">{tabs}</section>
