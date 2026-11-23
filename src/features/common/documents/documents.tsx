@@ -35,8 +35,12 @@ import {
   StatusBadge,
 } from "@/components/common/ui";
 import { documentKindLabel, statusLabel } from "@/lib/glossary";
-import { DOCUMENT_LANES, isDocumentLane } from "@/lib/today";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
+import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
+import {
+  documentTabCounts, documentTabEmptyMessage, documentTabTitle, documentTabs,
+  filterDocumentsByTab, isCapturedDocument, laneFromParam, laneTitle, resolveDocumentTab, reviewTabs,
+} from "@/features/common/documents/document-tabs";
 import { bulkSubmitReviews, cancelAccountantBatch, createDocumentBatch } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
 import { bulkResultSummary, hasContentRevision } from "@/features/common/bulk-selection";
@@ -58,10 +62,11 @@ const reviewSelectionKey = (doc: { id: string; contentRevision?: number }) => `$
 export function DocumentList({ user, tab }: { user: User; tab?: string }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const searchParams = useSearchParams();
-  const selectedTab = tab ?? (searchParams.get("tab") || "all");
-  // Opened from a Today tile: the backend applies the same rule the tile counted with.
-  const requestedLane = searchParams.get("lane");
-  const lane = isDocumentLane(requestedLane) ? requestedLane : "";
+  // A fixed `tab` prop means the list is embedded in another page (Sales > Debit notes): no tab bar of its own.
+  const embedded = tab !== undefined;
+  const selectedTab = resolveDocumentTab(tab ?? searchParams.get("tab"));
+  // Opened from a Today tile or the To review tabs: the backend applies the same rule the tile counted with.
+  const lane = laneFromParam(searchParams.get("lane"));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [date, setDate] = useState("");
@@ -82,26 +87,13 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
+  // A review lane is its own list (the backend already filtered it); the type tabs only apply to the plain list.
   const visibleDocuments = useMemo(() => {
     if (!data) return [];
-    // Sales = accounts receivable, Purchases = accounts payable (the category chosen at upload).
-    const filterByTab: Record<string, { type: string; category?: string } | undefined> = {
-      "sales-invoices": { type: "INVOICE" },
-      "purchase-bills": { type: "BILL" },
-      receipts: { type: "RECEIPT" },
-      "credit-notes": { type: "CREDIT_NOTE" },
-      "debit-notes": { type: "DEBIT_NOTE" },
-      "sales-credit-notes": { type: "CREDIT_NOTE", category: "ACCOUNTS_RECEIVABLE" },
-      "sales-debit-notes": { type: "DEBIT_NOTE", category: "ACCOUNTS_RECEIVABLE" },
-      "supplier-credit-notes": { type: "CREDIT_NOTE", category: "ACCOUNTS_PAYABLE" },
-      "supplier-debit-notes": { type: "DEBIT_NOTE", category: "ACCOUNTS_PAYABLE" },
-    };
-    const sourceDocuments = data.documents.filter((document) => !/\.json$/i.test(document.name));
-    const filter = filterByTab[selectedTab];
-    return filter
-      ? sourceDocuments.filter((document) => document.type === filter.type && (!filter.category || document.category?.toUpperCase() === filter.category))
-      : sourceDocuments;
-  }, [data, selectedTab]);
+    return lane ? data.documents.filter(isCapturedDocument) : filterDocumentsByTab(data.documents, selectedTab);
+  }, [data, selectedTab, lane]);
+  // Counts follow the same search and filters as the list, so a tab's number is what opening it shows.
+  const tabCounts = useMemo(() => documentTabCounts(data?.documents ?? []), [data]);
   const canBulkSubmit = lane === "ready" && user.role === "ACCOUNTANT";
   const eligible = canBulkSubmit && data?.queryKey === queryKey
     ? visibleDocuments.filter(hasContentRevision)
@@ -128,20 +120,12 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
       setSubmitting(false);
     }
   }
-  const documentTabs = [["All Documents", "all"], ["Sales Invoices", "sales-invoices"], ["Sales Credit Notes", "sales-credit-notes"], ["Sales Debit Notes", "sales-debit-notes"], ["Purchase Bills", "purchase-bills"], ["Supplier Credit Notes", "supplier-credit-notes"], ["Supplier Debit Notes", "supplier-debit-notes"], ["Receipts", "receipts"]];
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   return (
     <>
       <PageHeader
-        title={
-          lane === "to-review" ? "To review" :
-          lane ? DOCUMENT_LANES[lane] :
-          selectedTab === "receipts" ? "Expense receipts" :
-          selectedTab === "sales-debit-notes" ? "Debit notes" :
-          selectedTab === "supplier-debit-notes" ? "Supplier debit notes" :
-          user.role === "ACCOUNTANT" ? "My documents" : "Company documents"
-        }
+        title={lane ? laneTitle(lane) : embedded ? "Debit notes" : documentTabTitle(selectedTab)}
         description="Everything you have uploaded, from reading to approval."
         actions={
           <div className="new-document-menu">
@@ -173,18 +157,9 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
       <Panel>
         {canBulkSubmit && submitSummary && <p className="notice" role="status">{submitSummary}</p>}
         {canBulkSubmit && submitError && <p className="notice danger" role="alert">{submitError}</p>}
-        {lane && <nav className="workspace-tabs" aria-label="Review lanes">
-          <Link href={`${base}/documents?lane=to-review`} aria-current={lane === "to-review" ? "page" : undefined}>To review</Link>
-          <Link href={`${base}/documents?lane=ready`} aria-current={lane === "ready" ? "page" : undefined}>Ready to approve</Link>
-          {user.role === "LOCAL_ADMIN"
-            ? <Link href={`${base}/approvals`}>Approval queue</Link>
-            : <Link href={`${base}/documents?lane=waiting-approval`} aria-current={lane === "waiting-approval" ? "page" : undefined}>Sent for approval</Link>}
-          <Link href={`${base}/documents`}>All documents</Link>
-        </nav>}
-        {!lane &&
-        <div className="workspace-tabs document-list-tabs" role="tablist" aria-label="Document categories">
-          {documentTabs.map(([label, tab]) => <Link key={tab} className={selectedTab === tab ? "active" : ""} href={tab === "all" ? `${base}/documents` : `${base}/documents?tab=${tab}`} role="tab" aria-selected={selectedTab === tab}>{label}</Link>)}
-        </div>}
+        {lane && <DocumentTabBar label="Review lanes" tabs={reviewTabs(base, user.role, { lane })} />}
+        {!lane && !embedded && <DocumentTabBar label="Document types"
+          tabs={documentTabs(base, tabCounts, selectedTab).map((item) => ({ ...item, current: item.key === selectedTab }))} />}
         <div className="filter-bar">
           <SearchInput
             value={search}
@@ -222,11 +197,12 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
             onClick={() => void submitSelected()}>Submit selected for approval</button>
         </BulkControls>}
         <DataTable
+          key={`${lane}:${selectedTab}`}
           rows={visibleDocuments}
           rowKey={(d) => d.id}
           emptyMessage={search || status || date || amount || business
             ? "No documents match these filters. Clear a filter to see more documents."
-            : laneEmptyMessage(lane, selectedTab)}
+            : laneEmptyMessage(lane, documentTabEmptyMessage(selectedTab))}
           columns={[
             ...(canBulkSubmit ? [{
               label: "Select",
@@ -284,16 +260,13 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
     </>
   );
 }
-function laneEmptyMessage(lane: string, tab: string) {
+function laneEmptyMessage(lane: string, listMessage: string) {
   switch (lane) {
     case "ready": return "Nothing ready yet. Documents appear here once every check passes.";
     case "to-review": return "Nothing to review yet. Add a document in Upload & capture.";
     case "needs-fixing": return "Nothing needs fixing. Documents with a failed check appear in Exceptions.";
     case "waiting-approval": return "Nothing is waiting for approval. Submit a document from Ready to approve.";
-    default:
-      return tab === "all"
-        ? "No documents yet. Add one in Upload & capture."
-        : "No documents of this type yet. Add a received document in Upload & capture.";
+    default: return listMessage;
   }
 }
 

@@ -10,7 +10,7 @@ const children = (group: string) => topLevel.find((item) => item.label === group
 
 test("the menu follows Plan M3", () => {
   assert.deepEqual(topLevel.map(({ label }) => label), ["Dashboard", "Inbox", "Sales", "Purchases", "Bank", "Contacts", "Accounting", "Reports", "Settings"]);
-  assert.deepEqual(children("Inbox"), ["Upload & capture", "To review", "Exceptions"]);
+  assert.deepEqual(children("Inbox"), ["Upload & capture", "All documents", "To review", "Exceptions"]);
   assert.deepEqual(children("Sales"), ["Quotations", "Invoices", "Credit notes", "Debit notes", "Payments received"]);
   assert.deepEqual(children("Purchases"), ["Bills", "Expense receipts", "Supplier credit notes", "Supplier debit notes", "Payments made"]);
   assert.deepEqual(children("Bank"), ["Bank accounts", "Money in", "Money out", "Transfers", "Reconciliation"]);
@@ -42,6 +42,30 @@ test("the Dashboard is home again; B3's /today URL stays valid while it redirect
   assert.ok(isAllowedWorkspaceRoute(["company", "today"], "LOCAL_ADMIN"));
   assert.ok(isAllowedWorkspaceRoute(["workspace", "today"], "ACCOUNTANT"));
   assert.ok(isAllowedWorkspaceRoute(["company", "performance"], "LOCAL_ADMIN"));
+});
+
+test("no two menu entries open the same page and query", () => {
+  const targets = navLeaves(menu).map((item) => navHref("company", item));
+  assert.deepEqual(targets, [...new Set(targets)]);
+  const labels = navLeaves(menu).map((item) => item.label);
+  assert.deepEqual(labels, [...new Set(labels)]);
+});
+
+test("the documents page highlights the entry of the list it shows", () => {
+  // The bug: the plain list used to light up To review.
+  assert.equal(activeNavItem(menu, "documents", "")?.label, "All documents");
+  assert.equal(activeNavItem(menu, "documents", "tab=purchase-bills")?.label, "All documents");
+  assert.equal(activeNavItem(menu, "documents", "tab=supplier-credit-notes")?.label, "All documents");
+  assert.equal(activeNavItem(menu, "documents", "tab=sales-debit-notes")?.label, "All documents");
+  assert.equal(activeNavItem(menu, "documents", "tab=nonsense")?.label, "All documents");
+  for (const lane of ["to-review", "ready", "waiting-approval"]) {
+    assert.equal(activeNavItem(menu, "documents", `lane=${lane}`)?.label, "To review", lane);
+  }
+  assert.equal(activeNavItem(menu, "documents", "lane=needs-fixing")?.label, "Exceptions");
+  assert.equal(activeNavItem(menu, "approvals")?.label, "To review");
+  assert.equal(navParent(menu, activeNavItem(menu, "documents", ""))?.label, "Inbox");
+  const all = navLeaves(menu).find((item) => item.label === "All documents");
+  assert.equal(all && navHref("workspace", all), "/workspace/documents");
 });
 
 test("the highlighted entry follows the page", () => {

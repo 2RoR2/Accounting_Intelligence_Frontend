@@ -1,0 +1,13 @@
+/* Tab bars of the documents pages (All documents types, To review lanes). The count chip uses currentColor, so light and dark both read. */
+.doc-tab-bar.workspace-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; gap: 18px; padding-inline: 20px; }
+.doc-tab-bar a { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.doc-tab-bar .doc-tab-count {
+  min-width: 22px; padding: 1px 7px; border-radius: 99px; text-align: center;
+  font-size: 12px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums;
+  color: inherit; background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.doc-tab-bar a.active .doc-tab-count { background: color-mix(in srgb, currentColor 20%, transparent); }
+.doc-tab-bar a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
+/* Light mode: the open tab is the only blue one (dark mode keeps the theme's own tab colours). */
+.app-shell:not(.theme-dark) .doc-tab-bar.workspace-tabs a { color: #536174 !important; font-weight: 600; }
+.app-shell:not(.theme-dark) .doc-tab-bar.workspace-tabs a.active { color: var(--ui-primary, #2465b8) !important; font-weight: 800; border-bottom-color: var(--ui-primary, #2465b8); }
