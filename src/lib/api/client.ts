@@ -115,6 +115,27 @@ export async function download(path: string, filename: string) {
   globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Open a file (e.g. a PDF) in a new tab through the refresh-aware request, so an expired access cookie is renewed first. */
+export async function openInNewTab(path: string, fallbackName = "document.pdf") {
+  const tab = globalThis.open("", "_blank");  // opened before the await so pop-up blockers allow it
+  try {
+    const blob = await request(path, (response) => response.blob(), {}, true);
+    const url = URL.createObjectURL(blob);
+    if (tab) tab.location.href = url;
+    else if (!globalThis.open(url, "_blank")) {
+      // Pop-ups blocked: save the file instead of doing nothing.
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fallbackName;
+      link.click();
+    }
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (error) {
+    tab?.close();
+    throw error;
+  }
+}
+
 export const get = <T>(path: string) => api<T>(path);
 export const json = (method: string, body?: unknown): RequestInit => ({
   method,
