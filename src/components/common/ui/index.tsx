@@ -16,7 +16,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { statusLabel, statusTone } from "@/lib/glossary";
+import { documentStatusLabel, statusLabel, statusTone } from "@/lib/glossary";
 export function Badge({ children }: { children: ReactNode }) {
   const value = String(children);
   const tone =
@@ -37,11 +37,14 @@ export function Badge({ children }: { children: ReactNode }) {
   );
 }
 /** A document, exception, job or bank-line status in accountant words; the colour follows the raw status. */
-export function StatusBadge({ status }: { status: string | null | undefined }) {
+export function StatusBadge({ status, ready, role }: { status: string | null | undefined; ready?: boolean | null; role?: string | null }) {
+  const label = documentStatusLabel(status, ready, role);
+  const passed = label !== statusLabel(status);
   return (
-    <span className={`badge ${statusTone(status)}`} title={status ? `Status code: ${status}` : undefined}>
+    <span className={`badge ${passed ? "green" : statusTone(status)}`}
+      title={status ? `Status code: ${status}${passed ? ". Every check passed and nothing is open." : ""}` : undefined}>
       <span className="badge-dot" />
-      {statusLabel(status)}
+      {label}
     </span>
   );
 }

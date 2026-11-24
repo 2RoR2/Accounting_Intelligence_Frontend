@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  BACKEND_RULE_CODES, evidenceLabel, extractionStateLabel, isKnownRule, reviewSignalLabel,
+  BACKEND_RULE_CODES, documentStatusLabel, evidenceLabel, extractionStateLabel, isKnownRule, readyLabel, reviewSignalLabel,
   ruleCode, ruleSentence, ruleTitle, statusLabel, statusTone,
 } from "../src/lib/glossary";
 
@@ -43,6 +43,20 @@ test("a new counterparty says supplier or customer by the field", () => {
   assert.equal(ruleSentence("EX-008", "supplier"), "New supplier: add it to Contacts.");
   assert.equal(ruleSentence("EX-008", "customer"), "New customer: add it to Contacts.");
   assert.equal(ruleSentence("RECEIPT-REQUIRED"), "Missing detail: fill it in from the receipt.");
+});
+
+test("a document that passed every check says it is ready, in the word of the person who acts next", () => {
+  assert.equal(readyLabel("ACCOUNTANT"), "Ready to submit");
+  assert.equal(readyLabel("LOCAL_ADMIN"), "Ready to approve");
+  // Same predicate as the ready lane: only a document still waiting for the accountant, and only when the backend says so.
+  assert.equal(documentStatusLabel("EXTRACTED", true, "ACCOUNTANT"), "Ready to submit");
+  assert.equal(documentStatusLabel("CORRECTED", true, "ACCOUNTANT"), "Ready to submit");
+  assert.equal(documentStatusLabel("EXTRACTED", true, "LOCAL_ADMIN"), "Ready to approve");
+  assert.equal(documentStatusLabel("EXTRACTED", false, "ACCOUNTANT"), "Read, to check");
+  assert.equal(documentStatusLabel("EXTRACTED", undefined, "ACCOUNTANT"), "Read, to check");
+  assert.equal(documentStatusLabel("EXCEPTION", true, "ACCOUNTANT"), "Needs fixing", "an exception is never ready");
+  assert.equal(documentStatusLabel("IN_REVIEW", true, "ACCOUNTANT"), "In review");
+  assert.equal(documentStatusLabel("COMPLETED", true, "ACCOUNTANT"), "Saved to records");
 });
 
 test("statuses read as accountant words and keep their colour", () => {

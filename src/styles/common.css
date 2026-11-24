@@ -7453,6 +7453,9 @@ dialog {
 .validation-results-head { width: calc(100% - 56px); margin: 0 auto 12px; padding: 14px 16px; border: 1px solid #d6e3f0; border-radius: 12px; background: #f8fbff; }
 .validation-results-head strong { color: #17375f; font-size: 16px; }
 .validation-rule { display:flex; align-items:center; gap:9px; }.validation-icon { display:grid; place-items:center; }.validation-icon.pass { color:#15803d; }.validation-icon.warning { color:#b7791f; }.validation-icon.fail { color:#b42318; }.validation-message { color:#52657e; }.fail-text { color:#b42318; font-weight:600; }
+/* A total the AI read, not yet approved: muted, so it is not mistaken for a saved record's total. */
+.total-read { color:#6b7c93; font-style:italic; cursor:help; }.total-read small { font-style:normal; font-size:11px; letter-spacing:.02em; }
+.app-shell.theme-dark .total-read { color:#9fb2cc; }
 .validation-results-head + .table-scroll { width: calc(100% - 56px); margin: 0 auto; border: 1px solid #d6e3f0; border-radius: 12px; overflow: auto; }
 .validation-results-head + .table-scroll table { min-width: 900px; }
 .validation-results-head + .table-scroll tbody tr:hover { background: #f4f9ff; }

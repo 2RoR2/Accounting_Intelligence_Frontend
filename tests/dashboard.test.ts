@@ -33,7 +33,9 @@ test("the four counts that used to sit in cards live in Attention needed, each w
   const byId = (view: ReturnType<typeof dashboardView>) => Object.fromEntries(view.attention.map((tile) => [tile.id, [tile.title, tile.value]]));
   assert.deepEqual(byId(accountant).toReview, ["Documents to check", "3"]);
   assert.deepEqual(byId(accountant).needsFixing, ["Needs fixing", "2"]);
-  assert.deepEqual(byId(accountant).readyToApprove, ["Ready to approve", "1"]);
+  // The accountant submits; the tile says so. A company admin is the one who approves.
+  assert.deepEqual(byId(accountant).readyToApprove, ["Ready to submit", "1"]);
+  assert.deepEqual(byId(dashboardView(summary(counts), "LOCAL_ADMIN")).readyToApprove, ["Ready to approve", "1"]);
   assert.deepEqual(byId(accountant).bankToMatch, ["Bank lines to match", "4"]);
   assert.deepEqual(accountant.attention.map((tile) => tile.id), ["toReview", "needsFixing", "readyToApprove", "bankToMatch"]);
   const admin = dashboardView(summary({ toReview: 3, needsFixing: 2, waitingApproval: 5, bankToMatch: 4 }), "LOCAL_ADMIN");

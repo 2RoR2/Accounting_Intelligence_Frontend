@@ -2,6 +2,7 @@
  * Tabs of the documents pages: the type tabs on "All documents" (?tab=) and the lane tabs on "To review" (?lane=).
  * Pure data and rules, so the page, the sidebar and the tests read the same mapping.
  */
+import { readyLabel } from "@/lib/glossary";
 import { DOCUMENT_LANES, isDocumentLane, type DocumentLane } from "@/lib/today";
 
 type Side = "payable" | "receivable" | "unknown";
@@ -106,7 +107,7 @@ export function reviewTabs(base: string, role: string, current: { lane?: string 
   const tab = (key: string, label: string, href: string, isCurrent: boolean): ReviewTab => ({ key, label, href, current: isCurrent });
   const tabs = [
     tab("to-review", "To review", `${base}/documents?lane=to-review`, lane === "to-review"),
-    tab("ready", DOCUMENT_LANES.ready, `${base}/documents?lane=ready`, lane === "ready"),
+    tab("ready", readyLabel(role), `${base}/documents?lane=ready`, lane === "ready"),
     role === "LOCAL_ADMIN"
       ? tab("approvals", "Approval queue", `${base}/approvals`, current.page === "approvals")
       : tab("waiting-approval", DOCUMENT_LANES["waiting-approval"], `${base}/documents?lane=waiting-approval`, lane === "waiting-approval"),
@@ -119,4 +120,5 @@ export function reviewTabs(base: string, role: string, current: { lane?: string 
 export const laneFromParam = (value: string | null | undefined): DocumentLane | "" => (isDocumentLane(value) ? value : "");
 
 /** Page title of a lane: To review keeps its short menu name, the others the shared lane name. */
-export const laneTitle = (lane: DocumentLane) => (lane === "to-review" ? "To review" : DOCUMENT_LANES[lane]);
+export const laneTitle = (lane: DocumentLane, role?: string | null) =>
+  lane === "to-review" ? "To review" : lane === "ready" ? readyLabel(role) : DOCUMENT_LANES[lane];

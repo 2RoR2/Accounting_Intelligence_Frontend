@@ -260,6 +260,18 @@ export function statusLabel(status: string | null | undefined) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * The word for a document that passed every check and has no open problem. An accountant submits it for approval;
+ * a company admin approves it, so only the admin's word says "approve".
+ */
+export const readyLabel = (role: string | null | undefined) => (role === "LOCAL_ADMIN" ? "Ready to approve" : "Ready to submit");
+
+/** Only a document still waiting for the accountant can be "ready": the backend sets `ready` from the same rule as the ready lane. */
+export function documentStatusLabel(status: string | null | undefined, ready: boolean | null | undefined, role: string | null | undefined) {
+  const key = String(status ?? "").toUpperCase();
+  return ready && (key === "EXTRACTED" || key === "CORRECTED") ? readyLabel(role) : statusLabel(status);
+}
+
 /** Badge colour from the raw status, so relabelling never changes the meaning of a colour. */
 export function statusTone(status: string | null | undefined): "green" | "red" | "amber" | "neutral" {
   const value = String(status ?? "").toUpperCase();
