@@ -460,7 +460,10 @@ function DocumentReviewPage({
   const displayName = documentDisplayName(data.doc, data.doc.name);
   const kind = sourceKind(extraction, data.doc.type);
   const sourceReadonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !extraction.contentRevision || kind === "UNKNOWN";
-  const canStandardise = standardisationAvailable(data.doc.status, kind, data.validationReport);
+  // A set-aside document is out of the workflow until a local admin restores it: the backend refuses every edit,
+  // submission and approval with 409 (admin-e2e-set-aside), so the page offers none of them.
+  const setAside = !!data.doc.excludedAt;
+  const canStandardise = !setAside && standardisationAvailable(data.doc.status, kind, data.validationReport);
   const workflow = data.workflow ?? { overdue: false, duplicates: [], relatedNotes: [] };
   const validation = data.validation ?? [];
   const summary = validationSummary(validation);
@@ -535,7 +538,7 @@ function DocumentReviewPage({
   const receivable = data.doc.category?.toUpperCase() === "ACCOUNTS_RECEIVABLE";
   const newSupplier = extraction.fields.supplier?.value ?? extraction.fields.merchant?.value ?? extraction.fields.issuer?.value;
   // Revalidating resets status to extracted/exception, which would silently undo a submission or approval.
-  const canRevalidate = !["IN_REVIEW", "VALIDATED"].includes(data.doc.status);
+  const canRevalidate = !setAside && !["IN_REVIEW", "VALIDATED"].includes(data.doc.status);
   const blockingFindings = summary.blocking;
   const viewIssues = () => {
     setPanel("validation");
@@ -545,7 +548,7 @@ function DocumentReviewPage({
   const comments = data.comments ?? [];
   const audit = data.audit ?? [];
   const record = records.find((r) => r.documentId === documentId);
-  const readonly = sourceReadonly || !canEditDocument(user, data.doc, !!record);
+  const readonly = sourceReadonly || setAside || !canEditDocument(user, data.doc, !!record);
   const failed = data.doc.status === "FAILED";
   const pending = ["UPLOADED", "QUEUED", "PROCESSING"].includes(data.doc.status);
   const extracting = data.doc.status === "PROCESSING";
@@ -561,7 +564,7 @@ function DocumentReviewPage({
     ? `Reading found the type ${documentKindLabel(detected.value)}, but the document is filed as ${documentKindLabel(data.doc.type)}. Choose the right type.` : null;
   const typeReason = readingReason(readingFacts(extraction.raw, data.doc.mimeType, extraction.classification, extraction.fields), { typeChosen: !!decision }) ?? disagreement;
   const typeRevision = data.doc.contentRevision ?? extraction.contentRevision;
-  const canChooseType = canEditDocument(user, data.doc, !!record) && ["EXTRACTED", "CORRECTED", "EXCEPTION"].includes(data.doc.status) && !!typeRevision;
+  const canChooseType = !setAside && canEditDocument(user, data.doc, !!record) && ["EXTRACTED", "CORRECTED", "EXCEPTION"].includes(data.doc.status) && !!typeRevision;
   const chosenKind = decision?.value?.toUpperCase();
   const chooseType = (next: string) => run(() => chooseDocumentKind(user, documentId, next, typeRevision!),
     `Type saved as ${documentKindLabel(next)}. The checks ran again.`);
@@ -872,7 +875,10 @@ function DocumentReviewPage({
                   <ProcessingPanel trace={extraction.raw?.processing_trace as ProcessingTrace | undefined} type={extraction.classification?.value} status={extraction.classification?.status}
                     labelFor={(key) => fieldLabel(kind, key, extraction.fields[key]?.label)} />
                 </details>
-                {(
+                {setAside ? <p className="notice warning review-set-aside-readonly" role="status">
+                  This document is set aside, so it cannot be edited, submitted or approved.{" "}
+                  {user.role === "LOCAL_ADMIN" ? "Restore it with the banner at the top to work on it again." : "A local admin can restore it from the Set aside list at the bottom of All documents."}
+                </p> : (
                   <details open className="shoebox-actions review-action-drawer">
                     <summary><span>Review actions</span><small>{unsaved.length ? `${unsaved.length} unsaved change${unsaved.length === 1 ? "" : "s"}` : "Save or submit this review"}</small></summary>
                     <Field label="Review note · Optional">

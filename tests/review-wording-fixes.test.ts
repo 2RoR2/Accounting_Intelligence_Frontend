@@ -152,3 +152,17 @@ test("Set aside… reuses the page's SetAsideControl, and set-aside.tsx is not c
   assert.match(page, /onSetAside=\{canSetAside \? openSetAside : undefined\}/);
   assert.match(source("features/common/documents/set-aside.tsx"), /export function SetAsideControl\(\{ documentId, busy, onDone \}/);
 });
+
+test("a set-aside document is read-only: no edits, type choice, submit, approve or save to records", () => {
+  const page = source("features/common/documents/document-review.tsx");
+  assert.match(page, /const setAside = !!data\.doc\.excludedAt;/);
+  assert.match(page, /const readonly = sourceReadonly \|\| setAside \|\|/);
+  assert.match(page, /const canRevalidate = !setAside &&/);
+  assert.match(page, /const canChooseType = !setAside &&/);
+  assert.match(page, /const canStandardise = !setAside &&/);
+  // The review actions (save, submit, approve, set aside) give way to a note; the banner keeps Restore for local admins.
+  assert.match(page, /\{setAside \? <p className="notice warning review-set-aside-readonly"/);
+  assert.match(page, /<SetAsideBanner excludedAt=\{data\.doc\.excludedAt\}/);
+  // Anything that saves still checks readonly / canRevalidate, so the keyboard path (Ctrl+Enter) is refused too.
+  assert.match(page, /if \(readonly \|\| !canRevalidate\) \{ setFailure/);
+});
