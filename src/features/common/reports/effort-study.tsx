@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Badge, DataTable, PageHeader, Panel } from "@/components/common/ui";
 import { get, post } from "@/lib/api/client";
+import { WorkloadPanel } from "./workload-panel";
 
 interface StudyTask { sampleFile: string; kind: string; mode: "manual" | "ai_assisted"; set: string; file: string; fields: Array<{ key: string; type: string }>; prefill: Record<string, string | null> | null }
 interface StudyPlan { participant: string; aiRun: string | null; tasks: StudyTask[]; lineItems: string }
@@ -153,5 +154,6 @@ export function EffortStudyPage() {
       </div>
     </section>}
     <StudyResults results={results} onExport={exportCsv} />
+    {!plan && <WorkloadPanel />}
   </>;
 }
