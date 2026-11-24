@@ -93,7 +93,7 @@ function TopList({ title, rows, empty }: { title: string; rows: SummaryParty[]; 
 }
 
 function OverdueTable({ title, rows, empty }: { title: string; rows: SummaryOverdue[]; empty: string }) {
-  return <Panel title={title} subtitle="Largest overdue amounts first" className="biz-card">
+  return <Panel title={title} subtitle="Largest overdue amounts first, up to 10" className="biz-card">
     {rows.length === 0 ? <p className="biz-muted">{empty}</p> : <div className="data-table-wrap">
       <table className="data-table biz-table">
         <thead><tr><th>Contact</th><th>Number</th><th>Due</th><th>Overdue</th><th className="num">Outstanding</th></tr></thead>

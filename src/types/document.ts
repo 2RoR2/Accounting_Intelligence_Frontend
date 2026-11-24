@@ -28,6 +28,10 @@ export interface Document extends DocumentDisplayName {
   scenario: string;
   /** Prefer string to avoid float precision loss; backend list may return number, records return string. */
   totalAmount?: string | number | null;
+  /** Where `totalAmount` came from: the saved record ("record"), or what the AI read before approval ("read"). */
+  totalSource?: "record" | "read" | null;
+  /** Passed every check on the current revision with nothing open: the backend's ready lane rule (list responses only). */
+  readyToSubmit?: boolean;
   supplier?: string | null;
   customer?: string | null;
   /** Set aside as a wrong upload (left out of every list); detail responses only. */

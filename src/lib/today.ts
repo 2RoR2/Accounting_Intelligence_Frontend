@@ -5,7 +5,7 @@
  * with the same rule. A figure the backend cannot give arrives as `{ available: false, reason }` and is shown as
  * "Not available yet" with the reason under Details, never as a number.
  */
-import { ruleSentence, ruleTitle } from "./glossary";
+import { readyLabel, ruleSentence, ruleTitle } from "./glossary";
 
 export type TodayRole = "ACCOUNTANT" | "LOCAL_ADMIN";
 export interface TodayLink { page: string; query: string | null }
@@ -67,7 +67,8 @@ export interface TodayTileView {
 export const NOT_AVAILABLE = "Not available yet";
 
 /** Lists a Today tile can open, as the backend names them (documents ?lane=, records ?due= / ?posting=). */
-export const DOCUMENT_LANES = { "to-review": "Documents to check", ready: "Ready to approve", "needs-fixing": "Needs fixing", "waiting-approval": "Sent for approval" } as const;
+// "ready" is the accountant's word: they submit it. A company admin approves, so `readyLabel(role)` gives theirs.
+export const DOCUMENT_LANES = { "to-review": "Documents to check", ready: "Ready to submit", "needs-fixing": "Needs fixing", "waiting-approval": "Sent for approval" } as const;
 export type DocumentLane = keyof typeof DOCUMENT_LANES;
 export const isDocumentLane = (value: string | null | undefined): value is DocumentLane => !!value && value in DOCUMENT_LANES;
 export const DUE_WINDOWS = { "next-7-days": "due in the next 7 days", overdue: "overdue" } as const;
@@ -148,9 +149,9 @@ const COPY: Record<TileId, TileCopy> = {
     details: (t) => (t.topReasons ?? []).map((r) => `${ruleSentence(r.code)} (${plural(r.documents, "document")})`),
   },
   readyToApprove: {
-    title: () => "Ready to approve",
+    title: (role) => readyLabel(role),
     caption: (t, role) => (role === "LOCAL_ADMIN"
-      ? `${plural(t.count, "document")} passed every check`
+      ? `${plural(t.count, "document")} passed every check and can be approved`
       : `${plural(t.count, "document")} passed every check: send for approval`),
     empty: () => ({ text: "Nothing ready yet. Check the documents in To review first.", page: "documents", query: "lane=to-review" }),
   },
@@ -181,7 +182,7 @@ const COPY: Record<TileId, TileCopy> = {
     money: true,
   },
   invoicesOverdue: {
-    title: () => "Customers overdue",
+    title: () => "Customer invoices overdue",
     caption: (t) => `${plural(t.count, "invoice")} not yet paid by customers`,
     empty: () => ({ text: "No customer invoice is overdue." }),
     details: (t) => openItemNotes(t, "invoice"),
@@ -247,10 +248,13 @@ export interface MonthEndStepView {
 export interface MonthEndView { title: string; available: boolean; steps: MonthEndStepView[]; details: string[] }
 
 const STEP_LABELS: Record<MonthEndKey, string> = {
-  reviewed: "Documents checked",
-  matched: "Bank lines matched",
+  // What each count really is (checked against the database, 25 Nov): a document counts once it is sent for approval or
+  // approved, not when it merely passed its checks; a bank line counts when matched, classified or ignored; and the
+  // reconciliation figure counts reconciliation periods, not bank lines.
+  reviewed: "Documents submitted or approved",
+  matched: "Bank lines matched or explained",
   posted: "Approved records posted",
-  reconciled: "Bank reconciled",
+  reconciled: "Bank reconciliations completed",
 };
 
 export function monthLabel(startsOn: string) {

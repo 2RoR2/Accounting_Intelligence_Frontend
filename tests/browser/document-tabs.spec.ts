@@ -109,14 +109,16 @@ for (const [role, area, file] of [["accountant", "workspace", ACCOUNTANT], ["adm
       await expect(sidebarActive(page)).toHaveText("To review");
       const bar = page.getByRole("navigation", { name: "Review lanes" });
       const third = role === "admin" ? "Approval queue" : "Sent for approval";
-      await expect(bar.getByRole("link")).toHaveText(["To review", "Ready to approve", third]);
+      // An accountant submits what is ready; an admin approves it.
+      const ready = role === "admin" ? "Ready to approve" : "Ready to submit";
+      await expect(bar.getByRole("link")).toHaveText(["To review", ready, third]);
       await expect(bar.locator("a[aria-current='page']")).toHaveText("To review");
       await page.screenshot({ path: testInfo.outputPath(`to-review-${role}-${scheme}.png`) });
 
-      await bar.getByRole("link", { name: "Ready to approve" }).click();
+      await bar.getByRole("link", { name: ready }).click();
       await expect(page).toHaveURL(new RegExp(`/${area}/documents\\?lane=ready$`));
-      await expect(heading(page)).toHaveText("Ready to approve");
-      await expect(bar.locator("a[aria-current='page']")).toHaveText("Ready to approve");
+      await expect(heading(page)).toHaveText(ready);
+      await expect(bar.locator("a[aria-current='page']")).toHaveText(ready);
       await expect(sidebarActive(page)).toHaveText("To review");
 
       await bar.getByRole("link", { name: third }).click();
@@ -135,7 +137,7 @@ for (const [role, area, file] of [["accountant", "workspace", ACCOUNTANT], ["adm
       // Back returns to the previous lane; Exceptions has its own sidebar entry and does not light up To review.
       await page.goBack();
       await expect(page).toHaveURL(new RegExp(`lane=ready$`));
-      await expect(bar.locator("a[aria-current='page']")).toHaveText("Ready to approve");
+      await expect(bar.locator("a[aria-current='page']")).toHaveText(ready);
       await nav.getByRole("link", { name: "Exceptions" }).click();
       await expect(page).toHaveURL(new RegExp(`/${area}/exceptions$`));
       await expect(sidebarActive(page)).toHaveText(/^Exceptions/);

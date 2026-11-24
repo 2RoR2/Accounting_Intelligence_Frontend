@@ -34,7 +34,8 @@ import {
   formatDate,
   StatusBadge,
 } from "@/components/common/ui";
-import { documentKindLabel, statusLabel } from "@/lib/glossary";
+import { documentKindLabel, readyLabel, statusLabel } from "@/lib/glossary";
+import { READ_TOTAL_HINT, listedTotal } from "@/features/common/documents/document-total";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
 import { SetAsideList } from "@/features/common/documents/set-aside";
@@ -60,11 +61,6 @@ function NeedsFixing({ id, revision }: { id: string; revision?: number }) {
 
 const reviewSelectionKey = (doc: { id: string; contentRevision?: number }) => `${doc.id}:${doc.contentRevision}`;
 
-/** A total as read, with two decimals; the currency is on the document. */
-function registerAmount(value: string | number) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(value);
-}
 
 export function DocumentList({ user, tab }: { user: User; tab?: string }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
@@ -132,7 +128,7 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
   return (
     <>
       <PageHeader
-        title={lane ? laneTitle(lane) : embedded ? "Debit notes" : documentTabTitle(selectedTab)}
+        title={lane ? laneTitle(lane, user.role) : embedded ? "Debit notes" : documentTabTitle(selectedTab)}
         description="Everything you have uploaded, from reading to approval."
         actions={
           <div className="new-document-menu">
@@ -209,7 +205,7 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
           rowKey={(d) => d.id}
           emptyMessage={search || status || date || amount || business
             ? "No documents match these filters. Clear a filter to see more documents."
-            : laneEmptyMessage(lane, documentTabEmptyMessage(selectedTab))}
+            : laneEmptyMessage(lane, documentTabEmptyMessage(selectedTab), user.role)}
           columns={[
             ...(canBulkSubmit ? [{
               label: "Select",
@@ -248,10 +244,14 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
             { label: "Type", render: (d) => documentKindLabel(d.type) },
             // What an accountant scans a register for (audit 24 Nov): who, how much, and when it is due.
             { label: "Supplier / customer", render: (d) => (d.category === "ACCOUNTS_RECEIVABLE" ? d.customer : d.supplier) || d.supplier || d.customer || "—" },
-            { label: "Total", render: (d) => d.totalAmount == null || d.totalAmount === "" ? "—" : registerAmount(d.totalAmount) },
+            // The saved record's total once approved; until then what the AI read, muted and marked "read".
+            { label: "Total", render: (d) => {
+              const total = listedTotal(d);
+              return total.read ? <span className="total-read" title={READ_TOTAL_HINT}>{total.text} <small>read</small></span> : total.text;
+            } },
             { label: "Due", render: (d) => d.dueDate ? formatDate(d.dueDate) : "—" },
             { label: "Uploaded", render: (d) => formatDate(d.createdAt) },
-            { label: "Status", render: (d) => <StatusBadge status={d.status} /> },
+            { label: "Status", render: (d) => <StatusBadge status={d.status} ready={d.readyToSubmit} role={user.role} /> },
             ...(lane === "needs-fixing" && data.queryKey === queryKey ? [{
               label: "Needs fixing",
               render: (doc: (typeof visibleDocuments)[number]) =>
@@ -272,12 +272,12 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
     </>
   );
 }
-function laneEmptyMessage(lane: string, listMessage: string) {
+function laneEmptyMessage(lane: string, listMessage: string, role?: string) {
   switch (lane) {
     case "ready": return "Nothing ready yet. Documents appear here once every check passes.";
     case "to-review": return "Nothing to review yet. Add a document in Upload & capture.";
     case "needs-fixing": return "Nothing needs fixing. Documents with a failed check appear in Exceptions.";
-    case "waiting-approval": return "Nothing is waiting for approval. Submit a document from Ready to approve.";
+    case "waiting-approval": return `Nothing is waiting for approval. Submit a document from ${readyLabel(role)}.`;
     default: return listMessage;
   }
 }

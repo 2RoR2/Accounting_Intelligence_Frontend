@@ -51,7 +51,7 @@ export function ValidationOverviewPage({ user }: { user: User }) {
         <div className="widget-metric-grid">
           <Link href={`${base}/documents`}>
             <strong>{data.docs.length}</strong>
-            <span>Documents checked</span>
+            <span>All documents</span>
           </Link>
           <Link href={`${base}/documents?status=VALIDATED`}>
             <strong>{validated}</strong>

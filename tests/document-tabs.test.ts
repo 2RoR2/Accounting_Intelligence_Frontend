@@ -95,11 +95,11 @@ test("titles and empty messages follow the tab", () => {
   assert.match(documentTabEmptyMessage("supplier-credit-notes"), /^No supplier credit notes yet/);
 });
 
-test("To review tabs: To review, Ready to approve and Sent for approval map to the backend lanes", () => {
+test("To review tabs: To review, Ready to submit and Sent for approval map to the backend lanes", () => {
   const accountant = reviewTabs("/workspace", "ACCOUNTANT", { lane: "ready" });
   assert.deepEqual(accountant.map((tab) => [tab.label, tab.href, tab.current]), [
     ["To review", "/workspace/documents?lane=to-review", false],
-    ["Ready to approve", "/workspace/documents?lane=ready", true],
+    ["Ready to submit", "/workspace/documents?lane=ready", true],
     ["Sent for approval", "/workspace/documents?lane=waiting-approval", false],
   ]);
   assert.equal(reviewTabs("/workspace", "ACCOUNTANT", { lane: "to-review" })[0].current, true);
@@ -108,6 +108,7 @@ test("To review tabs: To review, Ready to approve and Sent for approval map to t
 
 test("an admin's third tab is the Approval queue, which is also where that page shows the same bar", () => {
   const onLane = reviewTabs("/company", "LOCAL_ADMIN", { lane: "to-review" });
+  // An admin approves, so only their list says "approve"; an accountant submits.
   assert.deepEqual(onLane.map((tab) => tab.label), ["To review", "Ready to approve", "Approval queue"]);
   assert.equal(onLane[2].href, "/company/approvals");
   const onQueue = reviewTabs("/company", "LOCAL_ADMIN", { page: "approvals" });
@@ -127,4 +128,7 @@ test("lane parameters", () => {
   assert.equal(laneFromParam(null), "");
   assert.equal(laneTitle("to-review"), "To review");
   assert.equal(laneTitle("waiting-approval"), "Sent for approval");
+  assert.equal(laneTitle("ready", "ACCOUNTANT"), "Ready to submit");
+  assert.equal(laneTitle("ready"), "Ready to submit");
+  assert.equal(laneTitle("ready", "LOCAL_ADMIN"), "Ready to approve");
 });

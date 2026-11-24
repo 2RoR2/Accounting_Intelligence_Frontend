@@ -303,7 +303,7 @@ export function DashboardPage({ user }: { user: User }) {
           <section className="dashboard-reference-panel dashboard-list-panel">
             <div className="dashboard-reference-panel-heading"><h2>Documents needing review</h2><Link href={`${base}/documents?lane=to-review`}>View all <ArrowRight size={13} /></Link></div>
             {reviewDocs.map((doc) => <Link className="dashboard-reference-list-row" href={`${base}/documents/${doc.id}`} key={doc.id}>
-              <span>{formatDate(doc.createdAt)}</span><strong>{documentDisplayName(doc, doc.name)}</strong><StatusBadge status={doc.status} />
+              <span>{formatDate(doc.createdAt)}</span><strong>{documentDisplayName(doc, doc.name)}</strong><StatusBadge status={doc.status} ready={doc.readyToSubmit} role={user.role} />
             </Link>)}
             {!reviewDocs.length && <div className="widget-empty">{toReview.loading ? "Loading…" : toReview.data === null || toReview.error ? "— The review list could not be loaded." : "No documents need review."}</div>}
           </section>
@@ -321,7 +321,7 @@ export function DashboardPage({ user }: { user: User }) {
               <strong><Files size={15} aria-hidden />{documentDisplayName(doc, doc.name)}</strong>
               <span>{documentKindLabel(doc.type)}</span>
               <span>{formatDate(doc.createdAt)}</span>
-              <StatusBadge status={doc.status} />
+              <StatusBadge status={doc.status} ready={doc.readyToSubmit} role={user.role} />
               <span className="document-row-action">{documentAction(doc.status)} <ArrowRight size={13} aria-hidden /></span>
             </Link>
           ))}

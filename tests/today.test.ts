@@ -111,6 +111,14 @@ test("an empty tile says what to do next instead of a bare zero", () => {
   }
 });
 
+test("the ready tile is the accountant's to submit and the admin's to approve; overdue invoices are not 'customers'", () => {
+  const titles = (role: "ACCOUNTANT" | "LOCAL_ADMIN") => Object.fromEntries(todayTiles(summary(), role).map((t) => [t.id, t.title]));
+  assert.equal(titles("ACCOUNTANT").readyToApprove, "Ready to submit");
+  assert.equal(titles("LOCAL_ADMIN").readyToApprove, "Ready to approve");
+  assert.equal(DOCUMENT_LANES.ready, "Ready to submit");
+  assert.equal(titles("ACCOUNTANT").invoicesOverdue, "Customer invoices overdue");
+});
+
 test("month-end checklist: progress, nothing yet, and not available with the reason", () => {
   const view = monthEndView(summary(), "LOCAL_ADMIN");
   assert.equal(view.title, "Month-end: November 2026 (FY26-11)");
@@ -121,6 +129,10 @@ test("month-end checklist: progress, nothing yet, and not available with the rea
   assert.equal(steps.reconciled.value, NOT_AVAILABLE);
   assert.match(steps.reconciled.details[0], /No bank reconciliation period/);
   assert.equal(steps.reconciled.href, "/company/reconciliation");
+  // Each label says what its number counts (checked against the database on 25 Nov): sent for approval or approved,
+  // not merely "checked"; matched, classified or ignored lines; reconciliation periods, not lines.
+  assert.deepEqual(view.steps.map((s) => s.label), ["Documents submitted or approved", "Bank lines matched or explained",
+    "Approved records posted", "Bank reconciliations completed"]);
   const calendar = monthEndView(summary({}, { available: true, scope: "company", steps: [],
     period: { code: "2026-02", startsOn: "2026-02-01", endsOn: "2026-02-28", status: null, source: "calendar_month" } }), "ACCOUNTANT");
   assert.equal(calendar.title, "Month-end: February 2026");
