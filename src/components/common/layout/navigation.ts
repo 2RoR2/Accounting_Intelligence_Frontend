@@ -25,6 +25,7 @@ const SECTIONS: NavSection[] = [
     // Plan M3: what KNT receives is captured here; what it issues is typed under Sales.
     { label: "Inbox", page: "upload", icon: "upload", children: [
       leaf("Upload & capture", "upload"),
+      leaf("All documents", "documents"),
       leaf("To review", "documents", "lane=to-review"),
       leaf("Exceptions", "exceptions", undefined, { count: "exceptions" }),
     ] },
@@ -82,10 +83,15 @@ export function activeNavItem(sections: NavSection[], page: string, search: URLS
   const leaves = navLeaves(sections);
   const items = leaves.filter((item) => item.page === page || (page === "today" && item.page === "dashboard"));
   const matches = (item: NavItem) => [...new URLSearchParams(item.query ?? "")].every(([key, value]) => params.get(key) === value);
+  if (page === "documents") {
+    // One page, several lists: the review lanes belong to To review (Needs fixing is Exceptions), every type tab to All documents.
+    const lane = params.get("lane");
+    if (lane === "needs-fixing") return leaves.find((item) => item.page === "exceptions");
+    if (lane) return leaves.find((item) => item.query === "lane=to-review");
+    return items.find((item) => item.query && matches(item)) ?? items.find((item) => !item.query);
+  }
   const exact = items.find((item) => item.query && matches(item)) ?? items.find((item) => !item.query);
   if (exact) return exact;
-  if (page === "documents" && params.get("tab") === "sales-debit-notes")
-    return leaves.find((item) => item.page === "sales" && item.query === "type=debit-note");
   if (page === "ledger") return items.find((item) => item.query === "section=general");
   if (page === "sales") return items.find((item) => item.query === "type=invoice");
   if (page === "approvals") return leaves.find((item) => item.query === "lane=to-review");

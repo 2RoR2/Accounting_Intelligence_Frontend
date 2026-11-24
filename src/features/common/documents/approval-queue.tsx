@@ -10,6 +10,8 @@ import { canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { bulkApproveReviews, decideDocumentReview, getDocumentReviews } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
+import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
+import { reviewTabs } from "@/features/common/documents/document-tabs";
 import { bulkResultSummary, saveApprovedToRecords, savedToRecordsSummary } from "@/features/common/bulk-selection";
 import { standardiseDocument } from "@/lib/api/record.service";
 import {
@@ -133,6 +135,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
       {decisionError && <p className="notice danger" role="alert">{decisionError}</p>}
       {bulkSummary && <p className="notice" role="status">{bulkSummary}</p>}
       <Panel title="Waiting for approval" subtitle={`${rows.length} document${rows.length === 1 ? "" : "s"} in review`}>
+        <DocumentTabBar label="Review lanes" tabs={reviewTabs(base, user.role, { page: "approvals" })} />
         <div className="filter-bar">
           <SearchInput value={search} onChange={setSearch} placeholder="Search code, file, supplier, or customer…" />
         </div>
