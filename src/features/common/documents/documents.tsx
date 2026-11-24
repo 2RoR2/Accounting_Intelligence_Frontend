@@ -393,7 +393,7 @@ export function UploadPage({ user }: { user: User }) {
       <div className="upload-reference-page">
       <PageHeader
         title="Upload documents"
-        description="Add your files. We’ll extract the details for your review."
+        description="Add your files. The details are extracted for your review."
       />
       <div className="upload-workflow-steps" aria-label="Upload workflow"><div className="is-active"><b>1</b><strong>Select files</strong></div><i /><div><b>2</b><strong>Confirm details</strong></div><i /><div><b>3</b><strong>Upload & process</strong></div></div>
       <div className="upload-layout">

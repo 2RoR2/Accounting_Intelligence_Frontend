@@ -39,7 +39,7 @@ export function Application({ path, page }: { path: string[]; page?: (user: User
           <div className="access-gate-alert"><AlertTriangle size={44} /></div>
         </div>
         <section className="access-gate-message" role="alert">
-          <h1>We couldn’t complete that request.</h1>
+          <h1>That request could not be completed.</h1>
           <p>{error || "Sign in with your account to enter your workspace."}</p>
         </section>
         <Link className="btn primary access-gate-login" href="/login" onMouseEnter={(event) => { event.currentTarget.style.background = "#eaf5ff"; event.currentTarget.style.color = "#2a3a4a"; }} onMouseLeave={(event) => { event.currentTarget.style.background = "#2b3e52"; event.currentTarget.style.color = "#f6f1e8"; }}>

@@ -26,7 +26,7 @@ test("financial reports use the contract endpoints and filter names for JSON and
   }
 });
 
-test("the ledger account filter is encoded and month pack only needs a period code", () => {
+test("the ledger account filter is encoded and the Monthly Accounting Pack only needs a period code", () => {
   assert.equal(financialReportPath({
     report: "general-ledger",
     fromDate: "2026-04-01",

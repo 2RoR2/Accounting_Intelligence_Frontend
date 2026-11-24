@@ -16,7 +16,7 @@ test("the menu follows Plan M3", () => {
   assert.deepEqual(children("Purchases"), ["Bills", "Expense receipts", "Supplier credit notes", "Supplier debit notes", "Payments made"]);
   assert.deepEqual(children("Bank"), ["Bank accounts", "Money in", "Money out", "Transfers", "Reconciliation"]);
   assert.deepEqual(children("Accounting"), ["Chart of accounts", "Journals", "General ledger", "Periods & month-end"]);
-  assert.deepEqual(children("Reports"), ["Business summary", "Financial reports", "Month pack", "Performance evaluation"]);
+  assert.deepEqual(children("Reports"), ["Business summary", "Financial reports", "Monthly Accounting Pack", "Performance evaluation"]);
   assert.equal(children("Settings"), undefined);
   assert.equal(navLeaves(menu).filter((item) => item.page === "exceptions").length, 1);
 });
@@ -80,7 +80,7 @@ test("the highlighted entry follows the page", () => {
   assert.equal(activeNavItem(menu, "sales", "type=payment")?.label, "Payments received");
   assert.equal(navParent(menu, activeNavItem(menu, "sales", "type=invoice"))?.label, "Sales");
   assert.equal(activeNavItem(menu, "reports")?.label, "Financial reports");
-  assert.equal(activeNavItem(menu, "reports", "view=month-pack")?.label, "Month pack");
+  assert.equal(activeNavItem(menu, "reports", "view=month-pack")?.label, "Monthly Accounting Pack");
   assert.equal(activeNavItem(menu, "reports", "view=business-summary")?.label, "Business summary");
   assert.equal(activeNavItem(menu, "evaluation")?.label, "Performance evaluation");
   assert.equal(activeNavItem(menu, "ledger", "section=journals")?.label, "Journals");

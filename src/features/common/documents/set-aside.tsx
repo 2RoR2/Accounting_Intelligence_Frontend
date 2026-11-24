@@ -20,7 +20,7 @@ export function SetAsideControl({ documentId, busy, onDone }: { documentId: stri
   const [failure, setFailure] = useState("");
   if (!open) return <button type="button" className="btn" disabled={busy} onClick={() => setOpen(true)}>Set aside…</button>;
   return <div className="review-set-aside" role="group" aria-label="Set this document aside">
-    <label htmlFor="set-aside-reason">Why? (a duplicate, not ours, unreadable…)</label>
+    <label htmlFor="set-aside-reason">Why? (a duplicate, not this company’s, unreadable…)</label>
     <input id="set-aside-reason" value={reason} disabled={saving} maxLength={500} onChange={(event) => setReason(event.target.value)} />
     <button type="button" className="btn danger" disabled={saving || reason.trim().length < 5} onClick={async () => {
       setSaving(true); setFailure("");

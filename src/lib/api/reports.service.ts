@@ -105,5 +105,5 @@ export function downloadFinancialReport(query: FinancialReportQuery, format: Rep
 }
 
 export function downloadMonthPack(period: string) {
-  return download(monthPackPath(period), `month-pack-${period}.xlsx`);
+  return download(monthPackPath(period), `monthly-accounting-pack-${period}.xlsx`);
 }

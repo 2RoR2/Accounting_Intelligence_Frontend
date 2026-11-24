@@ -63,7 +63,7 @@ const SECTIONS: NavSection[] = [
     { label: "Reports", page: "reports", icon: "reports", children: [
       leaf("Business summary", "reports", "view=business-summary"),
       leaf("Financial reports", "reports"),
-      leaf("Month pack", "reports", "view=month-pack"),
+      leaf("Monthly Accounting Pack", "reports", "view=month-pack"),
       leaf("Performance evaluation", "evaluation"),
     ] },
     { label: "Settings", page: "settings", icon: "settings" },
