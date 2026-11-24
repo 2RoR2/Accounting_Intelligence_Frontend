@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { workloadReportPath } from "../src/lib/api/workload";
-import { NOT_MEASURED, countLabel, rateLabel, sc2Label, statsLabel } from "../src/lib/workload";
+import { reviewSessionsPath, workloadReportPath } from "../src/lib/api/workload";
+import { NOT_MEASURED, countLabel, rateLabel, reviewSessionPayload, sc2Label, statsLabel } from "../src/lib/workload";
 
 test("the request carries only the dates that were chosen", () => {
   assert.equal(workloadReportPath(), "/api/reports/workload");
@@ -26,6 +26,17 @@ test("nothing recorded reads as not measured, never as zero", () => {
   assert.equal(rateLabel(0, 0, null), NOT_MEASURED);
   assert.equal(rateLabel(1, 14, 7.1), "1 of 14 (7.1%)");
   assert.equal(rateLabel(0, 11, 0), "0 of 11 (0%)");
+});
+
+test("a review session is recorded only after real activity, within the backend's limits", () => {
+  const opened = new Date("2026-11-24T02:00:00Z");
+  const closed = new Date("2026-11-24T02:01:00Z");
+  assert.equal(reviewSessionPayload("doc-1", 0, 40, opened, closed), null);
+  assert.equal(reviewSessionPayload("", 12, 0, opened, closed), null);
+  assert.deepEqual(reviewSessionPayload("doc-1", 42.4, 3, opened, closed), {
+    documentId: "doc-1", activeSeconds: 42, idleSeconds: 3, openedAt: "2026-11-24T02:00:00.000Z", closedAt: "2026-11-24T02:01:00.000Z" });
+  assert.equal(reviewSessionPayload("doc-1", 9000, 9000, opened, closed)?.activeSeconds, 7200);
+  assert.equal(reviewSessionsPath, "/api/workload/review-sessions");
 });
 
 test("SC2 is reported only from a valid effort study", () => {

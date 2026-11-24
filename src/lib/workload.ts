@@ -1,4 +1,16 @@
-import type { WorkloadEffortStudy, WorkloadStats } from "@/lib/api/workload";
+import type { ReviewSession, WorkloadEffortStudy, WorkloadStats } from "@/lib/api/workload";
+
+/** The backend accepts 0 to 7200 s per field. */
+export const REVIEW_SECONDS_LIMIT = 7200;
+
+/** The review-session body, or null when nothing worth recording happened (no active second). */
+export function reviewSessionPayload(documentId: string, activeSeconds: number, idleSeconds: number,
+  openedAt: Date, closedAt: Date): ReviewSession | null {
+  const clamp = (value: number) => Math.min(REVIEW_SECONDS_LIMIT, Math.max(0, Math.round(value)));
+  if (!documentId || clamp(activeSeconds) < 1) return null;
+  return { documentId, activeSeconds: clamp(activeSeconds), idleSeconds: clamp(idleSeconds),
+    openedAt: openedAt.toISOString(), closedAt: closedAt.toISOString() };
+}
 
 export const NOT_MEASURED = "Not measured yet";
 

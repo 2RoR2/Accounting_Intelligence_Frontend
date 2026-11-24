@@ -1,4 +1,4 @@
-import { get } from "./client";
+import { api, get } from "./client";
 
 /** Median and range over n documents; all null when nothing was recorded. */
 export type WorkloadStats = { n: number; median: number | null; min: number | null; max: number | null };
@@ -49,4 +49,14 @@ export function workloadReportPath(fromDate?: string, toDate?: string) {
 
 export function getWorkloadReport(fromDate?: string, toDate?: string) {
   return get<WorkloadReport>(workloadReportPath(fromDate, toDate));
+}
+
+/** POST /api/workload/review-sessions body: one review opened and closed. Anonymous: no user is sent or stored. */
+export type ReviewSession = { documentId: string; activeSeconds: number; idleSeconds: number; openedAt: string; closedAt: string };
+
+export const reviewSessionsPath = "/api/workload/review-sessions";
+
+/** keepalive lets the request finish when the page is closing. */
+export function recordReviewSession(session: ReviewSession) {
+  return api<{ recorded: boolean }>(reviewSessionsPath, { method: "POST", body: JSON.stringify(session), keepalive: true });
 }
