@@ -292,5 +292,37 @@ export function nextAfterSubmit(before: readonly string[], fresh: readonly strin
   return fresh.find(id => id !== currentId) ?? null;
 }
 
+/* ---------- Blocking checks and fields a person may add (24 Nov demo bugs a and d) ---------- */
+
+export interface CheckResult { rule: string; result: string; field?: string | null; message?: string | null; checkStatus?: string | null; preventsApproval?: boolean | null }
+
+/** A check that stops submission or approval: it failed, or it could not run and is required for approval. */
+export const isBlockingCheck = (item: CheckResult) => item.result === "FAIL" || item.preventsApproval === true;
+
+/** Fields named by a blocking check, so they say "Please check" even when the check could not run (it did not FAIL). */
+export function blockingFields(results: readonly CheckResult[], skip: (rule: string) => boolean = () => false): string[] {
+  return results.filter(item => isBlockingCheck(item) && !!item.field && !skip(item.rule)).map(item => item.field as string);
+}
+
+/**
+ * The blocking checks, for the list at the top of the Review tab. "Nothing to check" is shown only when this is empty:
+ * a check that names no field (a receipt rule, a duplicate check) would otherwise block approval with nothing on screen.
+ */
+export function blockingChecks<T extends CheckResult>(results: readonly T[], skip: (rule: string) => boolean = () => false): T[] {
+  return results.filter(item => isBlockingCheck(item) && !skip(item.rule));
+}
+
+/** Types whose payment terms and due date the accountant needs, whether or not the reader looked for them. */
+const TERMS_KINDS = new Set(["INVOICE", "BILL", "CREDIT_NOTE", "DEBIT_NOTE"]);
+/** Stored key → the label shown; the server creates the field on the first correction. */
+export const ADDABLE_FIELDS: ReadonlyArray<readonly [string, string]> = [["due", "Due date"], ["payment_terms", "Payment terms"]];
+
+/** Due date and payment terms the reader did not store for this type, offered as empty fields to fill in. */
+export function addableFields(kind: string, fields: Readonly<Record<string, unknown>>): Array<readonly [string, string]> {
+  if (!TERMS_KINDS.has(kind)) return [];
+  const has = (key: string) => key === "due" ? ("due" in fields || "due_date" in fields) : key in fields;
+  return ADDABLE_FIELDS.filter(([key]) => !has(key));
+}
+
 /** Fallback list when the lanes API is not deployed: documents still waiting for the accountant's check. */
 export const toReviewIds = (documents: Array<Pick<Document, "id">>) => documents.map(item => String(item.id));

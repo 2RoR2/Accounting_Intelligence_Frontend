@@ -67,8 +67,17 @@ const SECTIONS: NavSection[] = [
   ] },
 ];
 
-export function jobNavigation(): NavSection[] {
-  return SECTIONS;
+/** The local admin's own jobs, one click away (24 Nov demo bug b: approvals were reachable only through a tab). */
+const ADMIN_SECTION: NavSection = { label: "Admin", items: [
+  { label: "Approvals", page: "approvals", icon: "approve" },
+  { label: "Approved records", page: "records", icon: "records" },
+  { label: "Users & roles", page: "users", icon: "users" },
+  { label: "Check rules", page: "validation-rules", icon: "rules" },
+  { label: "Audit trail", page: "audit", icon: "audit" },
+] };
+
+export function jobNavigation(role?: string): NavSection[] {
+  return role === "LOCAL_ADMIN" ? [...SECTIONS, ADMIN_SECTION] : SECTIONS;
 }
 
 /** Every entry that opens a page: plain items and sub-items (groups themselves are not links). */

@@ -42,6 +42,23 @@
 .review-evidence-box:hover { border-color: var(--color-0); background: rgb(60 146 247 / 18%); }
 .review-evidence-box.is-selected { z-index: 1; border: 2px solid #f59e0b; background: rgb(251 191 36 / 22%); box-shadow: 0 0 0 3px rgb(251 191 36 / 35%); }
 
+/* Checks that block a document, listed on the Review tab with the field to go to (24 Nov demo bug d). */
+.review-blockers { display: grid; gap: 8px; margin: 12px 16px 0; padding: 10px 12px; border: 1px solid #efc36b; border-left: 4px solid #d99a27;
+  border-radius: 8px; background: #fff8e9; color: #71420b; font-size: 13px; }
+.review-blockers ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.review-blockers li { display: grid; gap: 2px; }
+.review-blockers li small { color: #8a5a12; }
+.review-blockers li .text-link { justify-self: start; }
+.app-shell.theme-dark .review-blockers { background: #513b16; border-color: #d99a27; color: #ffe6a8; }
+.app-shell.theme-dark .review-blockers li small { color: #ffd98a; }
+/* Due date and payment terms a person may add (bug a). */
+.review-addable { display: grid; gap: 4px; margin-top: 12px; }
+.review-addable > strong { padding: 0 16px; }
+/* The admin's decision on the document page (bug b). */
+.review-decision { display: grid; gap: 6px; margin: 0 16px 14px; }
+.approval-blocked-reason { margin: 0; color: #92530a; font-size: 12px; }
+.app-shell.theme-dark .approval-blocked-reason { color: #ffd06b; }
+
 @media (max-width: 760px) {
   .review-key-hint { display: none; }
   .review-queue-nav { width: 100%; justify-content: space-between; }

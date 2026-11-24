@@ -244,8 +244,10 @@ export function sourceKind(extraction: Pick<Extraction, "classification" | "kind
   const chosen = extraction.kindDecision?.value?.toUpperCase();
   if (chosen && ["INVOICE", "BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"].includes(chosen)) return chosen;
   if (extraction.classification?.value !== undefined) {
-    const kind = extraction.classification.value.toUpperCase();
-    return ["INVOICE", "BILL", "RECEIPT"].includes(kind) ? kind : "UNKNOWN";
+    // Credit and debit notes the reader recognised are real types too (24 Nov demo bug c): treating them as
+    // UNKNOWN made every field read-only with no way to choose the type.
+    const kind = extraction.classification.value.toUpperCase().replace(/[-\s]/g, "_");
+    return ["INVOICE", "BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"].includes(kind) ? kind : "UNKNOWN";
   }
   return intake?.toUpperCase() ?? "UNKNOWN";
 }

@@ -279,7 +279,7 @@ export function AppShell({
         { label: "Overview", items: [{ label: "Dashboard", page: "dashboard", icon: "today" }] },
         { label: "Workspace", items: adminNav.filter((item) => item[1] !== "dashboard").map(([label, page]) => ({ label, page, icon: "today" as const })) },
       ]
-    : jobNavigation();
+    : jobNavigation(user.role);
   const adminIcon = (page: string) => adminNav.find((item) => item[1] === page)?.[2] ?? LayoutDashboard;
   const homeHref = `/${prefix}/dashboard`;
 

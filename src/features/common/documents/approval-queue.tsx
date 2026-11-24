@@ -6,7 +6,7 @@ import { CheckCircle2, RotateCcw, XCircle, ExternalLink, FileText } from "lucide
 import type { Extraction, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments, getExtraction, getValidationReport } from "@/lib/api/document.service";
-import { canDecideReview } from "@/lib/permissions/document-review";
+import { approvalBlockedReason, canDecideReview } from "@/lib/permissions/document-review";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { bulkApproveReviews, decideDocumentReview, getDocumentReviews } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
@@ -14,6 +14,7 @@ import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
 import { reviewTabs } from "@/features/common/documents/document-tabs";
 import { bulkResultSummary, saveApprovedToRecords, savedToRecordsSummary } from "@/features/common/bulk-selection";
 import { standardiseDocument } from "@/lib/api/record.service";
+import "@/styles/review.css";
 import {
   Badge,
   ErrorState,
@@ -89,7 +90,8 @@ export function ApprovalQueuePage({ user }: { user: User }) {
     const { doc, extraction, reviews, validation } = row;
     const revision = doc.contentRevision ?? extraction?.contentRevision;
     const canApprove = canDecideReview(user, doc, reviews) && validation?.validationStatus === "PASS" && validation.coverageComplete !== false;
-    return { ...row, revision, canApprove, selectionKey: `${doc.id}:${revision}` };
+    const blockedReason = canApprove ? null : approvalBlockedReason(user, doc, reviews, validation);
+    return { ...row, revision, canApprove, blockedReason, selectionKey: `${doc.id}:${revision}` };
   });
   const canBulkApprove = user.role === "LOCAL_ADMIN";
   const eligible = canBulkApprove ? rows.filter((row) => row.canApprove && !!row.revision) : [];
@@ -158,7 +160,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
             : "Nothing is waiting for approval. Documents appear here when an accountant submits them."}</p></div>
         ) : (
           <div className="approval-list">
-            {rows.map(({ doc, extraction, reviews, revision, canApprove, selectionKey }) => {
+            {rows.map(({ doc, extraction, reviews, revision, canApprove, blockedReason, selectionKey }) => {
               const changes = changeList(extraction);
               const submitted = reviews?.submissions?.[0];
               const busy = !!busyId || bulkBusy;
@@ -207,6 +209,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                     <button type="button" className="btn small danger" disabled={busy} onClick={() => decide(doc.id, "rejected", revision ?? 1)}><XCircle size={14} /> Reject</button>
                     <Link className="btn small" href={`${base}/documents/${doc.id}`}><ExternalLink size={14} /> Open file</Link>
                   </div>
+                  {blockedReason && <p className="approval-blocked-reason" role="status">Approve is unavailable: {blockedReason}</p>}
                 </article>
               );
             })}
