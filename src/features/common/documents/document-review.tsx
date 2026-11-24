@@ -1,10 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, CircleX, FileCheck2, RefreshCw } from "lucide-react";
 import type { CurrencyReview, EvidenceStatus, ExtractedField, SourceEvidence, User } from "@/types";
-import { AiAssistPanel } from "./ai-assist-panel";
 import { MissingLineForm } from "./missing-line-form";
+import { documentDisplayName } from "@/lib/document-display-name";
+import { AskSecondReading, SecondReadingResult, useSecondReading } from "./review/second-reading";
+import { ReviewStatusStrip, TypePicker } from "./review/review-status-view";
+import { TYPE_POPOVER_CLOSED, secondReadingsElsewhere, statusCounts, statusStrip, typePopover, type StatusPartId, type TypePopoverEvent } from "./review/review-status";
 import { CURRENCY_SUPPORT, sourceCheckReason, aiAssistOutcomeLabel, alternativeCandidates, candidateText, dateReadings, dollarCurrencyChoices, processingSteps, validationRank, type ProcessingTrace } from "@/lib/api/document-contract";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
@@ -170,7 +173,7 @@ function SuggestedFixes({ documentId, fieldForCheck, disabled, onApply }: {
   );
 }
 
-function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedDraft, locked, appliedSuggestion, onSuggestionFilled }: {
+function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDirtyChange, currencyReview, signal, inputRef, onInputKey, onPendingChange, savedDraft, locked, appliedSuggestion, onSuggestionFilled, headingAction, belowInput }: {
   field: ExtractedField; fieldKey?: string; onSave: (value: string) => Promise<void>; onFocus?: () => void; readonly: boolean; selected?: boolean;
   onDirtyChange?: (label: string, dirty: boolean) => void; currencyReview?: CurrencyReview | null;
   /** Review signal in plain words; header fields only. */
@@ -184,6 +187,10 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   locked?: boolean;
   appliedSuggestion?: string;
   onSuggestionFilled?: () => void;
+  /** Beside the label, e.g. "Ask AI to re-read". */
+  headingAction?: ReactNode;
+  /** Under the input, e.g. that field's second reading with Accept and Reject. */
+  belowInput?: ReactNode;
 }) {
   const inputId = useId();
   const [value, setValue] = useState(field.value ?? "");
@@ -233,7 +240,8 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   const suggestion = enterPlan !== "move" && enterPlan.save === candidate ? candidate : null;
   return <div className={`shoebox-field${selected ? " selected" : ""}${signal ? ` review-signal-${signal}` : ""}`} onFocusCapture={onFocus} data-field={fieldKey}>
     <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
-      {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}
+      {(headingAction || onFocus) && <span className="shoebox-field-actions">{headingAction}
+        {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}</span>}
     </div>
     <span className={`shoebox-field-state${signal ? ` review-signal is-${signal}` : ""}`}>{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : signal ? SIGNAL_TEXT[signal] : fieldStateText(field)}</span>
     <input id={inputId} ref={inputRef} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving || locked}
@@ -241,6 +249,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
       onKeyDown={onInputKey ? event => onInputKey(event, { value, dirty, suggestion, save }) : undefined}
       onFocus={onFocus} onChange={e => { setValue(e.target.value); setDirty(true); setConflict(false); setError(""); }} />
     {suggestion && onInputKey && <small className="review-enter-hint" id={`${inputId}-enter`}>Press Enter to use {suggestion}</small>}
+    {belowInput}
     {fieldKey === "currency" && <datalist id={`${inputId}-currency-options`}>{currencyOptions.map(code => <option key={code} value={code} />)}</datalist>}
     {selected && <div className="shoebox-mobile-evidence"><strong>Selected source evidence</strong>
       {field.evidence?.length ? field.evidence.map((item, index) => <div key={index}><strong>Source page {item.page ?? "not provided"}</strong><p>{item.text ?? "Source text not provided"}</p></div>) : <p>Source evidence not available.</p>}
@@ -346,9 +355,21 @@ function DocumentReviewPage({
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
   const [selectedLine, setSelectedLine] = useState<{ index: number; key: string; label: string }>();
   const [lineItemsOpen, setLineItemsOpen] = useState<boolean>();
-  // "Change type" after a confident reading (the AI type can be wrong while it says "classified").
-  const [changingType, setChangingType] = useState(false);
+  // "Change type" after a confident reading (the AI type can be wrong while it says "classified"), or "Choose type"
+  // while it is not certain: a popover beside the button, not the notice at the top of the page (25 Nov redesign).
+  const [typeMenu, setTypeMenu] = useState(TYPE_POPOVER_CLOSED);
+  const onTypeMenu = useCallback((event: TypePopoverEvent) => setTypeMenu(state => typePopover(state, event)), []);
+  // Full review status, below the fields; the strip above the fields opens it.
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [notFoundOpen, setNotFoundOpen] = useState(false);
+  const statusDetailsId = useId();
+  const statusDetailsRef = useRef<HTMLDetailsElement>(null);
+  const notFoundRef = useRef<HTMLDetailsElement>(null);
   const validationHeadingRef = useRef<HTMLDivElement>(null);
+  // Second reading, per field. Nothing shows when it is not switched on.
+  const secondReading = useSecondReading({ user, documentId, contentRevision: data?.extraction?.contentRevision,
+    labelFor: key => data?.extraction ? fieldLabel(sourceKind(data.extraction, data.doc.type), key, data.extraction.fields[key]?.label) : key,
+    onSaved: refresh });
 
   async function run(op: () => Promise<unknown>, message: string, propagate = false) {
     setBusy(true);
@@ -427,6 +448,9 @@ function DocumentReviewPage({
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
 
   const extraction = data.extraction ?? { documentId, fields: {}, lineItems: [] };
+  // The name the All documents list shows (built from the detected number), not the stored upload name, which for
+  // older uploads still reads e.g. "..._NONUMBER.jpg". "Open original" still serves the real file.
+  const displayName = documentDisplayName(data.doc, data.doc.name);
   const kind = sourceKind(extraction, data.doc.type);
   const sourceReadonly = ["COMPLETED","STANDARDISED"].includes(data.doc.status) || !extraction.contentRevision || kind === "UNKNOWN";
   const canStandardise = standardisationAvailable(data.doc.status, kind, data.validationReport);
@@ -445,7 +469,6 @@ function DocumentReviewPage({
   const visible = stableOrder(visibleEntries(order, onlyToCheck, keepKeys), opened?.order ?? []);
   const notFound = notFoundEntries(order, onlyToCheck, keepKeys);
   const visibleKeys = visible.map(entry => entry.key);
-  const signalCount = (signal: ReviewSignal) => order.filter(entry => entry.signal === signal).length;
   const toCheckCount = order.filter(entry => isToCheck(entry.signal)).length;
   const fieldForCheck = (name: string) => Object.hasOwn(extraction.fields, name) || resolveLineItemField(name, extraction.lineItems)
     ? name : Object.keys(extraction.fields).find(key => failedCheckNames(key, [name]));
@@ -472,12 +495,15 @@ function DocumentReviewPage({
     if (action === "move") { setFocusRequest(next); return; }
     void actions.save(action.save).then(saved => { if (saved) setFocusRequest(next); });
   };
+  const showAssistSource = (label: string, evidence: SourceEvidence[]) => { setSelectedLine(undefined); setAssistSource({ label, evidence }); };
   const renderField = ([key, field]: [string, ExtractedField]) => (
     <FormField
       key={key}
       fieldKey={key}
       field={{ ...field, label: fieldLabel(kind, key, field.label) }}
       readonly={readonly}
+      headingAction={<AskSecondReading reading={secondReading} storedKey={key} label={fieldLabel(kind, key, field.label)} readonly={readonly} disabled={busy} />}
+      belowInput={<SecondReadingResult reading={secondReading} storedKey={key} label={fieldLabel(kind, key, field.label)} readonly={readonly} onShowSource={showAssistSource} />}
       currencyReview={key === "currency" ? extraction.currencyReview : undefined}
       selected={!selectedLine && highlightedField === key}
       onDirtyChange={markDirty}
@@ -532,6 +558,37 @@ function DocumentReviewPage({
   const chosenKind = decision?.value?.toUpperCase();
   const chooseType = (next: string) => run(() => chooseDocumentKind(user, documentId, next, typeRevision!),
     `Type saved as ${documentKindLabel(next)}. The checks ran again.`);
+  // From the popover: close it once the new type is saved; on a failure it stays open beside the error.
+  const chooseTypeInline = (next: string) => void run(() => chooseDocumentKind(user, documentId, next, typeRevision!),
+    `Type saved as ${documentKindLabel(next)}. The checks ran again.`, true).then(() => onTypeMenu("saved"), () => undefined);
+
+  /* ---------- Status strip (25 Nov redesign) ---------- */
+  const counts = statusCounts(order);
+  const stripParts = statusStrip(counts, data.validationReport ? summary : null, allFieldCount);
+  const openStatusDetails = () => {
+    setStatusOpen(true);
+    window.setTimeout(() => statusDetailsRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 0);
+  };
+  /** Each part filters or jumps to what it counts. */
+  const pickStatus = (part: StatusPartId | "details") => {
+    if (part === "details") { openStatusDetails(); return; }
+    if (part === "checks") { viewIssues(); return; }
+    if (part === "to-check") {
+      setOnlyToCheck(true);
+      const first = order.find(entry => isToCheck(entry.signal))?.key;
+      if (first) setFocusRequest(first);
+      return;
+    }
+    const target = order.find(entry => entry.signal === (part === "read" ? "verified" : "missing"))?.key;
+    if (part === "read") setOnlyToCheck(false);
+    if (part === "not-found" && notFound.length) {
+      setNotFoundOpen(true);
+      window.setTimeout(() => notFoundRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 0);
+    }
+    if (target) setFocusRequest(target);
+  };
+  const renderedFields = new Set([...visibleKeys, ...notFound.map(entry => entry.key)]);
+  const readingsElsewhere = secondReadingsElsewhere(secondReading.state, renderedFields);
 
   /* ---------- Next document and Ctrl+Enter (task B4b) ---------- */
   const queueIndex = queue.indexOf(documentId);
@@ -617,7 +674,7 @@ function DocumentReviewPage({
     <>
       <PageHeader
         eyebrow="DOCUMENT REVIEW"
-        title={data.doc.name}
+        title={displayName}
         description={`${data.doc.id} · Uploaded ${formatDate(data.doc.createdAt)}`}
         actions={
           <>
@@ -638,7 +695,7 @@ function DocumentReviewPage({
       {data.doc.excludedAt && <SetAsideBanner excludedAt={data.doc.excludedAt} reason={data.doc.excludedReason} documentId={documentId}
         canRestore={user.role === "LOCAL_ADMIN"} onRestored={() => void refresh().then(() => setToast("Restored to the lists."))} />}
 
-      {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType || changingType} canChoose={canChooseType}
+      {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType} canChoose={canChooseType}
         current={chosenKind} busy={busy} onChoose={chooseType} />}
 
       {!failed && !pending && (
@@ -665,7 +722,7 @@ function DocumentReviewPage({
           {panel === "review" && (
             <div className="shoebox-split">
               <div className="shoebox-doc">
-                <ReviewSource documentId={documentId} name={data.doc.name} extraction={extraction} onSelectField={focusField}
+                <ReviewSource documentId={documentId} name={displayName} extraction={extraction} onSelectField={focusField}
                   fields={visibleKeys.map(key => ({ key, label: fieldLabel(kind, key, extraction.fields[key]?.label), evidence: extraction.fields[key]?.evidence ?? [] }))}
                   selected={assistSource ? assistSource : selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [] }
                     : highlightedField ? { key: highlightedField, label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [] } : undefined} />
@@ -673,40 +730,14 @@ function DocumentReviewPage({
               <div className="shoebox-form">
                 <div className="shoebox-form-head">
                   <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : documentKindLabel(kind) + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}
-                    {canChooseType && !needsType && !decision && <> · <button type="button" className="text-link" aria-expanded={changingType}
-                      onClick={() => setChangingType(value => !value)}>{changingType ? "Keep this type" : "Change type"}</button></>}</small></div>
-                  <div className="review-filter-bar" role="toolbar" aria-label="Field filters">
+                    {canChooseType && <> · <TypePicker canChoose={canChooseType} needsType={needsType} state={typeMenu} onEvent={onTypeMenu} current={chosenKind} busy={busy} onChoose={chooseTypeInline} /></>}</small></div>
+                  <ReviewStatusStrip parts={stripParts} detailsId={statusDetailsId} onPick={pickStatus} />
+                  {allFieldCount > 0 && <div className="review-filter-bar" role="toolbar" aria-label="Field filters">
                     <label className="review-only-toggle"><input type="checkbox" role="switch" checked={onlyToCheck} onChange={event => setOnlyToCheck(event.target.checked)} />
                       Only fields to check <b>{toCheckCount}</b></label>
                     <small className="review-key-hint">Tab next field · Enter accept · Ctrl+Enter save and submit · Alt+→ next document</small>
-                  </div>
+                  </div>}
                 </div>
-                {kind === "UNKNOWN" && (Object.keys(extraction.fields).length > 0 || extraction.lineItems.length > 0) &&
-                  <p role="status">Provisional source reads are shown below. Document type and field roles remain unresolved; these candidates are not approved accounting values.</p>}
-                {(workflow.overdue || workflow.duplicates.length > 0 || workflow.relatedNotes.length > 0) && (
-                  <div className="panel-body">
-                    {workflow.overdue && <Badge>Overdue</Badge>}
-                    {workflow.duplicates.length > 0 && <p>Possible duplicate document: {workflow.duplicates.map((d) => d.code).join(", ")}</p>}
-                    {workflow.relatedNotes.length > 0 && <p>Related notes: {workflow.relatedNotes.map((d) => d.code).join(", ")}</p>}
-                  </div>
-                )}
-                <ProcessingPanel trace={extraction.raw?.processing_trace as ProcessingTrace | undefined} type={extraction.classification?.value} status={extraction.classification?.status}
-                  labelFor={(key) => fieldLabel(kind, key, extraction.fields[key]?.label)} />
-                <AiAssistPanel user={user} documentId={documentId} contentRevision={extraction.contentRevision} readonly={readonly}
-                  labelFor={(key) => fieldLabel(kind, key, extraction.fields[key]?.label)}
-                  onShowSource={(label, evidence) => { setSelectedLine(undefined); setAssistSource({ label, evidence }); }}
-                  onSaved={refresh} />
-                {Object.keys(extraction.fields).length === 0 && <p>{needsType ? "No fields yet. Choose the type at the top of the page to get the fields for that type." : "No accounting fields available. Review the original source."}</p>}
-                {Object.keys(extraction.fields).length > 0 && <div role="status" className="review-focus-summary">
-                  <strong className="review-summary-title">Review status</strong>
-                  <ul className="review-summary-list">
-                    <li className="is-warning"><b>{signalCount("check")}</b><span>{signalCount("check") === 1 ? "field says" : "fields say"} &quot;Please check&quot;</span></li>
-                    <li className="is-info"><b>{signalCount("verified")}</b><span>read from the document or corrected by a person</span></li>
-                    <li className="is-danger"><b>{signalCount("missing")}</b><span>not found on the document</span></li>
-                    <li className="is-neutral"><b>{signalCount("suggestion")}</b><span>{signalCount("suggestion") === 1 ? "field has" : "fields have"} a suggested value; nothing is applied until you accept it</span></li>
-                    {data.validationReport && <li className="is-validation"><b>Validation</b><span>{summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked</span></li>}
-                  </ul>
-                </div>}
                 {spotCheck && <div className="review-spot-check" role="status">
                   <strong>Spot check: compare every field</strong>
                   <span>This ready document was picked at random (about 1 in 20) for a full check, so every field is shown, not only the flagged ones.</span>
@@ -716,24 +747,24 @@ function DocumentReviewPage({
                     <strong>{laneEntry.risk.level === "high" ? "Look closely" : "Check"}:</strong> {laneEntry.risk.why.join(" ")}</p>}
                 <BlockingChecksNotice items={blockingChecks(validation, (name) => { const key = fieldForCheck(name); return !!key && visibleKeys.includes(key) && signalOf.get(key) === "check"; })}
                   labelFor={(name) => fieldLabel(kind, fieldForCheck(name) ?? name, extraction.fields[fieldForCheck(name) ?? name]?.label)} onOpenChecks={viewIssues} />
+                {kind === "UNKNOWN" && (Object.keys(extraction.fields).length > 0 || extraction.lineItems.length > 0) &&
+                  <p role="status">Provisional source reads are shown below. Document type and field roles remain unresolved; these candidates are not approved accounting values.</p>}
+                {(workflow.overdue || workflow.duplicates.length > 0 || workflow.relatedNotes.length > 0) && (
+                  <div className="panel-body">
+                    {workflow.overdue && <Badge>Overdue</Badge>}
+                    {workflow.duplicates.length > 0 && <p>Possible duplicate document: {workflow.duplicates.map((d) => d.code).join(", ")}</p>}
+                    {workflow.relatedNotes.length > 0 && <p>Related notes: {workflow.relatedNotes.map((d) => d.code).join(", ")}</p>}
+                  </div>
+                )}
+                {allFieldCount === 0 && <p className="review-no-fields">{needsType ? "No fields yet. Choose the type (beside the title above) to get the fields for that type." : "No accounting fields available. Review the original source."}</p>}
                 {visible.length > 0 && <div className="shoebox-fields review-field-list" aria-label={onlyToCheck ? "Fields to check" : "All fields"}>
                   {visible.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div>}
                 {allFieldCount > 0 && toCheckCount === 0 && summary.blocking === 0 && <p className="review-all-read" role="status">Nothing to check: every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
-                {notFound.length > 0 && <details className="review-field-group review-not-found"><summary><span>Not found on the document</span><b>{notFound.length}</b></summary>
-                  <p className="review-section-help">No check needs these. Fill one only if it is printed on the original.</p>
-                  <div className="shoebox-fields">{notFound.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div></details>}
                 {!readonly && extraction.contentRevision && <DueDateHelper party={receivable ? extraction.fields.customer?.value : (extraction.fields.supplier?.value ?? extraction.fields.merchant?.value)}
                   partyKind={receivable ? "customer" : "supplier"} documentDate={extraction.fields.date?.value}
                   due={extraction.fields.due?.value ?? extraction.fields.due_date?.value} printedTerms={extraction.fields.payment_terms?.value} busy={busy}
                   onUse={(value) => void run(() => updateExtractedField(user, documentId, extraction.fields.due_date && !extraction.fields.due ? "due_date" : "due", value, extraction.contentRevision!),
                     "Due date saved with a new revision.")} />}
-                {!readonly && extraction.contentRevision && <AddFieldControl keys={addableFields(kind, Object.keys(extraction.fields))} busy={busy}
-                  onAdd={(key, value) => run(() => updateExtractedField(user, documentId, key, value, extraction.contentRevision!),
-                    "Field added with a new revision. Run the checks again before submitting.", true)} />}
-                {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
-                  <p>Notes about how the document was read. They are separate from the accounting checks.</p>
-                  {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
-                </div>}
                 {extraction.lineItems.length > 0 && (
                   <div className="shoebox-lines">
                     <strong>{kind === "BILL" ? "Charges / line items" : kind === "RECEIPT" ? "Receipt items" : "Line items"}</strong>
@@ -781,8 +812,34 @@ function DocumentReviewPage({
                     <details><summary>Line item source evidence</summary>{extraction.lineItems.map((line, i) => <div key={line.id ?? i}><strong>Line {i + 1}</strong>{Object.entries(line.evidence ?? {}).map(([key, evidence]) => <div key={key}><p>{key}</p><SourceEvidenceList evidence={evidence} documentId={documentId} /></div>)}</div>)}</details>
                   </div>
                 )}
+                {notFound.length > 0 && <details ref={notFoundRef} className="review-field-group review-not-found" open={notFoundOpen} onToggle={event => setNotFoundOpen(event.currentTarget.open)}><summary><span>Not found on the document</span><b>{notFound.length}</b></summary>
+                  <p className="review-section-help">No check needs these. Fill one only if it is printed on the original.</p>
+                  <div className="shoebox-fields">{notFound.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div></details>}
+                {!readonly && extraction.contentRevision && <AddFieldControl keys={addableFields(kind, Object.keys(extraction.fields))} busy={busy}
+                  onAdd={(key, value) => run(() => updateExtractedField(user, documentId, key, value, extraction.contentRevision!),
+                    "Field added with a new revision. Run the checks again before submitting.", true)} />}
+                {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
+                  <p>Notes about how the document was read. They are separate from the accounting checks.</p>
+                  {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
+                </div>}
                 {!readonly && canRevalidate && <MissingLineForm revision={data.doc.contentRevision ?? 1} disabled={busy || unsaved.length !== 0}
                   onSave={input => run(() => addExtractedLineItem(documentId, input), "Printed item saved and revalidated.", true)} />}
+                {/* The full review status, below the fields (25 Nov redesign): the strip above the fields opens it. */}
+                <details ref={statusDetailsRef} id={statusDetailsId} className="review-field-group review-status-details" open={statusOpen} onToggle={event => setStatusOpen(event.currentTarget.open)}>
+                  <summary><span>Review status</span><small>{stripParts.map(part => part.text).join(" · ") || "Nothing read yet"}</small></summary>
+                  {allFieldCount > 0 && <ul className="review-summary-list">
+                    <li className="is-warning"><b>{counts.check}</b><span>{counts.check === 1 ? "field says" : "fields say"} &quot;Please check&quot;</span></li>
+                    <li className="is-info"><b>{counts.read}</b><span>read from the document or corrected by a person</span></li>
+                    <li className="is-danger"><b>{counts.missing}</b><span>not found on the document</span></li>
+                    <li className="is-neutral"><b>{counts.suggestion}</b><span>{counts.suggestion === 1 ? "field has" : "fields have"} a suggested value; nothing is applied until you accept it</span></li>
+                  </ul>}
+                  {data.validationReport && <p className="review-status-checks"><strong>Checks</strong> {summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked · {summary.notApplicable} not applicable{summary.blocking ? ` · ${summary.blocking} must be fixed before approval` : ""}
+                    {" "}<button type="button" className="text-link" onClick={viewIssues}>Open the Checks tab</button></p>}
+                  {readingsElsewhere.length > 0 && <div className="review-status-readings"><strong>Second readings of fields not shown above</strong>
+                    {readingsElsewhere.map(row => <SecondReadingResult key={row.stored_key} reading={secondReading} storedKey={row.stored_key} label={fieldLabel(kind, row.stored_key, extraction.fields[row.stored_key]?.label)} readonly={readonly} onShowSource={showAssistSource} />)}</div>}
+                  <ProcessingPanel trace={extraction.raw?.processing_trace as ProcessingTrace | undefined} type={extraction.classification?.value} status={extraction.classification?.status}
+                    labelFor={(key) => fieldLabel(kind, key, extraction.fields[key]?.label)} />
+                </details>
                 {(
                   <details open className="shoebox-actions review-action-drawer">
                     <summary><span>Review actions</span><small>{unsaved.length ? `${unsaved.length} unsaved change${unsaved.length === 1 ? "" : "s"}` : "Save or submit this review"}</small></summary>
