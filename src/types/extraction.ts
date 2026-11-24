@@ -18,8 +18,10 @@ export interface ExtractedField {
   /** What the reviewer should do with this field (backend reliability.review_signal). Never a confidence number. */
   reviewSignal?: "verified" | "check" | "suggestion" | "missing" | null;
   correctedBy?: string | null; correctedAt?: string | null;
+  /** The corrector's name (backend extraction route); correctedBy is their user id. */
+  correctedByName?: string | null;
 }
-export interface LineCorrection { line_item_id: string; field_key: string; old_value: string | null; new_value: string | null; corrected_by: string; corrected_at: string; }
+export interface LineCorrection { line_item_id: string; field_key: string; old_value: string | null; new_value: string | null; corrected_by: string; corrected_at: string; corrected_by_name?: string | null; }
 export interface LineItem { methods?: Record<string, string | null>; fieldStates?: Record<string, string>; guidance?: Record<string, Pick<ExtractedField, "warnings" | "confirmationRequired" | "reviewRequired">>; id?: string; description: string | null; quantity: string | number | null; unitPrice: string | number | null; amount: string | number | null; evidence?: Record<string, SourceEvidence[]>; candidates?: Record<string, unknown[]>; }
 export interface SourceClassification {
   value?: string; status?: string; method?: string; reason?: string; classifier_version?: string;

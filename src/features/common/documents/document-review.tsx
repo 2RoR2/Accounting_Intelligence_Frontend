@@ -41,7 +41,7 @@ import {
   Toast,
   formatDate,
 } from "@/components/common/ui";
-import { documentKindLabel, evidenceLabel, extractionStateLabel, readingFacts, readingReason, reviewSignalLabel, ruleCode, ruleSentence, typePendingCheck } from "@/lib/glossary";
+import { checkSentence, documentKindLabel, duplicateState, evidenceLabel, extractionStateLabel, readingFacts, readingReason, reviewSignalLabel, ruleCode, typePendingCheck } from "@/lib/glossary";
 import { ChooseTypeControl, DocumentTypeNotice } from "./choose-type";
 import { ApiError } from "@/lib/api/client";
 import { canEditDocument, canDecideReview } from "@/lib/permissions/document-review";
@@ -67,11 +67,11 @@ import {
 import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
-import { AddFieldControl, BlockingChecksNotice, DueDateHelper } from "./review/review-extras";
-import { addableFields, approvalBlockers, blockingChecks, blockingFields, keyFieldsPresent } from "./review/key-fields";
+import { AddMissingInfo, BlockingChecksNotice, DueDateHelper } from "./review/review-extras";
+import { addableFields, approvalBlockers, blockingFields, keyFieldsPresent, reviewNoticeChecks } from "./review/key-fields";
 import { useReviewQueue } from "./review/use-review-queue";
 import { PostingPreviewPanel } from "./review/posting-preview";
-import { LINE_ITEM_FIELDS, SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
+import { LINE_ITEM_FIELDS, SIGNAL_TEXT, correctionBy, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
 
@@ -238,12 +238,18 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
   const candidate = readonly || readings.length ? null : suggestedValue(candidates, field.value);
   const enterPlan = enterAction({ dirty: false, value: field.value ?? "", suggestion: candidate, signal, corrected: !!field.correctedBy });
   const suggestion = enterPlan !== "move" && enterPlan.save === candidate ? candidate : null;
+  // Once a person corrected the field, the reading's notes ("the source does not support a usable value") describe the
+  // value before the correction. They move into Details as history instead of contradicting "Corrected by" (25 Nov).
+  const corrector = correctionBy({ by: field.correctedBy, byName: field.correctedByName, at: field.correctedAt });
+  const notes = field.warnings ?? [];
+  const history = field.correctedBy ? notes : [];
+  const current = field.correctedBy ? [] : notes;
   return <div className={`shoebox-field${selected ? " selected" : ""}${signal ? ` review-signal-${signal}` : ""}`} onFocusCapture={onFocus} data-field={fieldKey}>
     <div className="shoebox-field-heading"><label className="shoebox-label" htmlFor={inputId}>{field.label}</label>
       {(headingAction || onFocus) && <span className="shoebox-field-actions">{headingAction}
         {onFocus && <button type="button" className="text-link" aria-label={`View source for ${field.label}`} aria-pressed={!!selected} onClick={onFocus}>View source</button>}</span>}
     </div>
-    <span className={`shoebox-field-state${signal ? ` review-signal is-${signal}` : ""}`}>{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? "Corrected by a reviewer" : signal ? SIGNAL_TEXT[signal] : fieldStateText(field)}</span>
+    <span className={`shoebox-field-state${signal ? ` review-signal is-${signal}` : ""}`}>{currencyReview?.decision && field.correctedBy ? "Confirmed by a person, not read from the document" : field.correctedBy ? `Corrected by ${corrector}` : signal ? SIGNAL_TEXT[signal] : fieldStateText(field)}</span>
     <input id={inputId} ref={inputRef} list={fieldKey === "currency" ? `${inputId}-currency-options` : undefined} aria-label={field.label} value={value} disabled={readonly || saving || locked}
       aria-describedby={suggestion && onInputKey ? `${inputId}-enter` : undefined}
       onKeyDown={onInputKey ? event => onInputKey(event, { value, dirty, suggestion, save }) : undefined}
@@ -261,7 +267,8 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
         <dt>Method</dt><dd>{field.method ?? "Not provided"}</dd>
         <dt>Confidence</dt><dd>{field.confidence == null ? "Not measured" : String(field.confidence)}</dd>
         {field.ocrEngineScore && <><dt>OCR engine score</dt><dd>{field.ocrEngineScore.min === field.ocrEngineScore.max ? field.ocrEngineScore.min.toFixed(3) : `${field.ocrEngineScore.min.toFixed(3)} to ${field.ocrEngineScore.max.toFixed(3)}`} (text recognition only, not field correctness)</dd></>}
-        {field.correctedBy && <><dt>Corrected by</dt><dd>{field.correctedBy}</dd><dt>Corrected at</dt><dd>{field.correctedAt ?? "Not provided"}</dd></>}
+        {field.correctedBy && <><dt>Corrected by</dt><dd>{field.correctedByName ?? field.correctedBy}</dd><dt>Corrected at</dt><dd>{field.correctedAt ?? "Not provided"}</dd></>}
+        {history.length > 0 && <><dt>Before the correction</dt><dd><ul className="review-field-history">{history.map((warning, index) => <li key={warning.code + index}>{warning.message}</li>)}</ul></dd></>}
       </dl>
     </details>
     {!field.correctedBy && candidates.source.length > 0 && <div className="shoebox-field-candidates"><small>Printed in source, not selected:</small>
@@ -277,9 +284,7 @@ function FormField({ field, fieldKey, onSave, onFocus, readonly, selected, onDir
     {!readonly && currencies.length > 0 && <div className="shoebox-field-candidates"><small>&quot;$&quot; does not name a currency. If the document or supplier shows which one, choose:</small>
       <ul>{currencies.map(code => <li key={code}><button type="button" className="text-link" disabled={locked} onClick={() => fillFromCandidate(code)}>{code}</button></li>)}</ul></div>}
     {field.confirmationRequired && field.evidenceStatus !== "source_backed" && <small>Accountant confirmation required</small>}
-    {field.warnings?.map((warning, index) => <p role="status" key={warning.code + index}>
-      {warning.reviewed ? "Reviewed" : "Please check"}: {warning.message}
-    </p>)}
+    {current.map((warning, index) => <p role="status" key={warning.code + index}>Please check: {warning.message}</p>)}
     {!readonly && <button type="button" className="btn small" aria-label={"Save " + field.label} disabled={!dirty || saving || conflict || locked} onClick={() => void save(value)}>{saving ? "Saving..." : "Save field"}</button>}
     {error && <p role="alert">{error}{conflict ? " Latest data refreshed; your draft is retained. Edit again after reviewing the saved value." : ""}</p>}
   </div>;
@@ -364,6 +369,8 @@ function DocumentReviewPage({
   const [notFoundOpen, setNotFoundOpen] = useState(false);
   const statusDetailsId = useId();
   const statusDetailsRef = useRef<HTMLDetailsElement>(null);
+  // "Set aside…" beside "Not addressed to this company" scrolls to and opens the page's existing SetAsideControl.
+  const setAsideRef = useRef<HTMLSpanElement>(null);
   const notFoundRef = useRef<HTMLDetailsElement>(null);
   const validationHeadingRef = useRef<HTMLDivElement>(null);
   // Second reading, per field. Nothing shows when it is not switched on.
@@ -588,6 +595,25 @@ function DocumentReviewPage({
     if (target) setFocusRequest(target);
   };
   const renderedFields = new Set([...visibleKeys, ...notFound.map(entry => entry.key)]);
+  const canSetAside = !data.doc.excludedAt && SET_ASIDE_STATUSES.has(data.doc.status) && canEditDocument(user, data.doc, !!record);
+  const openSetAside = () => {
+    setPanel("review");
+    window.setTimeout(() => {
+      const holder = setAsideRef.current;
+      const drawer = holder?.closest("details");
+      if (drawer && !drawer.open) drawer.open = true;
+      holder?.scrollIntoView({ block: "center", behavior: "smooth" });
+      const button = holder?.querySelector<HTMLButtonElement>("button");
+      if (button && /set aside/i.test(button.textContent ?? "") && !holder?.querySelector("input")) button.click();
+      window.setTimeout(() => holder?.querySelector<HTMLInputElement>("input")?.focus(), 0);
+    }, 0);
+  };
+  /** A field's correction, for the line above the original ("Invoice number: typed by Jonathan, 25 Nov."). */
+  const fieldCorrection = (key: string) => { const item = extraction.fields[key]; return item?.correctedBy ? { by: item.correctedBy, byName: item.correctedByName, at: item.correctedAt } : null; };
+  const lineCorrection = (index: number, key: string) => {
+    const item = extraction.lineCorrections?.find(row => row.line_item_id === extraction.lineItems[index]?.id && row.field_key === key);
+    return item ? { by: item.corrected_by, byName: item.corrected_by_name, at: item.corrected_at } : null;
+  };
   const readingsElsewhere = secondReadingsElsewhere(secondReading.state, renderedFields);
 
   /* ---------- Next document and Ctrl+Enter (task B4b) ---------- */
@@ -724,8 +750,8 @@ function DocumentReviewPage({
               <div className="shoebox-doc">
                 <ReviewSource documentId={documentId} name={displayName} extraction={extraction} onSelectField={focusField}
                   fields={visibleKeys.map(key => ({ key, label: fieldLabel(kind, key, extraction.fields[key]?.label), evidence: extraction.fields[key]?.evidence ?? [] }))}
-                  selected={assistSource ? assistSource : selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [] }
-                    : highlightedField ? { key: highlightedField, label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [] } : undefined} />
+                  selected={assistSource ? assistSource : selectedLine ? { label: selectedLine.label, evidence: extraction.lineItems[selectedLine.index]?.evidence?.[selectedLine.key] ?? [], correction: lineCorrection(selectedLine.index, selectedLine.key) }
+                    : highlightedField ? { key: highlightedField, label: fieldLabel(kind, highlightedField, extraction.fields[highlightedField]?.label), evidence: extraction.fields[highlightedField]?.evidence ?? [], correction: fieldCorrection(highlightedField) } : undefined} />
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">
@@ -745,14 +771,19 @@ function DocumentReviewPage({
                 {!spotCheck && laneEntry?.risk && laneEntry.risk.level !== "low" && laneEntry.risk.why.length > 0 &&
                   <p className={`review-risk-note is-${laneEntry.risk.level}`} role="status">
                     <strong>{laneEntry.risk.level === "high" ? "Look closely" : "Check"}:</strong> {laneEntry.risk.why.join(" ")}</p>}
-                <BlockingChecksNotice items={blockingChecks(validation, (name) => { const key = fieldForCheck(name); return !!key && visibleKeys.includes(key) && signalOf.get(key) === "check"; })}
-                  labelFor={(name) => fieldLabel(kind, fieldForCheck(name) ?? name, extraction.fields[fieldForCheck(name) ?? name]?.label)} onOpenChecks={viewIssues} />
+                <BlockingChecksNotice items={reviewNoticeChecks(validation, (name) => { const key = fieldForCheck(name); return !!key && visibleKeys.includes(key) && signalOf.get(key) === "check"; })}
+                  labelFor={(name) => fieldLabel(kind, fieldForCheck(name) ?? name, extraction.fields[fieldForCheck(name) ?? name]?.label)} onOpenChecks={viewIssues}
+                  onFill={(name) => { const key = fieldForCheck(name); if (key) focusField(key); else viewIssues(); }}
+                  documentHref={(id) => `${base}/documents/${encodeURIComponent(id)}`}
+                  onSetAside={canSetAside ? openSetAside : undefined} />
                 {kind === "UNKNOWN" && (Object.keys(extraction.fields).length > 0 || extraction.lineItems.length > 0) &&
                   <p role="status">Provisional source reads are shown below. Document type and field roles remain unresolved; these candidates are not approved accounting values.</p>}
                 {(workflow.overdue || workflow.duplicates.length > 0 || workflow.relatedNotes.length > 0) && (
                   <div className="panel-body">
                     {workflow.overdue && <Badge>Overdue</Badge>}
-                    {workflow.duplicates.length > 0 && <p>Possible duplicate document: {workflow.duplicates.map((d) => d.code).join(", ")}</p>}
+                    {/* The same number on another document is a fact, not a duplicate finding: the duplicate check (EX-007)
+                        compares supplier and number, and says "Possible duplicate of …" itself. */}
+                    {workflow.duplicates.length > 0 && !validation.some(item => duplicateState(item) === "found") && <p>Same number printed on: {workflow.duplicates.map((d, index) => <span key={d.id}>{index ? ", " : ""}<Link href={`${base}/documents/${encodeURIComponent(d.id)}`}>{d.code}</Link></span>)}</p>}
                     {workflow.relatedNotes.length > 0 && <p>Related notes: {workflow.relatedNotes.map((d) => d.code).join(", ")}</p>}
                   </div>
                 )}
@@ -799,14 +830,14 @@ function DocumentReviewPage({
                               confidence: null, state: line.fieldStates?.[key], evidence: line.evidence?.[key],
                               candidates: line.candidates?.[key],
                               method: line.methods?.[key] ?? "Method not provided",
-                              correctedBy: correction?.corrected_by, correctedAt: correction?.corrected_at,
+                              correctedBy: correction?.corrected_by, correctedAt: correction?.corrected_at, correctedByName: correction?.corrected_by_name,
                               confirmationRequired: !correction, warnings: guidance?.warnings?.map(w => ({...w, reviewed: !!correction}))}}
                             onDirtyChange={markDirty}
                             onSave={value => run(() => updateExtractedLineItem(user, documentId, line.id!, key, value, extraction.contentRevision!), "Line correction saved with a new revision.", true)} />;
                         })}
                       </div>)}
                       {!!extraction.lineCorrections?.length && <details><summary>Line correction history</summary>
-                        {extraction.lineCorrections.map((item, index) => <p key={index}>{item.field_key}: {item.old_value ?? "Not provided"} → {item.new_value ?? "Not provided"} | {item.corrected_by} | {item.corrected_at}</p>)}
+                        {extraction.lineCorrections.map((item, index) => <p key={index}>{item.field_key}: {item.old_value ?? "Not provided"} → {item.new_value ?? "Not provided"} | {item.corrected_by_name ?? item.corrected_by} | {item.corrected_at}</p>)}
                       </details>}
                     </details>
                     <details><summary>Line item source evidence</summary>{extraction.lineItems.map((line, i) => <div key={line.id ?? i}><strong>Line {i + 1}</strong>{Object.entries(line.evidence ?? {}).map(([key, evidence]) => <div key={key}><p>{key}</p><SourceEvidenceList evidence={evidence} documentId={documentId} /></div>)}</div>)}</details>
@@ -815,15 +846,12 @@ function DocumentReviewPage({
                 {notFound.length > 0 && <details ref={notFoundRef} className="review-field-group review-not-found" open={notFoundOpen} onToggle={event => setNotFoundOpen(event.currentTarget.open)}><summary><span>Not found on the document</span><b>{notFound.length}</b></summary>
                   <p className="review-section-help">No check needs these. Fill one only if it is printed on the original.</p>
                   <div className="shoebox-fields">{notFound.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div></details>}
-                {!readonly && extraction.contentRevision && <AddFieldControl keys={addableFields(kind, Object.keys(extraction.fields))} busy={busy}
-                  onAdd={(key, value) => run(() => updateExtractedField(user, documentId, key, value, extraction.contentRevision!),
-                    "Field added with a new revision. Run the checks again before submitting.", true)} />}
-                {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
-                  <p>Notes about how the document was read. They are separate from the accounting checks.</p>
-                  {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
-                </div>}
-                {!readonly && canRevalidate && <MissingLineForm revision={data.doc.contentRevision ?? 1} disabled={busy || unsaved.length !== 0}
-                  onSave={input => run(() => addExtractedLineItem(documentId, input), "Printed item saved and revalidated.", true)} />}
+                {!readonly && <AddMissingInfo busy={busy}
+                  fieldKeys={extraction.contentRevision ? addableFields(kind, Object.keys(extraction.fields)) : []}
+                  onAddField={(key, value) => run(() => updateExtractedField(user, documentId, key, value, extraction.contentRevision!),
+                    "Field added with a new revision. Run the checks again before submitting.", true)}
+                  lineForm={canRevalidate ? <MissingLineForm embedded revision={data.doc.contentRevision ?? 1} disabled={busy || unsaved.length !== 0}
+                    onSave={input => run(() => addExtractedLineItem(documentId, input), "Printed item saved and revalidated.", true)} /> : null} />}
                 {/* The full review status, below the fields (25 Nov redesign): the strip above the fields opens it. */}
                 <details ref={statusDetailsRef} id={statusDetailsId} className="review-field-group review-status-details" open={statusOpen} onToggle={event => setStatusOpen(event.currentTarget.open)}>
                   <summary><span>Review status</span><small>{stripParts.map(part => part.text).join(" · ") || "Nothing read yet"}</small></summary>
@@ -835,6 +863,10 @@ function DocumentReviewPage({
                   </ul>}
                   {data.validationReport && <p className="review-status-checks"><strong>Checks</strong> {summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked · {summary.notApplicable} not applicable{summary.blocking ? ` · ${summary.blocking} must be fixed before approval` : ""}
                     {" "}<button type="button" className="text-link" onClick={viewIssues}>Open the Checks tab</button></p>}
+                  {!!extraction.warnings?.length && <div className="review-status-reading-notes" aria-label="Reading notes"><strong>Reading notes</strong>
+                    <p className="review-section-help">How the document was read. They are separate from the accounting checks.</p>
+                    <ul>{extraction.warnings.map((warning, index) => <li key={warning.code + index}>{warning.message}</li>)}</ul>
+                  </div>}
                   {readingsElsewhere.length > 0 && <div className="review-status-readings"><strong>Second readings of fields not shown above</strong>
                     {readingsElsewhere.map(row => <SecondReadingResult key={row.stored_key} reading={secondReading} storedKey={row.stored_key} label={fieldLabel(kind, row.stored_key, extraction.fields[row.stored_key]?.label)} readonly={readonly} onShowSource={showAssistSource} />)}</div>}
                   <ProcessingPanel trace={extraction.raw?.processing_trace as ProcessingTrace | undefined} type={extraction.classification?.value} status={extraction.classification?.status}
@@ -859,8 +891,8 @@ function DocumentReviewPage({
                       {failure && <p className="notice danger" role="alert">{failure}</p>}
                       <div className="review-action-buttons">
                         <button className="btn" disabled={readonly || busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.")}>Save draft</button>
-                        {!data.doc.excludedAt && SET_ASIDE_STATUSES.has(data.doc.status) && canEditDocument(user, data.doc, !!record) &&
-                          <SetAsideControl documentId={documentId} busy={busy} onDone={(message) => void refresh().then(() => setToast(message))} />}
+                        {canSetAside &&
+                          <span ref={setAsideRef} className="review-set-aside-holder"><SetAsideControl documentId={documentId} busy={busy} onDone={(message) => void refresh().then(() => setToast(message))} /></span>}
                         {canRevalidate && <button className="btn primary" disabled={readonly || busy || unsaved.length > 0} onClick={() => run(() => revalidateDocument(user, documentId), "Review saved and revalidated.")}><CheckCircle2 size={16} /> Save & revalidate</button>}
                         {canSubmit && <button ref={submitButton} type="button" className="btn primary review-save-submit" disabled={busy} aria-keyshortcuts="Control+Enter" onClick={() => void saveAndSubmit()}>
                           Save, check and submit <kbd>Ctrl+Enter</kbd></button>}
@@ -925,7 +957,7 @@ function DocumentReviewPage({
                 rows={[...validation].sort((a, b) => validationRank(a) - validationRank(b))}
                 rowKey={(v) => JSON.stringify([v.rule, v.field ?? null, validation.indexOf(v)])}
                 columns={[
-                  { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{ruleSentence(v.rule, v.field)}</strong></div> },
+                  { label: "Check", render: (v) => <div className="validation-rule"><span className={`validation-icon ${v.result.toLowerCase()}`}>{v.result === "PASS" ? <CheckCircle2 size={16} /> : v.result === "WARNING" ? <AlertTriangle size={16} /> : <CircleX size={16} />}</span><strong>{checkSentence(v)}</strong></div> },
                   { label: "Result", render: (v) => <><StatusBadge status={validationState(v)} />{v.preventsApproval && !typePendingCheck(v.rule) && <small> Must be fixed before approval</small>}</> },
                   { label: "Field", render: (v) => v.field ? fieldLabel(kind, v.field, extraction.fields[v.field]?.label) : "Whole document" },
                   { label: "Priority", render: (v) => v.severity ? v.severity[0].toUpperCase() + v.severity.slice(1).toLowerCase() : "Normal" },
@@ -936,12 +968,13 @@ function DocumentReviewPage({
                     {reviewableFinding(v) && !readonly && canRevalidate && extraction.contentRevision && <ValidationReviewForm rule={v.rule} busy={busy} onSubmit={note => run(() => acceptValidationReview(user, documentId, v.rule, note, extraction.contentRevision!), "Review recorded and document revalidated.")} />}
                     {v.rule === "EX-008" && v.field !== "customer" && !receivable && !readonly && user.role === "LOCAL_ADMIN" && newSupplier && <p><button type="button" className="btn small" disabled={busy} onClick={() => run(async () => { await addedOrExisting(createSupplier(newSupplier)); await revalidateDocument(user, documentId); }, "Supplier added and document revalidated.")}>Add {newSupplier} as a supplier</button></p>}
                     {v.rule === "EX-008" && !readonly && user.role !== "LOCAL_ADMIN" && <p className="validation-hint">Only a local admin can add this name to the {v.field === "customer" || receivable ? "customer" : "supplier"} list. Ask them to add it from this document; it is then revalidated. Approval also needs a local admin.</p>}
-                    {v.duplicate_of && <p><Link href={`${base}/documents/${encodeURIComponent(v.duplicate_of)}`}>Related document: {v.duplicate_of}</Link></p>}
+                    {v.duplicate_of && <p><Link href={`${base}/documents/${encodeURIComponent(v.duplicate_of)}`}>Open the other document</Link></p>}
+                    {ruleCode(v.rule) === "BUYER-NOT-COMPANY" && v.result === "FAIL" && canSetAside && <p><button type="button" className="btn small" onClick={openSetAside}>Set aside…</button></p>}
                     {v.vendor_candidate && <p>Did you mean: {v.vendor_candidate.vendor_name ?? "Not provided"}?</p>}
                     {v.vendor_candidate && <details className="validation-details"><summary>Details</summary><small>Name similarity {v.vendor_candidate.similarity ?? "not provided"} (name matching, not extraction confidence) · method {v.vendor_candidate.score_method ?? "not provided"}</small></details>}
                   </div> },
                   // Task B4b: jump from a failed check to the field it concerns, on the Review tab with its source highlighted.
-                  { label: "Fix", render: (v) => { const key = v.result === "FAIL" && v.field ? fieldForCheck(v.field) : undefined;
+                  { label: "Fix", render: (v) => { const key = (v.result === "FAIL" || duplicateState(v) === "not-run") && v.field ? fieldForCheck(v.field) : undefined;
                     const label = key && (resolveLineItemField(key, extraction.lineItems)?.label ?? fieldLabel(kind, key, extraction.fields[key]?.label));
                     return key ? <button type="button" className="btn small" onClick={() => focusField(key)} aria-label={`Fix ${label}`}>Fix</button> : null; } },
                 ]}

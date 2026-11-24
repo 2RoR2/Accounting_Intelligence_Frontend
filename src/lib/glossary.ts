@@ -49,6 +49,7 @@ const OTHER_RULES: Record<string, Rule> = {
   "TAX-STATUS": { title: "Tax treatment unclear", action: "check whether tax is printed, then confirm it." },
   "MODEL-DISAGREEMENT": { title: "Second reading differs", action: "compare the value with the document." },
   "AMOUNT-PLAUSIBLE": { title: "Amounts do not fit together", action: "check tax, subtotal and total on the document; they may be swapped or misread." },
+  "BUYER-NOT-COMPANY": { title: "Not addressed to this company", action: "if it isn't yours, set it aside." },
 };
 
 /** Document kinds whose rules are named "<KIND>-<RULE>" by the backend. */
@@ -116,6 +117,45 @@ export function ruleSentence(code: string | null | undefined, field?: string | n
   const rule = findRule(code, field) ?? FALLBACK_RULE;
   return `${rule.title}: ${rule.action}`;
 }
+
+/* ---------- The duplicate check's three states (25 Nov review findings) ---------- */
+
+/** The result fields the check sentences read. */
+type CheckLike = { rule: string; field?: string | null; result?: string | null; checkStatus?: string | null; message?: string | null };
+
+/**
+ * EX-007 in one of three states: it could not run (a supplier or number is missing), it found a possible duplicate,
+ * or it passed. A check that did not run must never read as "possible duplicate".
+ */
+export type DuplicateState = "not-run" | "found" | "passed" | "off";
+export function duplicateState(item: CheckLike): DuplicateState | null {
+  if (ruleCode(item.rule) !== "EX-007") return null;
+  const result = String(item.result ?? "").toUpperCase();
+  if (result === "FAIL" || result === "FAILED") return "found";
+  if (result === "PASS" || result === "PASSED") return "passed";
+  if (result === "NOT_APPLICABLE") return "off";
+  return "not-run";
+}
+
+/** Older results said "A duplicate check needs both a supplier and an invoice number" without saying what to fill. */
+const DUPLICATE_NOT_RUN = "Duplicate check can't run yet: fill the supplier and invoice number.";
+
+/**
+ * The sentence for one check, by its result. EX-007 and BUYER-NOT-COMPANY speak for themselves (the backend message
+ * names the missing field, the other document, or the other company); every other rule uses ruleSentence.
+ */
+export function checkSentence(item: CheckLike): string {
+  const message = (item.message ?? "").trim();
+  const duplicate = duplicateState(item);
+  if (duplicate === "not-run") return message.startsWith("Duplicate check can't run yet") ? message : DUPLICATE_NOT_RUN;
+  if (duplicate === "found") return message.startsWith("Possible duplicate of") ? message : ruleSentence(item.rule, item.field);
+  if (duplicate === "passed") return "No duplicate: no other invoice from this supplier has this number.";
+  if (ruleCode(item.rule) === "BUYER-NOT-COMPANY" && String(item.result ?? "").toUpperCase() === "FAIL" && message) return message;
+  return ruleSentence(item.rule, item.field);
+}
+
+/** True when checkSentence already said the backend message, so a screen need not repeat it beside the sentence. */
+export const sentenceIsMessage = (item: CheckLike) => checkSentence(item) === (item.message ?? "").trim();
 
 /* ---------- Why reading left the type or the details empty ---------- */
 

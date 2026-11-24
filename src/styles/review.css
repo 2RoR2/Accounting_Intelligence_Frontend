@@ -122,3 +122,17 @@
   .review-type-popover { right: auto; left: 0; }
   .review-status-more { margin-left: 0; }
 }
+
+/* One "Add missing information" entry point (25 Nov review findings): a button, a two-item menu, then one small form. */
+.review-add-missing { display: grid; gap: 8px; padding: 10px 12px; }
+.review-add-missing-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); }
+.review-add-missing-menu { display: grid; gap: 4px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; }
+.review-add-missing-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.review-add-missing-menu button:hover, .review-add-missing-menu button:focus-visible { background: color-mix(in srgb, var(--border) 45%, transparent); }
+.review-add-missing-menu small { color: var(--muted); }
+.review-add-missing-form { display: grid; gap: 8px; }
+/* A corrected field's reading notes, kept as history in Details. */
+.review-field-history { margin: 0; padding-left: 18px; color: var(--muted); }
+.review-status-reading-notes { display: grid; gap: 4px; margin-block: 8px; font-size: 13px; }
+.review-status-reading-notes ul { margin: 0; padding-left: 18px; }
+.review-blocking-notice li .btn.small { margin-left: 6px; }
