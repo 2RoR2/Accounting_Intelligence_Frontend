@@ -26,11 +26,18 @@ function summary(counts: Partial<Record<keyof HomeSummary["tiles"], number>> = {
   };
 }
 
-test("headline numbers: check, fix, approve or waiting, bank", () => {
-  assert.deepEqual(dashboardView(summary(), "ACCOUNTANT").kpis.map((tile) => tile.id),
-    ["toReview", "needsFixing", "readyToApprove", "bankToMatch"]);
-  assert.deepEqual(dashboardView(summary(), "LOCAL_ADMIN").kpis.map((tile) => tile.id),
-    ["toReview", "needsFixing", "waitingApproval", "bankToMatch"]);
+test("the four counts that used to sit in cards live in Attention needed, each with its number", () => {
+  const counts = { toReview: 3, needsFixing: 2, readyToApprove: 1, bankToMatch: 4 };
+  const accountant = dashboardView(summary(counts), "ACCOUNTANT");
+  assert.equal("kpis" in accountant, false, "the headline cards are gone");
+  const byId = (view: ReturnType<typeof dashboardView>) => Object.fromEntries(view.attention.map((tile) => [tile.id, [tile.title, tile.value]]));
+  assert.deepEqual(byId(accountant).toReview, ["Documents to check", "3"]);
+  assert.deepEqual(byId(accountant).needsFixing, ["Needs fixing", "2"]);
+  assert.deepEqual(byId(accountant).readyToApprove, ["Ready to approve", "1"]);
+  assert.deepEqual(byId(accountant).bankToMatch, ["Bank lines to match", "4"]);
+  assert.deepEqual(accountant.attention.map((tile) => tile.id), ["toReview", "needsFixing", "readyToApprove", "bankToMatch"]);
+  const admin = dashboardView(summary({ toReview: 3, needsFixing: 2, waitingApproval: 5, bankToMatch: 4 }), "LOCAL_ADMIN");
+  assert.deepEqual(admin.attention.map((tile) => tile.id), ["toReview", "needsFixing", "waitingApproval", "bankToMatch"]);
 });
 
 test("attention lists only work with something to do, in working order, and links each to its list", () => {

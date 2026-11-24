@@ -5,6 +5,7 @@ import "@/styles/landing.css";
 import "@/styles/dashboard.css";
 import "@/styles/theme.css";
 import "@/styles/dashboard-home.css";
+import "@/styles/dashboard-layout.css";
 import "@/styles/latest-template.css";
 import "@/styles/trace.css";
 

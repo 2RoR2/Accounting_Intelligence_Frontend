@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { documentDisplayName } from "@/lib/document-display-name";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle, ArrowRight, BarChart3, CalendarClock, CheckCircle2, ClipboardCheck, FileSearch, Files, HandCoins,
-  Landmark, Plus, Receipt, Search, ShieldAlert, Send, type LucideIcon,
+  Landmark, Plus, Receipt, RotateCcw, Search, ShieldAlert, Send, type LucideIcon,
 } from "lucide-react";
+import { DashboardWidgets } from "./dashboard-widgets";
+import { useDashboardLayout } from "./use-dashboard-layout";
 import { ErrorState, LoadingState, StatusBadge, formatDate } from "@/components/common/ui";
 import { MalaysiaDayNight } from "@/components/common/dashboard/malaysia-day-night";
 import { useResource } from "@/features/common/hooks/use-resource";
@@ -41,20 +43,7 @@ const documentAction = (status: string) => {
   return "View record";
 };
 
-/** One of the four tiles under the filters: the count, or "—" with the reason when the backend cannot give it. */
-function WorkTile({ tile }: { tile: TodayTileView }) {
-  const unavailable = tile.tone === "unavailable";
-  const body = <>
-    <strong>{unavailable ? "—" : tile.value}</strong>
-    <span>{tile.title}</span>
-    <small className="dash-tile-hint">{unavailable ? tile.details[0] ?? tile.value : tile.caption || tile.nextStep}</small>
-    <ArrowRight size={14} aria-hidden />
-  </>;
-  return tile.href && !unavailable
-    ? <Link href={tile.href} aria-label={`${tile.title}: ${tile.value}`}>{body}</Link>
-    : <div title={tile.details.join(" ")}>{body}</div>;
-}
-
+/** One line of "Attention needed": the count and what it is (or "—" with the reason when the backend cannot give it). */
 function AttentionRow({ tile }: { tile: TodayTileView }) {
   const Icon = ICONS[tile.id];
   const unavailable = tile.tone === "unavailable";
@@ -114,6 +103,8 @@ export function DashboardPage({ user }: { user: User }) {
   const bankRows = useMemo(() => bank.data ?? [], [bank.data]);
   const bankAccounts = useMemo(() => [...new Set(bankRows.map((row) => row.bankAccountRef).filter((ref): ref is string => !!ref))].sort(), [bankRows]);
 
+  const layout = useDashboardLayout(user.id);
+
   if (summary.loading) return <LoadingState variant="dashboard" />;
   if (summary.error || !summary.data) return <ErrorState message={summary.error} retry={summary.refresh} />;
 
@@ -150,8 +141,8 @@ export function DashboardPage({ user }: { user: User }) {
   const docs = (recent.data ?? []).slice(0, 6);
   const periodLabel = (value: string) => (range.granularity === "month" ? value.slice(0, 7) : value);
   const outstanding = [
-    { id: "invoices", title: "Outstanding invoices", receivable: true, href: `${base}/records?category=ACCOUNTS_RECEIVABLE` },
-    { id: "bills", title: "Outstanding bills", receivable: false, href: `${base}/records?category=ACCOUNTS_PAYABLE` },
+    { id: "invoicesOutstanding", title: "Outstanding invoices", receivable: true, href: `${base}/records?category=ACCOUNTS_RECEIVABLE` },
+    { id: "billsOutstanding", title: "Outstanding bills", receivable: false, href: `${base}/records?category=ACCOUNTS_PAYABLE` },
   ];
 
   return (
@@ -183,16 +174,26 @@ export function DashboardPage({ user }: { user: User }) {
           <label>Cost centre<select value="all" disabled title="Cost centres are not recorded on documents yet.">
             <option value="all">All cost centres</option>
           </select></label>
+          <div className="dash-layout-actions">
+            <small className="dash-layout-hint">Drag a panel by its handle to rearrange it. Saved in this browser.</small>
+            <button type="button" className="btn dash-reset-layout" aria-disabled={layout.isDefault}
+              title={layout.isDefault ? "The panels are already in the default order." : "Put the panels back in the default order."}
+              onClick={() => { if (!layout.isDefault) layout.reset(); }}>
+              <RotateCcw size={14} aria-hidden /> Reset layout
+            </button>
+          </div>
         </div>
-        <div className="dashboard-daily-work-grid">{view.kpis.map((tile) => <WorkTile key={tile.id} tile={tile} />)}</div>
       </section>
 
-      <div className="dash-columns">
+      <DashboardWidgets order={layout.order} onOrderChange={layout.update} widgets={{
+        attention: (
         <section className="dash-card" aria-labelledby="dash-attention-title">
           <div className="dash-card-head"><div><h2 id="dash-attention-title">Attention needed</h2><p>Your work for today, in the order to do it.</p></div></div>
           {view.attention.length > 0 && <div className="dash-attention-list">{view.attention.map((tile) => <AttentionRow key={tile.id} tile={tile} />)}</div>}
           {view.allClear && <p className="dash-all-clear"><CheckCircle2 size={18} aria-hidden /> Nothing needs you right now.</p>}
         </section>
+        ),
+        monthEnd: (
         <section className="dash-card" aria-labelledby="dash-month-title">
           <div className="dash-card-head"><div><h2 id="dash-month-title">{month.title}</h2><p>Month-end progress for the whole company.</p></div></div>
           {month.available ? (
@@ -210,9 +211,8 @@ export function DashboardPage({ user }: { user: User }) {
             </ol>
           ) : <p className="dash-muted" title={month.details.join(" ")}>— Month-end figures are not available yet.</p>}
         </section>
-      </div>
-
-      <section className="dashboard-accounting-summary" aria-label="Monthly accounting summary">
+        ),
+        monthlySummary: (
         <section className="dashboard-reference-panel monthly-summary-panel">
           <div className="dashboard-reference-panel-heading">
             <div><h2>Monthly summary</h2><p className="dashboard-panel-help">Posted income and expenses over the last 12 months.</p></div>
@@ -226,6 +226,8 @@ export function DashboardPage({ user }: { user: User }) {
           </div>
           {!year.rows.length && <p className="widget-empty">{monthly.loading ? "Loading…" : monthly.data ? noJournals(monthly.data.periods) : "— The monthly report could not be loaded."}</p>}
         </section>
+        ),
+        monthlyLedger: (
         <section className="dashboard-reference-panel monthly-ledger-panel">
           <div className="dashboard-reference-panel-heading">
             <div><h2>Monthly ledger</h2><p className="dashboard-panel-help">Income, expenses and net result by month.</p></div>
@@ -240,22 +242,21 @@ export function DashboardPage({ user }: { user: User }) {
             {!year.rows.length && <div className="widget-empty">Months appear here once journals are posted.</div>}
           </div>
         </section>
-      </section>
-
-      <section className="dashboard-reference-overview" aria-label="Financial overview">
-        <div className="dashboard-reference-kpis">
+        ),
+        moneyKpis: (
+        <div className="dashboard-reference-kpis" role="group" aria-label="Invoice and bill totals">
           <MoneyKpi kind="invoice" label="Outstanding" figure={aging.invoicesOutstanding} currency={currency} href={`${base}/records?category=ACCOUNTS_RECEIVABLE`} hint={reportHint} />
           <MoneyKpi kind="invoice" label="Overdue" figure={aging.invoicesOverdue} currency={currency} href={`${base}/records?category=ACCOUNTS_RECEIVABLE&due=overdue`} hint={reportHint} />
           <MoneyKpi kind="bill" label="Outstanding" figure={aging.billsOutstanding} currency={currency} href={`${base}/records?category=ACCOUNTS_PAYABLE`} hint={reportHint} />
           <MoneyKpi kind="bill" label="Overdue" figure={aging.billsOverdue} currency={currency} href={`${base}/records?category=ACCOUNTS_PAYABLE&due=overdue`} hint={reportHint} />
         </div>
-        <div className="dashboard-reference-two-column">
-          {outstanding.map((panel) => {
+        ),
+        ...(Object.fromEntries(outstanding.map((panel) => {
             const rows = (report?.aging ?? [])
               .filter((item) => panel.receivable === (item.category === "accounts_receivable") && item.currency.toUpperCase() === currency.toUpperCase())
               .sort((a, b) => AGE_ORDER.indexOf(a.bucket) - AGE_ORDER.indexOf(b.bucket));
             const total = Math.max(1, rows.reduce((sum, item) => sum + Number(item.amount), 0));
-            return <section key={panel.id} className="dashboard-reference-panel">
+            return [panel.id, <section key={panel.id} className="dashboard-reference-panel">
               <div className="dashboard-reference-panel-heading"><h2>{panel.title}</h2><Link href={panel.href} title="Lists every approved record on this side; the bar counts unpaid balances only.">View records <ArrowRight size={13} /></Link></div>
               {rows.length > 0 && <div className="dashboard-aging-bar">{rows.map((item, index) => <span key={item.bucket} className={`aging-segment aging-${index % 5}`}
                 style={{ width: `${Math.max(1, (Number(item.amount) / total) * 100)}%` }} title={`${AGE_LABEL[item.bucket] ?? item.bucket}: ${rm(item.amount, item.currency)} (${item.itemCount})`} />)}</div>}
@@ -266,10 +267,9 @@ export function DashboardPage({ user }: { user: User }) {
                   return elsewhere.length ? `No unpaid ${currency} balance; balances in ${elsewhere.join(", ")} are not shown here.` : "Nothing approved is unpaid.";
                 })()}</span>}
               </div>
-            </section>;
-          })}
-        </div>
-        <div className="dashboard-reference-two-column">
+            </section>] as const;
+          })) as Record<"invoicesOutstanding" | "billsOutstanding", ReactNode>),
+        income: (
           <section className="dashboard-reference-panel dashboard-chart-panel">
             <div className="dashboard-reference-panel-heading"><div><h2>Income</h2><strong>{rm(totals?.income, currency)}</strong></div>
               <Link href={`${base}/ledger?section=monthly`}>Details <ArrowRight size={13} /></Link></div>
@@ -277,6 +277,8 @@ export function DashboardPage({ user }: { user: User }) {
               ? <Bars label="Income by period" values={periods.rows.map((row) => ({ key: row.period, value: Number(row.income), title: `${periodLabel(row.period)}: ${rm(row.income, currency)}` }))} />
               : <div className="widget-empty">{report ? noJournals(report.periods) : `— ${reportHint}`}</div>}
           </section>
+        ),
+        profitLoss: (
           <section className="dashboard-reference-panel dashboard-chart-panel">
             <div className="dashboard-reference-panel-heading"><div><h2>Profit &amp; Loss</h2><strong>{rm(totals?.netProfit, currency)}</strong></div>
               <Link href={`${base}/ledger?section=trial`}>Open ledger <ArrowRight size={13} /></Link></div>
@@ -285,8 +287,8 @@ export function DashboardPage({ user }: { user: User }) {
                   values={periods.rows.map((row) => ({ key: row.period, value: Number(row.netProfit), title: `${periodLabel(row.period)}: ${rm(row.netProfit, currency)}` }))} />
               : <div className="widget-empty">{report ? noJournals(report.periods) : `— ${reportHint}`}</div>}
           </section>
-        </div>
-        <div className="dashboard-reference-two-column">
+        ),
+        cashflow: (
           <section className="dashboard-reference-panel dashboard-chart-panel">
             <div className="dashboard-reference-panel-heading"><h2>Cashflow trend</h2><Link href={`${base}/money-in`}>Review bank <ArrowRight size={13} /></Link></div>
             <div className="dashboard-cashflow-chart">
@@ -296,6 +298,8 @@ export function DashboardPage({ user }: { user: User }) {
             </div>
             <small className="dashboard-chart-note">Imported bank lines in {currency}, net per {range.granularity === "month" ? "month" : "day"}{cashOther.length ? `; ${cashOther.join(", ")} lines not shown` : ""}.</small>
           </section>
+        ),
+        reviewDocuments: (
           <section className="dashboard-reference-panel dashboard-list-panel">
             <div className="dashboard-reference-panel-heading"><h2>Documents needing review</h2><Link href={`${base}/documents?lane=to-review`}>View all <ArrowRight size={13} /></Link></div>
             {reviewDocs.map((doc) => <Link className="dashboard-reference-list-row" href={`${base}/documents/${doc.id}`} key={doc.id}>
@@ -303,9 +307,8 @@ export function DashboardPage({ user }: { user: User }) {
             </Link>)}
             {!reviewDocs.length && <div className="widget-empty">{toReview.loading ? "Loading…" : toReview.data === null || toReview.error ? "— The review list could not be loaded." : "No documents need review."}</div>}
           </section>
-        </div>
-      </section>
-
+        ),
+        recentDocuments: (
       <section className="dash-card workspace-documents-card" aria-labelledby="dash-recent-title">
         <div className="dash-card-head">
           <div><h2 id="dash-recent-title">Recent documents</h2><p>The latest documents you can work on.</p></div>
@@ -325,6 +328,8 @@ export function DashboardPage({ user }: { user: User }) {
           {!docs.length && <div className="workspace-document-empty">{recent.loading ? "Loading documents…" : "No documents yet. Upload an invoice, bill or receipt to begin."}</div>}
         </div>
       </section>
+        ),
+      }} />
     </div>
   );
 }
