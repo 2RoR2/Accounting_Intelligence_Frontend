@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { DataTable, Field, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { amountInCents, decimalAmount, documentHref } from "@/features/common/erp/document-logic";
+import { amountInCents, decimalAmount, documentGroup, documentHref } from "@/features/common/erp/document-logic";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { listCatalog } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
@@ -28,7 +28,9 @@ export function bankLineMoney(value: string, currency?: string | null) {
 
 export function BankLineDocumentLink({ line, base }: { line: BankMoneyTransaction; base: string }) {
   if (line.recordedDocumentId && line.recordedDocumentType) {
-    return <Link href={documentHref(base, "bank-entries", line.recordedDocumentType, line.recordedDocumentId)}>
+    // money-in/out live under bank entries; a matched payment voucher or official receipt under purchases/sales.
+    const group = documentGroup(line.recordedDocumentType) ?? "bank-entries";
+    return <Link href={documentHref(base, group, line.recordedDocumentType, line.recordedDocumentId)}>
       {line.recordedDocumentNumber || "Open document"}
     </Link>;
   }

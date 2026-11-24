@@ -2,7 +2,7 @@ import { amountInCents, decimalAmount } from "@/features/common/erp/document-log
 import { ApiError } from "@/lib/api/client";
 import { createManualMatchCandidate, decideMatch, getMoneyTransactionDetail, matchBankRecords, type ManualMatchRecord } from "@/lib/api/money.service";
 import type { User } from "@/types";
-import type { BankMoneyTransaction, BankReconciliationCandidate, MatchStatus } from "@/types/money";
+import type { BankMoneyTransaction, BankReconciliationCandidate, MatchStatus, PaymentDocumentCandidate } from "@/types/money";
 
 export const MATCH_LIMIT = 50;
 
@@ -70,6 +70,50 @@ export function canReviewBankCandidate(
   candidate?: Pick<BankReconciliationCandidate, "status">,
 ) {
   return candidate?.status === "proposed" && (line.status === "proposed" || line.status === "imported");
+}
+
+/** A proposed bill/invoice that can still be confirmed: not one a voucher/receipt already paid. */
+export function canConfirmBankCandidate(
+  line: Pick<BankMoneyTransaction, "status">,
+  candidate?: Pick<BankReconciliationCandidate, "status" | "settledBy">,
+) {
+  return canReviewBankCandidate(line, candidate) && !candidate?.settledBy;
+}
+
+/** The candidate's plain-language reasons, or its rule codes from an older backend. */
+export function candidateEvidence(candidate: Pick<BankReconciliationCandidate, "explanation" | "reasons">) {
+  return candidate.explanation?.length ? candidate.explanation : candidate.reasons;
+}
+
+export type RankedBankSuggestion =
+  | { kind: "payment_document"; score: number; payment: PaymentDocumentCandidate }
+  | { kind: "record"; score: number; candidate: BankReconciliationCandidate };
+
+/**
+ * The line's suggestions, best first: recorded vouchers/receipts and proposed bills/invoices ranked together by the
+ * server's score (amount, reference, date). On a tie a voucher/receipt comes first: matching it posts nothing.
+ * Decided records (matched, rejected, superseded) follow in the server's order.
+ */
+export function rankedBankSuggestions(line: Pick<BankMoneyTransaction, "candidates" | "paymentCandidates">): RankedBankSuggestion[] {
+  const records = line.candidates ?? [];
+  const open: RankedBankSuggestion[] = [
+    ...(line.paymentCandidates ?? []).map((payment) => ({ kind: "payment_document" as const, score: payment.score, payment })),
+    ...records.filter((candidate) => candidate.status === "proposed")
+      .map((candidate) => ({ kind: "record" as const, score: candidate.score ?? 0, candidate })),
+  ].sort((a, b) => b.score - a.score);
+  const decided = records.filter((candidate) => candidate.status !== "proposed")
+    .map((candidate) => ({ kind: "record" as const, score: candidate.score ?? 0, candidate }));
+  return [...open, ...decided];
+}
+
+/** "payment voucher" / "official receipt" for the document a matched line links to. */
+export function paymentDocumentNoun(type: BankMoneyTransaction["recordedDocumentType"]) {
+  return type === "payment" ? "official receipt" : type === "purchase-payment" ? "payment voucher" : "document";
+}
+
+/** A voucher/receipt can be matched while the line is open, unallocated and not recorded by another document. */
+export function canMatchPaymentDocument(line: BankMoneyTransaction) {
+  return (line.status === "imported" || line.status === "proposed") && !line.recordedDocumentId && isUnallocated(line);
 }
 
 export function canAllocateBankLine(line: BankMoneyTransaction) {

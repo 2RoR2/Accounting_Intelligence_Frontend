@@ -112,7 +112,19 @@ export const matchBankRecords = (id: string, expectedAllocated: string, allocati
   api<{ settlementId: string; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { expectedAllocated, allocations }),
   );
-export const createManualMatchCandidate = (bankTransactionId: string, recordId: string) =>
+/** Matching a line to a recorded voucher/receipt never posts (postedJournal is always false); a retry is alreadyMatched. */
+export type PaymentDocumentMatch = {
+  bankTransactionId: string; documentId: string; documentType: string; documentNumber: string; journalId: string | null;
+  bankTransactionStatus: BankTransactionStatus; postedJournal: false; alreadyMatched: boolean;
+};
+export const matchBankPaymentDocument = (id: string, documentId: string) =>
+  api<PaymentDocumentMatch>(`/api/bank/transactions/${encodeURIComponent(id)}/match-payment-document`,
+    json("POST", { documentId }));
+export const unmatchBankPaymentDocument = (id: string, reason: string) =>
+  api<{ bankTransactionId: string; documentId: string; documentNumber: string; bankTransactionStatus: BankTransactionStatus;
+    reversedJournal: false }>(`/api/bank/transactions/${encodeURIComponent(id)}/unmatch-payment-document`,
+    json("POST", { reason: reason.trim() }));
+export const createManualMatchCandidate =(bankTransactionId: string, recordId: string) =>
   api<{ id: string }>("/api/bank/reconciliation/candidates", json("POST", { bankTransactionId, recordId, proposedBy: "accountant", reasonCodes: ["MANUAL_SELECTION"] }));
 
 export interface BankImportPreview {

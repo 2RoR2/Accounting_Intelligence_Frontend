@@ -18,16 +18,20 @@ import {
   getReconciliationPeriods,
   createReconciliationPeriod,
   completeReconciliationPeriod,
+  matchBankPaymentDocument,
+  unmatchBankPaymentDocument,
   type BankImportPreview,
   type BankPaymentPosting,
   type BankPaymentPreview,
 } from "@/lib/api/money.service";
 import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } from "@/types";
+import type { PaymentDocumentCandidate } from "@/types/money";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
+import { documentGroup, documentHref } from "@/features/common/erp/document-logic";
 import { BankLineActions, BankLineDocumentLink, PaymentJournalTable } from "./bank-line-actions";
 import {
-  bankLineStatusLabel, bankPaymentNotPosted, canReviewBankCandidate, isUnallocated,
-  PAYMENT_NOT_POSTED, PAYMENT_WAITING_FOR_ADMIN,
+  bankLineStatusLabel, bankPaymentNotPosted, canConfirmBankCandidate, canMatchPaymentDocument, canReviewBankCandidate,
+  candidateEvidence, isUnallocated, paymentDocumentNoun, rankedBankSuggestions, PAYMENT_NOT_POSTED, PAYMENT_WAITING_FOR_ADMIN,
 } from "./allocation-logic";
 import { autoMapColumns, headerMatchesField, IMPORT_COLUMNS, importMappingForPreview, type ImportColumn } from "./import-mapping";
 function csvHeaders(text: string): string[] {
@@ -122,7 +126,9 @@ export function ReconciliationPage({ user }: { user: User }) {
   }, {} as Record<string, { moneyIn: number; moneyOut: number }>), [visibleRows]);
   const primaryCurrency = Object.keys(totals)[0] ?? "MYR";
   const primaryTotals = totals[primaryCurrency] ?? { moneyIn: 0, moneyOut: 0 };
-  const reviewCandidates = reviewRow?.candidates ?? [];
+  // Recorded vouchers/receipts and bills/invoices together, best first, each with its reasons.
+  const suggestions = reviewRow ? rankedBankSuggestions(reviewRow) : [];
+  const [unmatchReason, setUnmatchReason] = useState("");
 
   async function onImport(file: File | undefined) {
     if (!file) return;
@@ -201,6 +207,7 @@ export function ReconciliationPage({ user }: { user: User }) {
       if (!line) throw new Error("The bank line could not be found.");
       setReviewRow(line);
       setPostedPayment(null);
+      setUnmatchReason("");
       void loadMatchPreview(line);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Unable to load the bank line.");
@@ -210,7 +217,7 @@ export function ReconciliationPage({ user }: { user: User }) {
   }
 
   async function loadMatchPreview(line: BankMoneyTransactionDetail) {
-    const candidate = (line.candidates ?? []).find((item) => canReviewBankCandidate(line, item));
+    const candidate = (line.candidates ?? []).find((item) => canConfirmBankCandidate(line, item));
     setMatchPreview(admin && candidate ? { candidateId: candidate.id } : null);
     if (!admin || !candidate) return;
     try {
@@ -242,6 +249,39 @@ export function ReconciliationPage({ user }: { user: User }) {
       }
       await refresh();
     } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to save reconciliation decision."); }
+    finally { setBusyId(null); }
+  }
+
+  async function reloadReviewRow(id: string, fallback: string) {
+    const updated = await getMoneyTransactionDetail(user, id).catch(() => undefined);
+    setReviewRow(updated ?? null);
+    if (!updated) setActionError(fallback);
+    await refresh();
+  }
+
+  /** Link the line to the voucher/receipt that already recorded the payment. Posts nothing; a retry is harmless. */
+  async function matchPayment(payment: PaymentDocumentCandidate) {
+    if (busy || busyId || !reviewRow) return;
+    setBusyId(payment.documentId); setNotice(""); setActionError("");
+    try {
+      const result = await matchBankPaymentDocument(reviewRow.id, payment.documentId);
+      setNotice(`${result?.alreadyMatched ? "Already matched" : "Matched"} to ${payment.documentLabel.toLowerCase()} ` +
+        `${payment.documentNumber}. Nothing was posted: ${payment.documentNumber} already recorded this payment.`);
+      await reloadReviewRow(reviewRow.id, "Match saved. Reopen the bank line to load the latest details.");
+    } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to match this payment."); }
+    finally { setBusyId(null); }
+  }
+
+  async function unmatchPayment() {
+    if (busy || busyId || !reviewRow || !unmatchReason.trim()) return;
+    setBusyId(reviewRow.id); setNotice(""); setActionError("");
+    try {
+      const result = await unmatchBankPaymentDocument(reviewRow.id, unmatchReason);
+      setNotice(`Unmatched from ${result?.documentNumber ?? "the payment"}. The payment and its journal are unchanged; ` +
+        "the bank line is open again.");
+      setUnmatchReason("");
+      await reloadReviewRow(reviewRow.id, "Unmatched. Reopen the bank line to load the latest details.");
+    } catch (e) { setActionError(e instanceof Error ? e.message : "Unable to unmatch this bank line."); }
     finally { setBusyId(null); }
   }
 
@@ -313,7 +353,10 @@ export function ReconciliationPage({ user }: { user: User }) {
             <span>{bankLineStatusLabel(selectedRow)}</span>
             {selectedRow.paymentPosted && <Badge>Payment posted</Badge>}
             {bankPaymentNotPosted(selectedRow) && <Badge>{admin ? "Ready to post" : PAYMENT_WAITING_FOR_ADMIN}</Badge>}
+            {!!selectedRow.paymentCandidates?.length && <Badge>Recorded payment found</Badge>}
           </div>
+          {selectedRow.matchedPaymentDocument && <p>Matched to {paymentDocumentNoun(selectedRow.recordedDocumentType)}{" "}
+            <BankLineDocumentLink line={selectedRow} base={base} /> (posted when it was issued).</p>}
         </> : <div className="bank-detail-empty"><Landmark size={28} /><strong>Select a transaction</strong><span>Choose a bank line to review its amount, reference, and matching options.</span></div>}</aside>
       </div>
     </Panel>}
@@ -369,46 +412,92 @@ export function ReconciliationPage({ user }: { user: User }) {
             </div>
           </div>
 
-          {reviewCandidates.length ? reviewCandidates.map((reviewCandidate) => <section key={reviewCandidate.id} className="reconciliation-match-record">
+          {reviewRow.matchedPaymentDocument && <section className="reconciliation-match-record">
             <div className="transaction-review-section-heading">
-              <h3>Suggested standardised record</h3>
-              <Badge>{reviewCandidate.status === "confirmed" ? "MATCHED" : reviewCandidate.status.toUpperCase()}</Badge>
+              <h3>Matched to a recorded payment</h3>
+              <Badge>MATCHED</Badge>
             </div>
-            <div className="reconciliation-match-record-grid">
-              <div><span>Record</span><strong>{reviewCandidate.recordCode}</strong></div>
-              <div><span>Category</span><strong>{reviewCandidate.category.replace(/_/g, " ")}</strong></div>
-              <div><span>Reference</span><strong>{reviewCandidate.reference || "—"}</strong></div>
-              <div><span>Party</span><strong>{reviewCandidate.party || "—"}</strong></div>
-              <div><span>Record amount</span><strong>{money(reviewCandidate.amount, reviewCandidate.currency)}</strong></div>
-              <div><span>Difference</span><strong>{money(reviewCandidate.amountDelta, reviewCandidate.currency)}</strong></div>
-              <div className="reconciliation-match-record-wide"><span>Match evidence</span><strong>{reviewCandidate.reasons.join(", ") || "Suggested match"}</strong></div>
+            <p>This bank line is explained by {paymentDocumentNoun(reviewRow.recordedDocumentType)}{" "}
+              <BankLineDocumentLink line={reviewRow} base={base} />. Its journal was posted when it was issued, so the
+              match posted nothing.</p>
+            <div className="reconciliation-review-actions">
+              <input aria-label="Reason for unmatching" placeholder="Reason for unmatching" value={unmatchReason}
+                maxLength={1000} disabled={busy || !!busyId} onChange={(event) => setUnmatchReason(event.target.value)} />
+              <button className="btn" type="button" disabled={busy || !!busyId || !unmatchReason.trim()}
+                onClick={() => void unmatchPayment()}>Unmatch</button>
             </div>
-            <div className="reconciliation-review-links">
-              <Link className="btn small" href={`${base}/records/${reviewCandidate.recordId}`}>View standardised record</Link>
-              {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
-            </div>
-            {canReviewBankCandidate(reviewRow, reviewCandidate) && <>
-              <MatchPaymentPreview admin={admin} currency={reviewRow.currency}
-                preview={matchPreview?.candidateId === reviewCandidate.id ? matchPreview : undefined} />
-              <div className="reconciliation-review-actions">
-                {admin && <button className="btn primary" type="button"
-                  disabled={busy || !!busyId || !isUnallocated(reviewRow) || matchPreview?.candidateId !== reviewCandidate.id || !matchPreview.preview?.canPost}
-                  onClick={() => void decide(reviewCandidate, "confirm", true)}>Confirm and post payment</button>}
-                <button className={admin ? "btn" : "btn primary"} type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)}
-                  onClick={() => void decide(reviewCandidate, "confirm")}>{admin ? "Confirm match only" : "Confirm match"}</button>
-                <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
+          </section>}
+
+          {suggestions.length ? suggestions.map((item) => item.kind === "payment_document"
+            ? <section key={`payment-${item.payment.documentId}`} className="reconciliation-match-record">
+              <div className="transaction-review-section-heading">
+                <h3>Recorded payment: {item.payment.documentLabel.toLowerCase()}</h3>
+                <Badge>SUGGESTED</Badge>
               </div>
-            </>}
-          </section>) : <section className="reconciliation-match-record">
-            <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3></div>
-            <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
+              <div className="reconciliation-match-record-grid">
+                <div><span>{item.payment.documentLabel}</span><strong>
+                  <Link href={documentHref(base, documentGroup(item.payment.documentType) ?? "purchases", item.payment.documentType, item.payment.documentId)}>
+                    {item.payment.documentNumber}</Link></strong></div>
+                <div><span>{item.payment.documentType === "payment" ? "Received from" : "Paid to"}</span><strong>{item.payment.contactName || "—"}</strong></div>
+                <div><span>Date</span><strong>{item.payment.documentDate}</strong></div>
+                <div><span>Amount</span><strong>{money(item.payment.amount, item.payment.currency)}</strong></div>
+                <div><span>Reference</span><strong>{item.payment.reference || "—"}</strong></div>
+                <div className="reconciliation-match-record-wide"><span>Why it is suggested</span><strong>{item.payment.explanation.join(" · ")}</strong></div>
+              </div>
+              <p className="reconciliation-review-empty-copy">{item.payment.documentNumber} already posted this payment.
+                Confirming links the bank line to it and posts nothing.</p>
+              {canMatchPaymentDocument(reviewRow) && <div className="reconciliation-review-actions">
+                <button className="btn primary" type="button" disabled={busy || !!busyId}
+                  onClick={() => void matchPayment(item.payment)}>Confirm match to {item.payment.documentNumber}</button>
+              </div>}
+            </section>
+            : <section key={item.candidate.id} className="reconciliation-match-record">
+              <div className="transaction-review-section-heading">
+                <h3>Suggested standardised record</h3>
+                <Badge>{item.candidate.status === "confirmed" ? "MATCHED" : item.candidate.status.toUpperCase()}</Badge>
+              </div>
+              <div className="reconciliation-match-record-grid">
+                <div><span>Record</span><strong>{item.candidate.recordCode}</strong></div>
+                <div><span>Category</span><strong>{item.candidate.category.replace(/_/g, " ")}</strong></div>
+                <div><span>Reference</span><strong>{item.candidate.reference || "—"}</strong></div>
+                <div><span>Party</span><strong>{item.candidate.party || "—"}</strong></div>
+                <div><span>Record amount</span><strong>{money(item.candidate.amount, item.candidate.currency)}</strong></div>
+                <div><span>Difference</span><strong>{money(item.candidate.amountDelta, item.candidate.currency)}</strong></div>
+                <div className="reconciliation-match-record-wide"><span>Match evidence</span><strong>{candidateEvidence(item.candidate).join(" · ") || "Suggested match"}</strong></div>
+              </div>
+              {item.candidate.settledBy && canReviewBankCandidate(reviewRow, item.candidate) && <p className="notice" role="status">
+                {item.candidate.settledBy.documentLabel} {item.candidate.settledBy.documentNumber} already paid this record.{" "}
+                {item.candidate.settledBy.bankMatched ? "It is matched to another bank line; reject this match."
+                  : `Match the bank line to ${item.candidate.settledBy.documentNumber} instead, so the payment is not posted twice.`}</p>}
+              <div className="reconciliation-review-links">
+                <Link className="btn small" href={`${base}/records/${item.candidate.recordId}`}>View standardised record</Link>
+                {item.candidate.documentId && <Link className="btn small" href={`${base}/documents/${item.candidate.documentId}`}>View original document</Link>}
+              </div>
+              {canReviewBankCandidate(reviewRow, item.candidate) && <>
+                {canConfirmBankCandidate(reviewRow, item.candidate) && <MatchPaymentPreview admin={admin} currency={reviewRow.currency}
+                  preview={matchPreview?.candidateId === item.candidate.id ? matchPreview : undefined} />}
+                <div className="reconciliation-review-actions">
+                  {canConfirmBankCandidate(reviewRow, item.candidate) && <>
+                    {admin && <button className="btn primary" type="button"
+                      disabled={busy || !!busyId || !isUnallocated(reviewRow) || matchPreview?.candidateId !== item.candidate.id || !matchPreview.preview?.canPost}
+                      onClick={() => void decide(item.candidate, "confirm", true)}>Confirm and post payment</button>}
+                    <button className={admin ? "btn" : "btn primary"} type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)}
+                      onClick={() => void decide(item.candidate, "confirm")}>{admin ? "Confirm match only" : "Confirm match"}</button>
+                  </>}
+                  <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(item.candidate, "reject")}>Reject match</button>
+                </div>
+              </>}
+            </section>) : !reviewRow.matchedPaymentDocument && <section className="reconciliation-match-record">
+            <div className="transaction-review-section-heading"><h3>No suggested record or recorded payment</h3></div>
+            <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved record or
+              recorded payment voucher / receipt has been suggested yet.</p>
           </section>}
 
           {postedPayment?.lineId === reviewRow.id && <section className="transaction-review-section">
             <div className="transaction-review-section-heading"><h3>Posted payment journal</h3></div>
             <PaymentJournalTable lines={postedPayment.payment.lines} currency={reviewRow.currency} />
           </section>}
-          {reviewRow.recordedDocumentId && <p>Original document <BankLineDocumentLink line={reviewRow} base={base} /></p>}
+          {reviewRow.recordedDocumentId && !reviewRow.matchedPaymentDocument && <p>Original document <BankLineDocumentLink line={reviewRow} base={base} /></p>}
           <BankLineActions user={user} line={reviewRow} busy={busy || !!busyId} onBusyChange={setBusy}
             onLineLoaded={(line) => { setReviewRow(line); void refresh(); }} />
 

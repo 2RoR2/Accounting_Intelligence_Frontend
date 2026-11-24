@@ -1,4 +1,36 @@
-import type { BANK_TYPES } from "@/lib/api/erp.service";
+import type { DocumentType } from "@/lib/api/erp.service";
+
+/** A payment voucher (money out) or official receipt (money in) that already posted the payment. */
+export type PaymentDocumentType = "payment" | "purchase-payment";
+
+/** The voucher/receipt that already paid a suggested bill or invoice: the bank line belongs to it instead. */
+export interface BankMatchSettledBy {
+  documentId: string;
+  documentType: PaymentDocumentType;
+  documentNumber: string;
+  documentLabel: string;
+  /** Already matched to another bank line. */
+  bankMatched: boolean;
+}
+
+/** A recorded voucher/receipt suggested for a bank line. Confirming it links the line and posts nothing. */
+export interface PaymentDocumentCandidate {
+  kind: "payment_document";
+  documentId: string;
+  documentType: PaymentDocumentType;
+  documentLabel: string;
+  documentNumber: string;
+  contactName: string | null;
+  reference: string | null;
+  documentDate: string;
+  amount: string;
+  currency: string;
+  daysApart: number | null;
+  /** Rank against the line's other suggestions (higher first). */
+  score: number;
+  /** Why it is suggested: same amount, reference found, days apart. */
+  explanation: string[];
+}
 
 export type MoneyDirection = "money_in" | "money_out";
 
@@ -28,6 +60,13 @@ export interface BankReconciliationCandidate {
   reasons: string[];
   evidence: Record<string, unknown>;
   status: "proposed" | "confirmed" | "rejected" | "reversed" | "superseded";
+  recordDate?: string | null;
+  /** Rank against the line's other suggestions (higher first). */
+  score?: number;
+  /** Plain-language reasons: same amount, reference found, days apart. */
+  explanation?: string[];
+  /** A voucher/receipt already paid this record: match the bank line to it instead. */
+  settledBy?: BankMatchSettledBy | null;
 }
 
 /** Simplified match state for the Money In / Money Out UI. */
@@ -79,7 +118,12 @@ export interface BankMoneyTransaction {
   relatedDocumentCode?: string | null;
   recordedDocumentId: string | null;
   recordedDocumentNumber: string | null;
-  recordedDocumentType: (typeof BANK_TYPES)[number] | null;
+  /** money-in/out created from the line, or the voucher/receipt it is matched to (matchedPaymentDocument). */
+  recordedDocumentType: DocumentType | null;
+  /** Matched to a voucher/receipt recorded before the bank line: that payment's journal stands; undo with Unmatch. */
+  matchedPaymentDocument?: boolean;
+  /** Recorded vouchers/receipts that could explain this line, best first. */
+  paymentCandidates?: PaymentDocumentCandidate[];
   amountDelta?: string | null;
   createdAt: string | null;
   candidateId?: string | null;
