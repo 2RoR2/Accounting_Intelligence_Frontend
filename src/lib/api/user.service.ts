@@ -1,4 +1,4 @@
-import type { User, UserStatus } from "@/types";
+import type { InvitedUser, User, UserStatus } from "@/types";
 import { assertTenant, requireRole } from "../permissions";
 import { passwordChecks } from "./auth.service";
 import { api, get } from "./client";
@@ -47,7 +47,7 @@ export async function inviteAccountant(
   requireRole(user, ["LOCAL_ADMIN"]);
   if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     throw new Error("Enter a full name and valid company email.");
-  return api<User>("/api/users/invitations", { method: "POST", body: JSON.stringify({ name: name.trim(), email }) });
+  return api<InvitedUser>("/api/users/invitations", { method: "POST", body: JSON.stringify({ name: name.trim(), email }) });
   /*
   return mutate((db) => {
     if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase()))
@@ -75,6 +75,17 @@ export async function inviteAccountant(
     log(db, user, "ACCOUNTANT_INVITED", email, "Invitation created.");
     return invited;
   }); */
+}
+export type CompanyUserRole = "LOCAL_ADMIN" | "ACCOUNTANT";
+/** Super Admin invites a Company Admin or Accountant into an existing company. */
+export async function addCompanyUser(user: User, tenantId: string, name: string, email: string, role: CompanyUserRole) {
+  requireRole(user, ["SUPER_ADMIN"]);
+  if (name.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    throw new Error("Enter a full name and valid company email.");
+  return api<InvitedUser>(`/api/tenants/${encodeURIComponent(tenantId)}/users`, {
+    method: "POST",
+    body: JSON.stringify({ name: name.trim(), email: email.trim(), role: role.toLowerCase() }),
+  });
 }
 export async function changeUserStatus(
   user: User,
@@ -110,8 +121,8 @@ export async function changeUserStatus(
 export const disableUser = (user: User, id: string) =>
   changeUserStatus(user, id, "DISABLED");
 export async function resendInvitation(user: User, userId: string) {
-  await api(`/api/users/${userId}/resend-invitation`, { method: "POST" });
-  return;
+  requireRole(user, ["LOCAL_ADMIN", "SUPER_ADMIN"]);
+  return api<InvitedUser>(`/api/users/${encodeURIComponent(userId)}/resend-invitation`, { method: "POST" });
   /*
   await changeUserStatus(user, userId, "INVITED");
   mutate((db) => {

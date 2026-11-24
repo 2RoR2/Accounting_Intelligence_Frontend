@@ -27,7 +27,6 @@ import { Badge, Field, ErrorState, LoadingState } from "@/components/common/ui";
 import { HelpCenter } from "@/features/common/help/help-center";
 import {
   activateAccount,
-  getAccounts,
   login,
   verifyMfa,
   resendMfa,
@@ -47,14 +46,14 @@ import { useResource } from "@/features/common/hooks/use-resource";
 export function PublicPage({ page }: { page: string }) {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: accounts } = useResource(getAccounts, "public");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [activation, setActivation] = useState(params.get("user") ?? "");
+  // The single-use token from the emailed link (/activate?token=...). Only its hash is stored server-side.
+  const activationToken = params.get("token") ?? "";
   const [otpStep, setOtpStep] = useState(false);
   const [mfaStep, setMfaStep] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
@@ -88,7 +87,6 @@ export function PublicPage({ page }: { page: string }) {
     "reset-password": "Create a new password",
     help: "Help & support",
   };
-  const selected = accounts?.find((a) => a.id === activation);
   useEffect(() => {
     if (!otpStep) return;
     const timer = window.setInterval(() => {
@@ -171,7 +169,7 @@ export function PublicPage({ page }: { page: string }) {
         );
       } else if (page === "activate") {
         await activateAccount(
-          activation,
+          activationToken,
           password,
           String(f.get("confirm")),
         );
@@ -689,33 +687,16 @@ export function PublicPage({ page }: { page: string }) {
                 </>
               )}
               {page === "activate" && (
-                <>
-                  <Field label="Pending invitation">
-                    <select
-                      required
-                      value={activation}
-                      onChange={(e) => setActivation(e.target.value)}
-                    >
-                      <option value="">Select an invitation</option>
-                      {accounts
-                        ?.filter((a) =>
-                          ["INVITED", "INVITATION_EXPIRED"].includes(a.status),
-                        )
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} · {a.email}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                  {selected && (
-                    <div className="info-box">
-                      <strong>{selected.email}</strong>
-                      <span>Company: {selected.tenantId}</span>
-                      <Badge>{selected.role}</Badge>
-                    </div>
-                  )}
-                </>
+                activationToken ? (
+                  <div className="info-box">
+                    <span>
+                      Choose the password for your invited account. This link works once; after that, sign in
+                      with your company email.
+                    </span>
+                  </div>
+                ) : (
+                  <ErrorState message="Open the activation link from your invitation email. If it has expired, ask your company administrator to resend the invitation." />
+                )
               )}
               {page === "forgot-password" && (
                 <Field label="Company email *">
@@ -785,7 +766,7 @@ export function PublicPage({ page }: { page: string }) {
                   </div>
                 </div>
               )}
-              <button className={`btn primary full${page === "reset-password" ? " reset-submit" : ""}`} disabled={busy}>
+              <button className={`btn primary full${page === "reset-password" ? " reset-submit" : ""}`} disabled={busy || (page === "activate" && !activationToken)}>
                 {busy
                   ? "Please wait…"
                   : page === "login"

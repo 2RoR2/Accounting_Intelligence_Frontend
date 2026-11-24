@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Building2, Plus } from "lucide-react";
-import type { CompanyRequest, Tenant, User } from "@/types";
+import type { CompanyRequest, InvitationDelivery, Tenant, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
   approveCompanyRequest,
@@ -34,6 +34,12 @@ import {
   formatDate,
 } from "@/components/common/ui";
 import { UserManagement } from "@/features/common/users/user-management";
+import {
+  InvitationLinkModal,
+  invitationMessage,
+  undeliveredInvitation,
+  type UndeliveredInvitation,
+} from "@/features/common/users/invitation-link";
 import { ProcessingPage, AuditPage } from "@/features/common/monitoring/monitoring";
 import { RecordsPage } from "@/features/common/records/records";
 export function Approvals({ user }: { user: User }) {
@@ -59,13 +65,14 @@ export function Approvals({ user }: { user: User }) {
     approve: boolean;
   }>();
   const [busy, setBusy] = useState(false);
-  async function act(operation: () => Promise<unknown>, message: string) {
+  const [undelivered, setUndelivered] = useState<UndeliveredInvitation>();
+  async function act(operation: () => Promise<unknown>, message: string | ((result: unknown) => string)) {
     setBusy(true);
     try {
-      await operation();
+      const result = await operation();
       setReview(undefined);
       setLimitReview(undefined);
-      setToast(message);
+      setToast(typeof message === "function" ? message(result) : message);
       setFailure("");
       await refresh();
     } catch (e) {
@@ -301,7 +308,11 @@ export function Approvals({ user }: { user: User }) {
                               ? approveCompanyRequest(user, review.id, limit)
                               : rejectCompanyRequest(user, review.id, reason),
                           mode === "approve"
-                            ? `${review.company} approved. Local Administrator activation invitation created for ${review.email}.`
+                            ? (result) => {
+                                const delivery = (result as { invitation?: InvitationDelivery } | undefined)?.invitation;
+                                setUndelivered(undeliveredInvitation(delivery, review.email, window.location.origin));
+                                return `${review.company} approved. ${invitationMessage(delivery, review.email)}`;
+                              }
                             : "Company request rejected.",
                         )
                       }
@@ -349,6 +360,7 @@ export function Approvals({ user }: { user: User }) {
           </div>
         </Modal>
       )}
+      {undelivered && <InvitationLinkModal invitation={undelivered} onClose={() => setUndelivered(undefined)} />}
       <Toast message={toast} />
     </>
   );

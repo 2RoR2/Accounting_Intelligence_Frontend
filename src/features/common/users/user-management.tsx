@@ -1,17 +1,24 @@
 "use client";
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Pencil, Plus } from "lucide-react";
-import type { User, UserStatus } from "@/types";
+import type { InvitedUser, User, UserStatus } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getTenants, requestAccountLimit } from "@/lib/api/tenant.service";
 import {
+  addCompanyUser,
   changeUserStatus,
   getTenantUsers,
   inviteAccountant,
   resendInvitation,
   updateAccountantCredentials,
+  type CompanyUserRole,
 } from "@/lib/api/user.service";
+import {
+  InvitationLinkModal,
+  invitationMessage,
+  undeliveredInvitation,
+  type UndeliveredInvitation,
+} from "@/features/common/users/invitation-link";
 import {
   AccountUsage,
   Badge,
@@ -46,13 +53,14 @@ export function UserManagement({
   );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [modal, setModal] = useState<"invite" | "limit">();
+  const [modal, setModal] = useState<"invite" | "limit" | "add">();
   const [confirm, setConfirm] = useState<{ user: User; status: UserStatus }>();
   const [view, setView] = useState<User>();
   const [edit, setEdit] = useState<User>();
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [undelivered, setUndelivered] = useState<UndeliveredInvitation>();
   if (loading) return <LoadingState />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const tenant = data.tenants.find((t) => t.id === (tenantId ?? user.tenantId));
@@ -60,11 +68,15 @@ export function UserManagement({
     ["ACTIVE", "INVITED"].includes(u.status),
   ).length;
   const full = !!tenant && used >= tenant.accountLimit;
+  // Super Admin adds Company Admins or Accountants from a company's Users tab.
+  const canAdd = admin && !!tenantId && !!tenant;
   async function run(op: () => Promise<unknown>, message: string) {
     setBusy(true);
     try {
-      await op();
-      setToast(message);
+      const result = await op();
+      const invited = result && typeof result === "object" && "invitation" in result ? (result as InvitedUser) : undefined;
+      setToast(invited ? invitationMessage(invited.invitation, invited.email) : message);
+      setUndelivered(invited && undeliveredInvitation(invited.invitation, invited.email, window.location.origin));
       setFailure("");
       setModal(undefined);
       setConfirm(undefined);
@@ -87,14 +99,22 @@ export function UserManagement({
               String(f.get("name")),
               String(f.get("email")),
             )
-          : requestAccountLimit(
-              user,
-              Number(f.get("limit")),
-              String(f.get("reason")),
-            ),
-      modal === "invite"
-        ? `Invitation sent to ${f.get("email")}.`
-        : "Account limit request submitted to AccordAI.",
+          : modal === "add" && tenantId
+            ? addCompanyUser(
+                user,
+                tenantId,
+                String(f.get("name")),
+                String(f.get("email")),
+                String(f.get("role")) as CompanyUserRole,
+              )
+            : requestAccountLimit(
+                user,
+                Number(f.get("limit")),
+                String(f.get("reason")),
+              ),
+      modal === "limit"
+        ? "Account limit request submitted to AccordAI."
+        : `Invitation sent to ${f.get("email")}.`,
     );
   }
   return (
@@ -107,7 +127,19 @@ export function UserManagement({
             : "Manage your company’s accountants and reserved seats."
         }
         actions={
-            canManage && (
+          canAdd ? (
+            <button
+              className="btn primary"
+              disabled={full || tenant?.status !== "ACTIVE"}
+              title={tenant?.status !== "ACTIVE" ? "Reactivate the company first." : full ? "Account limit reached." : undefined}
+              onClick={() => {
+                setModal("add");
+                setFailure("");
+              }}
+            >
+              <Plus size={16} /> Add user
+            </button>
+          ) : canManage && (
             <>
               <button
                 className="btn"
@@ -260,13 +292,10 @@ export function UserManagement({
                           onClick={() =>
                             run(
                               () =>
-                                changeUserStatus(
-                                  user,
-                                  u.id,
-                                  u.status === "DISABLED"
-                                    ? "ACTIVE"
-                                    : "INVITED",
-                                ),
+                                // Reinviting issues a fresh activation link; a status change alone sends nothing.
+                                u.status === "DISABLED"
+                                  ? changeUserStatus(user, u.id, "ACTIVE")
+                                  : resendInvitation(user, u.id),
                               "Account updated.",
                             )
                           }
@@ -275,6 +304,14 @@ export function UserManagement({
                         </button>
                       )}
                     </>
+                  )}
+                  {admin && u.role !== "SUPER_ADMIN" && ["INVITED", "INVITATION_EXPIRED"].includes(u.status) && (
+                    <button
+                      className="text-link"
+                      onClick={() => run(() => resendInvitation(user, u.id), "Invitation resent.")}
+                    >
+                      Resend invitation
+                    </button>
                   )}
                 </div>
               ),
@@ -286,13 +323,35 @@ export function UserManagement({
       {modal && (
         <Modal
           title={
-            modal === "invite" ? "Invite accountant" : "Request more accounts"
+            modal === "invite" ? "Invite accountant" : modal === "add" ? `Add user to ${tenant?.name ?? "company"}` : "Request more accounts"
           }
           onClose={() => setModal(undefined)}
         >
           <form className="panel-body" onSubmit={submit}>
             {failure && <ErrorState message={failure} />}
-            {modal === "invite" ? (
+            {modal === "add" ? (
+              <>
+                <Field label="Full name *">
+                  <input name="name" required minLength={2} />
+                </Field>
+                <Field label="Company email *" hint="Emails are unique across AccordAI; one person, one account.">
+                  <input name="email" type="email" required />
+                </Field>
+                <Field label="Role *">
+                  <select name="role" required defaultValue="ACCOUNTANT">
+                    <option value="ACCOUNTANT">Accountant</option>
+                    <option value="LOCAL_ADMIN">Company Admin</option>
+                  </select>
+                </Field>
+                <div className="info-box">
+                  <span>
+                    We email a single-use activation link. The person chooses their own password; Company
+                    Admins also set up an authenticator at first sign-in.
+                  </span>
+                </div>
+                <AccountUsage used={used} limit={tenant?.accountLimit ?? 1} />
+              </>
+            ) : modal === "invite" ? (
               <>
                 <Field label="Full name *">
                   <input name="name" required />
@@ -335,7 +394,7 @@ export function UserManagement({
                 Cancel
               </button>
               <button className="btn primary" disabled={busy}>
-                {modal === "invite" ? "Send invitation" : "Submit request"}
+                {modal === "limit" ? "Submit request" : "Send invitation"}
               </button>
             </div>
           </form>
@@ -424,13 +483,15 @@ export function UserManagement({
               <strong>{formatDate(view.invitedAt)}</strong>
             </div>
             {view.status === "INVITED" && (
-              <Link href={`/activate?user=${view.id}`} className="btn primary">
-                Open activation
-              </Link>
+              <p className="muted">
+                Waiting for them to open the emailed activation link. Use Resend to issue a new link; the old one
+                stops working.
+              </p>
             )}
           </div>
         </Modal>
       )}
+      {undelivered && <InvitationLinkModal invitation={undelivered} onClose={() => setUndelivered(undefined)} />}
       <Toast message={toast} />
     </div>
   );
