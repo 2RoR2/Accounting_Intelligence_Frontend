@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { EmptyState, Field, LoadingState, Panel, formatDate } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { openInNewTab } from "@/lib/api/client";
@@ -8,8 +8,26 @@ import {
   addAttachmentLink, listAttachments, removeAttachment, uploadAttachment, type Attachment,
 } from "@/lib/api/attachments.service";
 import {
-  ATTACHMENT_ACCEPT, canAttach, fileProblem, formatBytes, isImage, linkHost, linkProblem,
+  ATTACHMENT_ACCEPT, ATTACHMENTS_CHANGED, canAttach, fileProblem, formatBytes, isImage, linkHost, linkProblem,
+  showsSupplierCopy, type AttachmentsChanged,
 } from "./attachments-logic";
+
+/** Tell the other view of this record's attachments (the supplier's copy beside a bill) that they changed. */
+export function announceAttachments(type: string, id: string) {
+  globalThis.dispatchEvent(new CustomEvent<AttachmentsChanged>(ATTACHMENTS_CHANGED, { detail: { type, id } }));
+}
+
+/** Refresh when another view of this record's attachments changed them. */
+export function useAttachmentsChanged(type: string, id: string, refresh: () => unknown) {
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<AttachmentsChanged>).detail;
+      if (detail?.type === type && detail.id === id) void refresh();
+    };
+    globalThis.addEventListener(ATTACHMENTS_CHANGED, handler);
+    return () => globalThis.removeEventListener(ATTACHMENTS_CHANGED, handler);
+  }, [type, id, refresh]);
+}
 
 /** Proof for a payment, refund, money in/out, bank transfer or manual journal: receipt photos, bank slips, PDFs or https links. */
 export function AttachmentsPanel({ type, id }: { type: string; id: string }) {
@@ -26,6 +44,7 @@ function AttachmentsBox({ type, id }: { type: string; id: string }) {
   const picker = useRef<HTMLInputElement>(null);
   const items = data?.items ?? [];
   const full = !!data && items.length >= data.maxItems;
+  useAttachmentsChanged(type, id, refresh);
 
   async function run(action: () => Promise<{ items: Attachment[] }>, failure: string) {
     if (busy) return false;
@@ -34,6 +53,7 @@ function AttachmentsBox({ type, id }: { type: string; id: string }) {
     try {
       const changed = await action();
       setData((current) => current ? { ...current, items: changed.items } : current);
+      announceAttachments(type, id);
       return true;
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : failure);
@@ -74,7 +94,10 @@ function AttachmentsBox({ type, id }: { type: string; id: string }) {
     await run(() => removeAttachment(item.id), "Unable to remove the attachment.");
   }
 
-  return <Panel title="Attachments" subtitle="Receipt photo, bank slip, PDF or a link that backs this record.">
+  const supplier = showsSupplierCopy(type);
+  return <Panel title="Attachments" subtitle={supplier
+    ? "The supplier's own copy (PDF or photo), or a link to it. The first file shows beside the form."
+    : "Receipt photo, bank slip, PDF or a link that backs this record."}>
     {loading && <LoadingState variant="table" />}
     {error && <div className="notice danger error-state" role="alert">
       <p>{error}</p>
@@ -84,7 +107,7 @@ function AttachmentsBox({ type, id }: { type: string; id: string }) {
       ? <ul className="m-0 grid list-none gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Attached proof">
         {items.map((item) => <AttachmentCard key={item.id} item={item} busy={busy} onRemove={() => void remove(item)} />)}
       </ul>
-      : <EmptyState message="No proof attached yet." />)}
+      : <EmptyState message={supplier ? "No supplier copy attached yet." : "No proof attached yet."} />)}
     {data && <div className="p-5" aria-busy={busy}>
       {actionError && <div className="notice danger error-state" role="alert">{actionError}</div>}
       {full

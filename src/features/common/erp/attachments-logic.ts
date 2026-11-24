@@ -1,8 +1,22 @@
 /** Rules for the Attachments box. The server decides again from the file's bytes; these only give a quick, clear message. */
 
+/** Typed supplier documents: keyed in from the supplier's paper, so the form shows that paper where sales documents
+ * show their printed preview. */
+export const SUPPLIER_COPY_TYPES: ReadonlySet<string> = new Set(["bill", "purchase-credit-note", "purchase-debit-note"]);
 export const ATTACHABLE_TYPES: ReadonlySet<string> = new Set([
   "payment", "purchase-payment", "refund", "purchase-refund", "money-in", "money-out", "bank-transfer", "journal-entry",
+  ...SUPPLIER_COPY_TYPES,
 ]);
+export const showsSupplierCopy = (type: string) => SUPPLIER_COPY_TYPES.has(type);
+/** Sent on window after an attachment is added or removed, so the supplier's copy and the Attachments box agree. */
+export const ATTACHMENTS_CHANGED = "attachments:changed";
+export type AttachmentsChanged = { type: string; id: string };
+
+/** The files that can be shown beside the form (PDFs and images, oldest first, as attached). Links are listed instead. */
+export function viewableCopies<T extends { kind: string; mediaType: string | null; fileUrl: string | null }>(items: T[]): T[] {
+  return items.filter((item) => item.kind === "file" && !!item.fileUrl
+    && (item.mediaType === "application/pdf" || isImage(item.mediaType)));
+}
 export const ATTACHMENT_ACCEPT = "application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp";
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const FILE_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
