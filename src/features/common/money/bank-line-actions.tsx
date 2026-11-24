@@ -4,13 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { DataTable, Field, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { amountInCents, decimalAmount, documentHref } from "@/features/common/erp/document-logic";
+import { amountInCents, decimalAmount, documentGroup, documentHref } from "@/features/common/erp/document-logic";
 import { decimalDisplay } from "@/lib/api/document-contract";
-import { listCatalog } from "@/lib/api/erp.service";
+import { listCatalog, type DocumentType } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import {
   getBankPaymentPreview, getMoneyTransactionDetail, matchRecordedDocument, postBankPayment, recordBankExpense, searchMatchRecords,
-  searchRecordedDocuments, type BankPaymentPosting, type ManualMatchRecord, type RecordedDocumentCandidate,
+  searchRecordedDocuments, unmatchRecordedDocument, type BankPaymentPosting, type ManualMatchRecord, type RecordedDocumentCandidate,
 } from "@/lib/api/money.service";
 import type { User } from "@/types";
 import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
@@ -28,8 +28,10 @@ export function bankLineMoney(value: string, currency?: string | null) {
 
 export function BankLineDocumentLink({ line, base }: { line: BankMoneyTransaction; base: string }) {
   if (line.recordedDocumentId && line.recordedDocumentType) {
-    return <Link href={documentHref(base, "bank-entries", line.recordedDocumentType, line.recordedDocumentId)}>
-      {line.recordedDocumentNumber || "Open document"}
+    // A matched voucher or payment received opens under Purchases or Sales, a recorded money in/out under bank entries.
+    const group = documentGroup(line.recordedDocumentType as DocumentType) ?? "bank-entries";
+    return <Link href={documentHref(base, group, line.recordedDocumentType as DocumentType, line.recordedDocumentId)}>
+      {line.recordedDocumentNumber || "Open document"}{line.recordedByMatch ? " (matched)" : ""}
     </Link>;
   }
   return line.relatedDocumentId
@@ -151,6 +153,7 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
         onClick={postPayment}>Post payment to ledger</button>}
     </section>}
     {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
+    {canManage && line.recordedByMatch && line.recordedDocumentId && <UnmatchRecordedDocument line={line} busy={disabled} run={run} />}
     {canAllocate && isUnallocated(line) && <MatchRecordedDocument line={line} busy={disabled} run={run} />}
     {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}
   </>;
@@ -348,9 +351,30 @@ function MatchBankLine({ user, line, busy, run }: {
  * 24 Nov demo (bug f): a bill already paid by a payment voucher could not be matched to its bank line, because only
  * open records were offered. The line is the bank's copy of the voucher: link the two, nothing is posted again.
  */
+/** Undo a manual match with a reason (review of #52). A money document recorded from the line is undone by voiding it. */
+function UnmatchRecordedDocument({ line, busy, run }: { line: BankMoneyTransactionDetail; busy: boolean; run: RunBankAction }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const number = line.recordedDocumentNumber || "the payment";
+  return <section className="transaction-review-section">
+    <div className="transaction-review-section-heading"><h3>Matched to {number}</h3></div>
+    <p>This line was matched by hand to {number}, which was already posted. If it is the wrong payment, unmatch it; nothing is reversed.</p>
+    {!open ? <button type="button" className="btn" disabled={busy} onClick={() => setOpen(true)}>Unmatch…</button> : <>
+      <Field label="Why is this match wrong? *" hint="Saved with your name in the audit trail.">
+        <input value={reason} disabled={busy} maxLength={1000} onChange={(event) => setReason(event.target.value)} />
+      </Field>
+      <button type="button" className="btn danger" disabled={busy || reason.trim().length < 5}
+        onClick={() => void run(async () => { await unmatchRecordedDocument(line.id, reason.trim()); setOpen(false); setReason("");
+          return `Unmatched from ${number}. The line can be matched again.`; }, "Unable to unmatch this bank line.")}>Unmatch</button>{" "}
+      <button type="button" className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+    </>}
+  </section>;
+}
+
 function MatchRecordedDocument({ line, busy, run }: { line: BankMoneyTransactionDetail; busy: boolean; run: RunBankAction }) {
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState<RecordedDocumentCandidate[]>();
+  const [confirming, setConfirming] = useState<RecordedDocumentCandidate | null>(null);
   const [searching, setSearching] = useState(false);
   const [failure, setFailure] = useState("");
   async function search() {
@@ -376,12 +400,29 @@ function MatchRecordedDocument({ line, busy, run }: { line: BankMoneyTransaction
     </form>
     {shown?.length === 0 && <p role="status">No issued {label} in {line.currency} for this amount is waiting for a bank line.
       {hidden > 0 ? ` ${hidden} other ${hidden === 1 ? "document differs" : "documents differ"}; search by number to see why.` : ""}</p>}
-    {shown && shown.length > 0 && <ul>{shown.map((row) => <li key={row.documentId}>
+    {shown && shown.length > 0 && !confirming && <ul>{shown.map((row) => <li key={row.documentId}>
       <strong>{row.number}</strong> · {row.documentDate}{row.contactName ? ` · ${row.contactName}` : ""} · {bankLineMoney(row.amount, row.currency)}
       {row.problem ? <small> · {row.problem}</small> : <> <button type="button" className="btn small primary" disabled={busy}
-        onClick={() => void run(async () => { await matchRecordedDocument(line.id, row.documentId); setRows(undefined); return `Matched to ${row.number}.`; },
-          "Unable to match this payment.")}>Match to {row.number}</button></>}
+        onClick={() => setConfirming(row)}>Match to {row.number}</button></>}
     </li>)}</ul>}
+    {/* Review of #52: with two vouchers of the same amount a wrong pick is easy, so say exactly what is matched first. */}
+    {confirming && <div className="notice" role="group" aria-label={`Confirm the match to ${confirming.number}`}>
+      <p><strong>Match this bank line to {confirming.number}?</strong></p>
+      <dl className="detail-list">
+        <div><dt>Document</dt><dd>{confirming.number}{confirming.reference && confirming.reference !== confirming.number ? ` (${confirming.reference})` : ""}</dd></div>
+        <div><dt>Contact</dt><dd>{confirming.contactName || "—"}</dd></div>
+        <div><dt>Document date</dt><dd>{confirming.documentDate}</dd></div>
+        <div><dt>Amount</dt><dd>{bankLineMoney(confirming.amount, confirming.currency)}</dd></div>
+        <div><dt>Bank line</dt><dd>{line.postedDate} · {line.description} · {bankLineMoney(line.amount ?? "", line.currency)}</dd></div>
+      </dl>
+      <p>Nothing is posted: the document already is. A wrong match can be unmatched with a reason.</p>
+      <button type="button" className="btn primary" disabled={busy} onClick={() => {
+        const row = confirming;
+        void run(async () => { await matchRecordedDocument(line.id, row.documentId); setRows(undefined); setConfirming(null); return `Matched to ${row.number}.`; },
+          "Unable to match this payment.");
+      }}>Confirm match</button>{" "}
+      <button type="button" className="btn" disabled={busy} onClick={() => setConfirming(null)}>Cancel</button>
+    </div>}
     {failure && <p className="notice danger" role="alert">{failure}</p>}
   </section>;
 }

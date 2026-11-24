@@ -84,7 +84,11 @@ export const searchRecordedDocuments = (id: string, query = "") =>
 export const matchRecordedDocument = (id: string, documentId: string) =>
   api<{ status: string; documentId: string; documentType: string; number: string }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/match-document`, json("POST", { documentId }));
-export const searchMatchRecords = (id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
+/** Undo a manual match with a reason. Nothing was posted by it, so nothing is reversed; the line returns to unmatched. */
+export const unmatchRecordedDocument = (id: string, reason: string) =>
+  api<{ status: string; documentId: string }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/unmatch-document`, json("POST", { reason }));
+export const searchMatchRecords =(id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
 export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string, bankAccountId?: string) =>
   api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description, bankAccountId }),
