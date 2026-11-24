@@ -58,8 +58,67 @@
 .review-posting-preview .review-section-help { padding: 0; }
 .app-shell.theme-dark .review-posting-preview { border-color: #2b4a6e; }
 
+/* 25 Nov redesign: fields first. One-line status strip in the fields' head; full status below the fields. */
+.review-status-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 10px; font-size: 13px; font-weight: 600; }
+.review-status-part { padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: #405a76; font: inherit; cursor: pointer; }
+.review-status-part:hover, .review-status-part:focus-visible { background: #e7f2ff; text-decoration: underline; }
+.review-status-part.is-warning { color: #9a3412; }
+.review-status-part.is-danger { color: #b42318; }
+.review-status-part.is-ok { color: #166534; }
+.review-status-sep { color: #94a3b8; }
+.review-status-more { margin-left: auto; font-size: 12px; font-weight: 500; }
+.shoebox-form-head .review-filter-bar { margin-top: 8px; }
+.review-status-details > summary span { flex: none; }
+.review-status-details > summary small { margin-left: auto; color: #607995; font-size: 12px; font-weight: 500; text-align: right; }
+.review-status-details > :not(summary) { margin-inline: 14px; }
+.review-status-details .review-summary-list { margin-block: 12px; }
+.review-status-checks { font-size: 13px; color: #405a76; }
+.review-status-readings { display: grid; gap: 8px; margin-block: 8px; font-size: 13px; }
+.review-no-fields { margin: 16px 20px; color: #405a76; }
+
+/* The fields column scrolls; its sections keep their height instead of shrinking (a group with overflow: hidden
+   otherwise collapses to its border once the column is full). */
+.shoebox-form > * { flex-shrink: 0; }
+
+/* "Change type" opens the type picker beside the button. */
+.review-type-picker { position: relative; display: inline-block; }
+.review-type-picker > .text-link.is-needed { color: #9a3412; font-weight: 700; }
+.review-type-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 6; display: grid; gap: 8px; width: min(340px, calc(100vw - 48px));
+  padding: 12px 14px; border: 1px solid #a8c7e5; border-radius: 10px; background: #fff; color: #17375f; text-align: left;
+  font-size: 13px; font-weight: 500; white-space: normal; box-shadow: 0 12px 28px rgb(36 72 108 / 22%); }
+.review-type-popover strong { font-size: 14px; }
+.review-type-popover p { margin: 0; color: #405a76; line-height: 1.45; }
+.review-type-popover > .btn { justify-self: start; }
+
+/* Second reading, per field: the action beside the label and the result under the input. */
+.shoebox-field-actions { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.review-ask-ai { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.review-second-reading { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--color-2); border-radius: 8px; background: var(--color-4); font-size: 13px; }
+.review-second-reading p { margin: 0; }
+.review-second-reading strong { display: inline-flex; align-items: center; gap: 4px; }
+.review-second-reading[data-outcome="SOURCE_VERIFIED_CANDIDATE"] .ai-assist-outcome { color: #166534; font-weight: 600; }
+.review-second-reading:is([data-outcome="UNVERIFIED_MODEL_SUGGESTION"], [data-outcome="PARSER_MODEL_CONFLICT"]) .ai-assist-outcome { color: #9a3412; font-weight: 600; }
+
+.app-shell.theme-dark .review-status-part { color: #d9edff; }
+.app-shell.theme-dark .review-status-part:hover, .app-shell.theme-dark .review-status-part:focus-visible { background: #163f70; }
+.app-shell.theme-dark .review-status-part.is-warning { color: #ffd06b; }
+.app-shell.theme-dark .review-status-part.is-danger { color: #ff9b8f; }
+.app-shell.theme-dark .review-status-part.is-ok { color: #86efac; }
+.app-shell.theme-dark :is(.review-status-checks, .review-no-fields, .review-status-details > summary small) { color: #b9d5f2; }
+.app-shell.theme-dark .review-type-popover { background: #102f57; color: #f5f9ff; border-color: rgb(157 202 255 / 40%); }
+.app-shell.theme-dark .review-type-popover p { color: #b9d5f2; }
+.app-shell.theme-dark .review-type-picker > .text-link.is-needed { color: #ffd06b; }
+.app-shell.theme-dark .review-second-reading { background: #123b6d; border-color: rgb(157 202 255 / 35%); color: #e5f2ff; }
+
+/* The two columns fit beside the sidebar at 1280 px; below 1100 px they stack (common.css). */
+@media (min-width: 1101px) and (max-width: 1400px) {
+  .shoebox-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+}
+
 @media (max-width: 760px) {
   .review-key-hint { display: none; }
   .review-queue-nav { width: 100%; justify-content: space-between; }
   .review-source-viewport { height: clamp(260px, 46dvh, 520px); }
+  .review-type-popover { right: auto; left: 0; }
+  .review-status-more { margin-left: 0; }
 }
