@@ -1,12 +1,15 @@
 import type { User } from "@/types";
 import { api, get, json } from "@/lib/api/client";
 import type {
+  BankDocumentTarget,
   BankMoneyTransaction,
   BankMoneyTransactionDetail,
   BankReconciliationCandidate,
   BankTransactionStatus,
   CashSummary,
+  MatchLabel,
   MoneyDirection,
+  SettledByDocument,
 } from "@/types/money";
 
 type BankTransactionResponse = Omit<BankMoneyTransaction, "amount" | "amountDelta" | "currency" | "createdAt"> & {
@@ -19,6 +22,7 @@ type BankTransactionResponse = Omit<BankMoneyTransaction, "amount" | "amountDelt
   candidateId?: string | null;
   expectedRevision?: number | null;
   candidates?: BankReconciliationCandidate[];
+  documentSuggestions?: BankDocumentTarget[];
 };
 
 function mapTransaction(row: BankTransactionResponse): BankMoneyTransactionDetail {
@@ -31,6 +35,8 @@ function mapTransaction(row: BankTransactionResponse): BankMoneyTransactionDetai
     candidates: row.candidates ?? [],
     candidateId: row.candidateId ?? null,
     expectedRevision: row.expectedRevision ?? null,
+    reconciliation: row.reconciliation ?? null,
+    documentSuggestions: row.documentSuggestions ?? [],
   };
 }
 
@@ -60,7 +66,7 @@ export async function decideMatch(
   reason?: string,
   options?: { postPayment?: boolean },
 ): Promise<{ id: string | null; candidateId: string; decision: string; settlementId: string | null;
-  alreadyConfirmed?: boolean; payment?: BankPaymentPosting }> {
+  alreadyConfirmed?: boolean; payment?: BankPaymentPosting | null; reconciliation?: BankDocumentReconciliation }> {
   return api(`/api/bank/reconciliation/candidates/${encodeURIComponent(candidateId)}/decision`, {
     method: "POST",
     body: JSON.stringify({
@@ -74,8 +80,27 @@ export async function decideMatch(
   });
 }
 
-export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string };
+export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string;
+  /** allocate: take part of this line's cash · link: already paid by settledBy, so reconcile against that payment. */
+  action?: "allocate" | "link"; settledBy?: SettledByDocument | null; matchLabel?: MatchLabel | null; matchReason?: string | null };
 export const searchMatchRecords = (id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
+/** Scanned records to allocate, posted typed payments to reconcile against, and open typed bills/invoices. */
+export const searchMatchTargets = (id: string, query: string) =>
+  get<{ records: ManualMatchRecord[]; documents: BankDocumentTarget[] }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/match-targets?q=${encodeURIComponent(query)}`);
+
+export type BankDocumentReconciliation = {
+  reconciliationId: string; bankTransactionId: string; documentId: string; documentNumber: string; documentType: string;
+  documentLabel: string; journalId: string | null; matchLabel: MatchLabel; matchReason: string | null;
+  bankTransactionStatus: BankTransactionStatus; newJournal: false; idempotent: boolean;
+};
+/** Reconcile the line against a payment that already posted its cash: links both, posts nothing. */
+export const reconcileBankDocument = (id: string, documentId: string) =>
+  api<BankDocumentReconciliation>(`/api/bank/transactions/${encodeURIComponent(id)}/reconcile-document`,
+    json("POST", { documentId }));
+export const undoBankDocumentReconciliation = (id: string, reason?: string) =>
+  api<{ bankTransactionId: string; documentId: string; documentNumber: string; bankTransactionStatus: BankTransactionStatus }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/reconcile-document/undo`, json("POST", reason ? { reason } : {}));
 export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string, bankAccountId?: string) =>
   api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/record-expense`, json("POST", { ledgerAccountId, description, bankAccountId }),
@@ -109,7 +134,8 @@ export const postBankPayment = (id: string, journalDate?: string) =>
   api<BankPaymentPosting>(`/api/bank/transactions/${encodeURIComponent(id)}/post-payment`, json("POST", { journalDate }));
 
 export const matchBankRecords = (id: string, expectedAllocated: string, allocations: Array<{ recordId: string; amount: string }>) =>
-  api<{ settlementId: string; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus }>(
+  api<{ settlementId: string | null; allocated: string; remaining: string; bankTransactionStatus: BankTransactionStatus;
+    reconciliation?: BankDocumentReconciliation }>(
     `/api/bank/transactions/${encodeURIComponent(id)}/match-many`, json("POST", { expectedAllocated, allocations }),
   );
 export const createManualMatchCandidate = (bankTransactionId: string, recordId: string) =>

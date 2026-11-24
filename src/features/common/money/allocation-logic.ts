@@ -1,10 +1,40 @@
-import { amountInCents, decimalAmount } from "@/features/common/erp/document-logic";
+import { amountInCents, decimalAmount, documentGroup, documentHref } from "@/features/common/erp/document-logic";
 import { ApiError } from "@/lib/api/client";
+import type { DocumentType } from "@/lib/api/erp.service";
 import { createManualMatchCandidate, decideMatch, getMoneyTransactionDetail, matchBankRecords, type ManualMatchRecord } from "@/lib/api/money.service";
 import type { User } from "@/types";
-import type { BankMoneyTransaction, BankReconciliationCandidate, MatchStatus } from "@/types/money";
+import type { BankDocumentTarget, BankMoneyTransaction, BankReconciliationCandidate, MatchLabel, MatchStatus } from "@/types/money";
 
 export const MATCH_LIMIT = 50;
+
+/** The short tag shown next to each suggestion; the sentence (matchReason) says the rest. */
+export const MATCH_LABEL_TEXT: Record<MatchLabel, string> = {
+  exact: "Exact match",
+  reference: "Reference match",
+  "amount+date": "Amount and date",
+  memory: "Seen before",
+  manual: "Chosen by reviewer",
+};
+
+export function matchLabelText(label?: MatchLabel | null) {
+  return label ? MATCH_LABEL_TEXT[label] ?? null : null;
+}
+
+/** A posted payment can be reconciled against an open, unallocated line: it links both and posts nothing. */
+export function canReconcileDocument(line: BankMoneyTransaction, target: Pick<BankDocumentTarget, "action" | "linkable">) {
+  return target.action === "link" && target.linkable && canAllocateBankLine(line) && isUnallocated(line);
+}
+
+/** Where a typed document opens: payment vouchers under Purchases, receipts under Sales, money in/out under Bank. */
+export function typedDocumentHref(base: string, type: string, id: string) {
+  const group = documentGroup(type as DocumentType) ?? "bank-entries";
+  return documentHref(base, group, type as DocumentType, id);
+}
+
+export function reconciledNotice(result: { documentLabel: string; documentNumber: string; idempotent?: boolean }) {
+  return `${result.idempotent ? "Already reconciled" : "Reconciled"} with ${result.documentLabel} ${result.documentNumber}. ` +
+    "It had already posted this payment, so no new journal was created.";
+}
 
 export function allocationCents(value: string) {
   if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(value.trim())) return null;

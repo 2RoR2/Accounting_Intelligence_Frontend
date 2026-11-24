@@ -28,6 +28,55 @@ export interface BankReconciliationCandidate {
   reasons: string[];
   evidence: Record<string, unknown>;
   status: "proposed" | "confirmed" | "rejected" | "reversed" | "superseded";
+  /** Why the match is suggested: a short label and a sentence ("Amount 462.00 and reference INV-1 match"). */
+  matchLabel?: MatchLabel | null;
+  matchReason?: string | null;
+  /** The typed payment (for example a payment voucher) that already paid this record, if any. */
+  settledBy?: SettledByDocument | null;
+}
+
+/** exact: amount and reference · reference: reference only · memory: an earlier line went to the same contact ·
+ * amount+date: amount and a date within a week · manual: chosen by the reviewer. */
+export type MatchLabel = "exact" | "reference" | "amount+date" | "memory" | "manual";
+
+export interface SettledByDocument {
+  documentId: string;
+  documentNumber: string;
+  documentType: string;
+  documentLabel: string;
+}
+
+/** A typed document a bank line can be matched to: a posted payment to reconcile against ("link"), or an open
+ * bill/invoice that still needs its payment document ("pay"). */
+export interface BankDocumentTarget {
+  targetType: "document";
+  documentId: string;
+  documentType: string;
+  documentLabel: string;
+  documentNumber: string;
+  documentDate: string;
+  party: string | null;
+  reference: string | null;
+  currency: string;
+  amount: string;
+  outstandingAmount: string | null;
+  bankAccountName: string | null;
+  action: "link" | "pay";
+  linkable: boolean;
+  blockedReason: string | null;
+  matchLabel: MatchLabel | null;
+  matchReason: string | null;
+}
+
+/** The bank line is reconciled against a payment that had already posted its cash (no journal of its own). */
+export interface BankLineReconciliation {
+  id: string;
+  documentId: string;
+  documentNumber: string;
+  documentType: string;
+  documentLabel: string;
+  matchLabel: MatchLabel | null;
+  matchReason: string | null;
 }
 
 /** Simplified match state for the Money In / Money Out UI. */
@@ -79,7 +128,9 @@ export interface BankMoneyTransaction {
   relatedDocumentCode?: string | null;
   recordedDocumentId: string | null;
   recordedDocumentNumber: string | null;
-  recordedDocumentType: (typeof BANK_TYPES)[number] | null;
+  /** money-in/out recorded from the line, or the payment (voucher, receipt, refund) it is reconciled against. */
+  recordedDocumentType: (typeof BANK_TYPES)[number] | "payment" | "refund" | "purchase-payment" | "purchase-refund" | null;
+  reconciliation?: BankLineReconciliation | null;
   amountDelta?: string | null;
   createdAt: string | null;
   candidateId?: string | null;
@@ -98,6 +149,8 @@ export interface BankMoneyTransactionDetail extends BankMoneyTransaction {
   importId?: string | null;
   sourceRow?: number | null;
   candidates?: BankReconciliationCandidate[];
+  /** Posted payments that already recorded this line's cash, best first, each with its reason. */
+  documentSuggestions?: BankDocumentTarget[];
 }
 
 export interface CashSummary {

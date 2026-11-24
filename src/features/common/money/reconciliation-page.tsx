@@ -24,10 +24,10 @@ import {
 } from "@/lib/api/money.service";
 import type { BankReconciliationCandidate, BankMoneyTransactionDetail, User } from "@/types";
 import { decimalDisplay as money } from "@/lib/api/document-contract";
-import { BankLineActions, BankLineDocumentLink, PaymentJournalTable } from "./bank-line-actions";
+import { BankLineActions, BankLineDocumentLink, MatchReason, PaymentJournalTable } from "./bank-line-actions";
 import {
   bankLineStatusLabel, bankPaymentNotPosted, canReviewBankCandidate, isUnallocated,
-  PAYMENT_NOT_POSTED, PAYMENT_WAITING_FOR_ADMIN,
+  PAYMENT_NOT_POSTED, PAYMENT_WAITING_FOR_ADMIN, reconciledNotice,
 } from "./allocation-logic";
 import { autoMapColumns, headerMatchesField, IMPORT_COLUMNS, importMappingForPreview, type ImportColumn } from "./import-mapping";
 function csvHeaders(text: string): string[] {
@@ -229,9 +229,11 @@ export function ReconciliationPage({ user }: { user: User }) {
         decision === "reject" ? "Rejected during reconciliation review" : undefined, { postPayment });
       if (postPayment && reviewRow && result?.payment) setPostedPayment({ lineId: reviewRow.id, payment: result.payment });
       setNotice(decision === "reject" ? "Candidate rejected."
-        : postPayment ? "Match confirmed and payment posted to the ledger."
-          : admin ? `Match confirmed. ${PAYMENT_NOT_POSTED}: post the payment below when you are ready.`
-            : `Match confirmed. ${PAYMENT_WAITING_FOR_ADMIN}.`);
+        // The record was already paid (for example by a payment voucher): the line is reconciled, nothing posted.
+        : result?.reconciliation ? reconciledNotice(result.reconciliation)
+          : postPayment ? "Match confirmed and payment posted to the ledger."
+            : admin ? `Match confirmed. ${PAYMENT_NOT_POSTED}: post the payment below when you are ready.`
+              : `Match confirmed. ${PAYMENT_WAITING_FOR_ADMIN}.`);
       if (reviewRow && decision === "confirm") {
         const updated = await getMoneyTransactionDetail(user, reviewRow.id).catch(() => undefined);
         setReviewRow(updated ?? null);
@@ -381,13 +383,27 @@ export function ReconciliationPage({ user }: { user: User }) {
               <div><span>Party</span><strong>{reviewCandidate.party || "—"}</strong></div>
               <div><span>Record amount</span><strong>{money(reviewCandidate.amount, reviewCandidate.currency)}</strong></div>
               <div><span>Difference</span><strong>{money(reviewCandidate.amountDelta, reviewCandidate.currency)}</strong></div>
-              <div className="reconciliation-match-record-wide"><span>Match evidence</span><strong>{reviewCandidate.reasons.join(", ") || "Suggested match"}</strong></div>
+              <div className="reconciliation-match-record-wide"><span>Why it is suggested</span><strong>{reviewCandidate.matchReason || reviewCandidate.matchLabel
+                ? <MatchReason label={reviewCandidate.matchLabel} reason={reviewCandidate.matchReason} />
+                : reviewCandidate.reasons.join(", ") || "Suggested match"}</strong></div>
+              {reviewCandidate.settledBy && reviewCandidate.status === "proposed" && <div className="reconciliation-match-record-wide">
+                <span>Already paid by</span><strong>{reviewCandidate.settledBy.documentLabel} {reviewCandidate.settledBy.documentNumber}</strong>
+              </div>}
             </div>
             <div className="reconciliation-review-links">
               <Link className="btn small" href={`${base}/records/${reviewCandidate.recordId}`}>View standardised record</Link>
               {reviewCandidate.documentId && <Link className="btn small" href={`${base}/documents/${reviewCandidate.documentId}`}>View original document</Link>}
             </div>
-            {canReviewBankCandidate(reviewRow, reviewCandidate) && <>
+            {canReviewBankCandidate(reviewRow, reviewCandidate) && reviewCandidate.settledBy && <>
+              <p className="reconciliation-review-empty-copy">{reviewCandidate.settledBy.documentNumber} already posted this
+                payment to the ledger. Confirming reconciles the bank line against it; no allocation or journal is created.</p>
+              <div className="reconciliation-review-actions">
+                <button className="btn primary" type="button" disabled={busy || !!busyId || !isUnallocated(reviewRow)}
+                  onClick={() => void decide(reviewCandidate, "confirm")}>Reconcile with {reviewCandidate.settledBy.documentNumber}</button>
+                <button className="btn" type="button" disabled={busy || !!busyId} onClick={() => void decide(reviewCandidate, "reject")}>Reject match</button>
+              </div>
+            </>}
+            {canReviewBankCandidate(reviewRow, reviewCandidate) && !reviewCandidate.settledBy && <>
               <MatchPaymentPreview admin={admin} currency={reviewRow.currency}
                 preview={matchPreview?.candidateId === reviewCandidate.id ? matchPreview : undefined} />
               <div className="reconciliation-review-actions">
@@ -401,7 +417,9 @@ export function ReconciliationPage({ user }: { user: User }) {
             </>}
           </section>) : <section className="reconciliation-match-record">
             <div className="transaction-review-section-heading"><h3>No suggested standardised record</h3></div>
-            <p className="reconciliation-review-empty-copy">This bank row is available for review, but no approved standardised record has been suggested yet.</p>
+            <p className="reconciliation-review-empty-copy">{reviewRow.documentSuggestions?.length
+              ? "No approved scanned record is suggested, but a payment that already recorded this amount is shown below."
+              : "This bank row is available for review, but no approved standardised record has been suggested yet."}</p>
           </section>}
 
           {postedPayment?.lineId === reviewRow.id && <section className="transaction-review-section">

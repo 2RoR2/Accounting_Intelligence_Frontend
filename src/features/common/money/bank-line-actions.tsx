@@ -2,22 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { DataTable, Field, money } from "@/components/common/ui";
+import { Badge, DataTable, Field, money } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { amountInCents, decimalAmount, documentHref } from "@/features/common/erp/document-logic";
+import { amountInCents, decimalAmount } from "@/features/common/erp/document-logic";
 import { decimalDisplay } from "@/lib/api/document-contract";
 import { listCatalog } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import {
-  getBankPaymentPreview, getMoneyTransactionDetail, postBankPayment, recordBankExpense, searchMatchRecords,
-  type BankPaymentPosting, type ManualMatchRecord,
+  getBankPaymentPreview, getMoneyTransactionDetail, postBankPayment, reconcileBankDocument, recordBankExpense,
+  searchMatchTargets, undoBankDocumentReconciliation, type BankPaymentPosting, type ManualMatchRecord,
 } from "@/lib/api/money.service";
 import type { User } from "@/types";
-import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
+import type { BankDocumentTarget, BankMoneyTransaction, BankMoneyTransactionDetail, MatchLabel } from "@/types/money";
 import {
   allocationCents, allocationTotals, bankPaymentNotPosted, canAllocateBankLine, canMatchRecord, canPostBankPayment,
-  defaultAllocation, isUnallocated, MATCH_LIMIT, needsBankAccountChoice, needsBankMatchRefresh, PAYMENT_WAITING_FOR_ADMIN,
-  submitBankAllocations,
+  canReconcileDocument, defaultAllocation, isUnallocated, MATCH_LIMIT, matchLabelText, needsBankAccountChoice,
+  needsBankMatchRefresh, PAYMENT_WAITING_FOR_ADMIN, reconciledNotice, submitBankAllocations, typedDocumentHref,
 } from "./allocation-logic";
 
 type RunBankAction = (action: () => Promise<string>, fallback: string, resetDraft?: () => void) => Promise<void>;
@@ -28,13 +28,93 @@ export function bankLineMoney(value: string, currency?: string | null) {
 
 export function BankLineDocumentLink({ line, base }: { line: BankMoneyTransaction; base: string }) {
   if (line.recordedDocumentId && line.recordedDocumentType) {
-    return <Link href={documentHref(base, "bank-entries", line.recordedDocumentType, line.recordedDocumentId)}>
+    return <Link href={typedDocumentHref(base, line.recordedDocumentType, line.recordedDocumentId)}>
       {line.recordedDocumentNumber || "Open document"}
     </Link>;
   }
   return line.relatedDocumentId
     ? <Link href={`${base}/documents/${line.relatedDocumentId}`}>{line.relatedDocumentCode || "Open document"}</Link>
     : "—";
+}
+
+/** Why a match is suggested: a short tag ("Exact match") and the sentence behind it. */
+export function MatchReason({ label, reason }: { label?: MatchLabel | null; reason?: string | null }) {
+  const tag = matchLabelText(label);
+  if (!tag && !reason) return null;
+  return <span className="bank-match-reason">
+    {tag && <Badge>{tag}</Badge>}{reason && <span className="bank-match-reason-text">{reason}</span>}
+  </span>;
+}
+
+function documentBase(user: User) {
+  return user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
+}
+
+/** One typed document a bank line could be matched to, with why, and the action it allows. */
+function DocumentTargetItem({ user, line, target, busy, onReconcile }: {
+  user: User;
+  line: BankMoneyTransaction;
+  target: BankDocumentTarget;
+  busy: boolean;
+  onReconcile: (target: BankDocumentTarget) => void;
+}) {
+  const canLink = canReconcileDocument(line, target);
+  return <li className="bank-match-target">
+    <div>
+      <strong><Link href={typedDocumentHref(documentBase(user), target.documentType, target.documentId)}>
+        {target.documentNumber}</Link></strong>
+      {` · ${target.documentLabel}`}{target.party && ` · ${target.party}`}{` · ${target.documentDate}`}
+      {" · "}{bankLineMoney(target.outstandingAmount ?? target.amount, target.currency)}
+      {target.outstandingAmount !== null && " outstanding"}
+    </div>
+    <MatchReason label={target.matchLabel} reason={target.matchReason} />
+    {target.blockedReason && <small>{target.blockedReason}</small>}
+    {target.action === "link" && <button className="btn small" type="button" disabled={busy || !canLink}
+      aria-label={`Reconcile with ${target.documentNumber}`} onClick={() => onReconcile(target)}>Reconcile</button>}
+  </li>;
+}
+
+/** The line is reconciled against a payment that had already posted its cash: show it, and allow undo. */
+function ReconciledWith({ user, line, busy, run }: {
+  user: User;
+  line: BankMoneyTransactionDetail;
+  busy: boolean;
+  run: RunBankAction;
+}) {
+  const link = line.reconciliation;
+  if (!link) return null;
+  return <section className="transaction-review-section">
+    <div className="transaction-review-section-heading"><h3>Reconciled</h3><Badge>RECONCILED</Badge></div>
+    <p>This bank line is reconciled with {link.documentLabel}{" "}
+      <Link href={typedDocumentHref(documentBase(user), link.documentType, link.documentId)}>{link.documentNumber}</Link>,
+      which had already posted the payment. No allocation or journal was created for the bank line.</p>
+    <MatchReason label={link.matchLabel} reason={link.matchReason} />
+    <button className="btn small" type="button" disabled={busy} onClick={() => void run(async () => {
+      const undone = await undoBankDocumentReconciliation(line.id);
+      return `Reconciliation with ${undone.documentNumber} undone. The bank line is open again.`;
+    }, "Unable to undo the reconciliation.")}>Undo reconciliation</button>
+  </section>;
+}
+
+/** Posted payments that already recorded this line's cash, each with why it is suggested. */
+function SuggestedPayments({ user, line, busy, run }: {
+  user: User;
+  line: BankMoneyTransactionDetail;
+  busy: boolean;
+  run: RunBankAction;
+}) {
+  const suggestions = line.documentSuggestions ?? [];
+  if (!suggestions.length) return null;
+  return <section className="transaction-review-section">
+    <div className="transaction-review-section-heading"><h3>Payment already recorded</h3></div>
+    <p>These payments already posted this amount to the ledger. Reconciling links the bank line to the payment and
+      posts nothing new.</p>
+    <ul className="bank-match-targets">
+      {suggestions.map((target) => <DocumentTargetItem key={target.documentId} user={user} line={line} target={target}
+        busy={busy} onReconcile={(chosen) => void run(async () =>
+          reconciledNotice(await reconcileBankDocument(line.id, chosen.documentId)), "Unable to reconcile this bank line.")} />)}
+    </ul>
+  </section>;
 }
 
 /** The payment journal lines, as previewed before posting or as posted. */
@@ -150,6 +230,8 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
       {canPost && <button type="button" className="btn primary" disabled={disabled || preview.data?.canPost === false}
         onClick={postPayment}>Post payment to ledger</button>}
     </section>}
+    {canManage && <ReconciledWith user={user} line={line} busy={disabled} run={run} />}
+    {canAllocate && isUnallocated(line) && <SuggestedPayments user={user} line={line} busy={disabled} run={run} />}
     {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
     {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}
   </>;
@@ -251,6 +333,7 @@ function MatchBankLine({ user, line, busy, run }: {
 }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<ManualMatchRecord[]>();
+  const [documents, setDocuments] = useState<BankDocumentTarget[]>();
   const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
   const [searching, setSearching] = useState(false);
   const [failure, setFailure] = useState("");
@@ -265,13 +348,27 @@ function MatchBankLine({ user, line, busy, run }: {
     setSearching(true);
     setFailure("");
     setMatches(undefined);
+    setDocuments(undefined);
     try {
-      setMatches(await searchMatchRecords(line.id, query.trim()));
+      const found = await searchMatchTargets(line.id, query.trim());
+      setMatches(found.records);
+      setDocuments(found.documents);
     } catch (e) {
       setFailure(e instanceof Error ? e.message : "Unable to search approved records.");
     } finally {
       setSearching(false);
     }
+  }
+
+  function reconcile(documentId: string) {
+    if (busy || searching) return;
+    setFailure("");
+    void run(async () => reconciledNotice(await reconcileBankDocument(line.id, documentId)),
+      "Unable to reconcile this bank line.", () => {
+        setAllocations([]);
+        setMatches(undefined);
+        setDocuments(undefined);
+      });
   }
 
   function match() {
@@ -286,31 +383,48 @@ function MatchBankLine({ user, line, busy, run }: {
     }, "Unable to match the selected records.", () => {
       setAllocations([]);
       setMatches(undefined);
+      setDocuments(undefined);
     });
   }
 
   return (
     <section className="transaction-review-section">
-      <div className="transaction-review-section-heading"><h3>Match to several</h3></div>
+      <div className="transaction-review-section-heading"><h3>Find a match</h3></div>
       <form onSubmit={(event) => { event.preventDefault(); void search(); }}>
-        <Field label="Search approved records to allocate">
+        <Field label="Search records, payment vouchers, receipts and open bills"
+          hint="By number (PV, OR, REC…), reference or contact">
           <input value={query} disabled={busy || searching} onChange={(event) => setQuery(event.target.value)} />
         </Field>
         <button type="submit" className="btn" disabled={busy || searching}>{searching ? "Searching…" : "Search"}</button>
       </form>
-      {matchingRecords?.length === 0 && <p role="status">No matching approved records in {line.currency}.</p>}
-      {matchingRecords && matchingRecords.length > 0 && <ul>
+      {documents && documents.length > 0 && <>
+        <h4>Payments and documents</h4>
+        <ul className="bank-match-targets">
+          {documents.map((target) => <DocumentTargetItem key={target.documentId} user={user} line={line} target={target}
+            busy={busy || searching} onReconcile={(chosen) => reconcile(chosen.documentId)} />)}
+        </ul>
+      </>}
+      {matchingRecords && matchingRecords.length > 0 && <h4>Approved records to allocate</h4>}
+      {matchingRecords?.length === 0 && !documents?.length && <p role="status">No matching approved records or payments in {line.currency}.</p>}
+      {matchingRecords && matchingRecords.length > 0 && <ul className="bank-match-targets">
         {matchingRecords.map((record) => {
           const amount = defaultAllocation(record.remainingAmount, remaining);
           const checked = allocations.some((item) => item.record.recordId === record.recordId);
           const reference = record.invoiceNumber || record.reference;
-          return <li key={record.recordId}>
-            <strong>{record.recordCode}</strong>
-            {reference && ` · ${reference}`}{record.party && ` · ${record.party}`}
-            {" · "}{bankLineMoney(record.remainingAmount, record.currency)} outstanding{" "}
-            <button className="btn small" type="button" aria-label={`Add ${record.recordCode}`}
-              disabled={busy || checked || atLimit || amount === "0.00"}
-              onClick={() => setAllocations([...allocations, { record, amount }])}>{checked ? "Added" : "Add"}</button>
+          const payer = record.action === "link" ? record.settledBy : null;
+          return <li key={record.recordId} className="bank-match-target">
+            <div>
+              <strong>{record.recordCode}</strong>
+              {reference && ` · ${reference}`}{record.party && ` · ${record.party}`}
+              {" · "}{bankLineMoney(record.remainingAmount, record.currency)} outstanding
+            </div>
+            <MatchReason label={record.matchLabel} reason={record.matchReason} />
+            {payer ? <button className="btn small" type="button" aria-label={`Reconcile with ${payer.documentNumber}`}
+              disabled={busy || searching || !isUnallocated(line)} onClick={() => reconcile(payer.documentId)}>
+              Reconcile with {payer.documentNumber}</button>
+              : <button className="btn small" type="button" aria-label={`Add ${record.recordCode}`}
+                disabled={busy || checked || atLimit || amount === "0.00"}
+                onClick={() => setAllocations([...allocations, { record, amount }])}>{checked ? "Added" : "Add"}</button>}
           </li>;
         })}
       </ul>}

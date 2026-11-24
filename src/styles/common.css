@@ -9529,6 +9529,17 @@ html,body { min-height:100%; background:linear-gradient(135deg,#f4f8fc 0%,#eaf3f
 @media (max-width:700px){.transaction-review-section{padding:14px}.transaction-review-section-heading{display:grid;gap:4px}.transaction-match-search{grid-template-columns:1fr}.transaction-match-search .btn{width:100%}}
 @media (max-width:700px){.reconciliation-review-summary,.reconciliation-match-record-grid{grid-template-columns:1fr}.reconciliation-match-record-wide{grid-column:auto}.reconciliation-review-links .btn,.reconciliation-review-actions .btn{width:100%;justify-content:center}}
 @media (max-width:700px){.reconciliation-stats{grid-template-columns:1fr}.reconciliation-import{width:100%;justify-content:center}}
+/* Bank match targets: each suggestion says why (a tag and a sentence). */
+.bank-match-targets{display:grid;gap:10px;margin:8px 0 14px;padding:0;list-style:none}
+.bank-match-target{display:grid;gap:6px;padding:10px 12px;border:1px solid #d5e5f5;border-radius:12px;background:#f8fbff;overflow-wrap:anywhere}
+.bank-match-target small{color:#8a5a12;line-height:1.5}
+.bank-match-target .btn{justify-self:start}
+.bank-match-reason{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;color:#36506f;font-size:13px;font-weight:500;line-height:1.5}
+.bank-match-reason .bank-match-reason-text{color:inherit;font-size:13px;font-weight:500;letter-spacing:0;text-transform:none}
+.app-shell.theme-dark .bank-match-target{background:#0c2a52;border-color:rgba(157,202,255,.3)}
+.app-shell.theme-dark .bank-match-reason{color:#d7e7f8}
+.app-shell.theme-dark .bank-match-target small{color:#f3c98a}
+@media (max-width:700px){.bank-match-target .btn{width:100%;justify-content:center}}
 
 /* Bank reconciliation workspace */
 .bank-reconciliation-toolbar{display:flex;gap:18px;align-items:flex-end;margin:4px 0 18px}
