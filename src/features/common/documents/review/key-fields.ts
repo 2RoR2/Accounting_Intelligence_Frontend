@@ -4,7 +4,7 @@
  * a field on screen, and a due date from payment terms. Pure functions, unit tested.
  */
 import { addDays, MAX_PAYMENT_TERM_DAYS } from "@/features/common/erp/line-defaults";
-import { typePendingCheck } from "@/lib/glossary";
+import { duplicateState, ruleCode, typePendingCheck } from "@/lib/glossary";
 import type { ValidationResult } from "@/types";
 
 /** Always on screen when stored, even with "Only fields to check": an accountant checks these on every document. */
@@ -61,6 +61,26 @@ export function addedValueProblem(key: string, value: string): string | null {
 export function blockingChecks(results: readonly ValidationResult[], fieldShown: (field: string) => boolean): ValidationResult[] {
   return results.filter((item) => (item.result === "FAIL" || item.preventsApproval === true)
     && !typePendingCheck(item.rule) && (!item.field || !fieldShown(item.field)));
+}
+
+/**
+ * Document-level findings the review box always lists, even when their field is on screen: the duplicate check that
+ * could not run (with a jump to the missing field), a possible duplicate (with a link), and a document addressed to
+ * another company (with "Set aside…"). A field that only says "Please check" would not tell the reviewer why.
+ */
+export function documentLevelChecks(results: readonly ValidationResult[]): ValidationResult[] {
+  return results.filter((item) => {
+    const duplicate = duplicateState(item);
+    if (duplicate === "found") return true;
+    if (duplicate === "not-run") return item.preventsApproval === true || item.required === true;
+    return ruleCode(item.rule) === "BUYER-NOT-COMPANY" && item.result === "FAIL";
+  });
+}
+
+/** What the review box lists: checks that light up no field on screen, then the document-level ones, each once. */
+export function reviewNoticeChecks(results: readonly ValidationResult[], fieldShown: (field: string) => boolean): ValidationResult[] {
+  const listed = blockingChecks(results, fieldShown);
+  return [...listed, ...documentLevelChecks(results).filter((item) => !listed.includes(item))];
 }
 
 /** Blocking results that name a field: that field must say "Please check", whatever the reading said. */

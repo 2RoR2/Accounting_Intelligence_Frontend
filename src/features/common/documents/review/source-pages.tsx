@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import type { Extraction, SourceEvidence } from "@/types";
 import { DocumentViewer } from "@/components/common/documents/document-viewer";
-import { evidenceBox, evidenceCaption } from "./review-logic";
+import { evidenceBox, evidenceCaption, type FieldCorrection } from "./review-logic";
 
 /** A field whose boxes may be drawn. The selected one is drawn strongly, the others faintly. */
 export interface FieldEvidence { key: string; label: string; evidence: SourceEvidence[] }
@@ -96,7 +96,7 @@ export function ReviewSource({ documentId, name, mimeType, extraction, fields, s
   /** Fields on screen; their boxes are drawn faintly and can be clicked. */
   fields: FieldEvidence[];
   /** What is selected: a field (key set) or a line item / suggestion (evidence only). */
-  selected?: { key?: string; label: string; evidence: SourceEvidence[] };
+  selected?: { key?: string; label: string; evidence: SourceEvidence[]; correction?: FieldCorrection | null };
   onSelectField: (key: string) => void;
 }) {
   const format = sourceFormat(name, mimeType);

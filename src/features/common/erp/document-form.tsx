@@ -38,6 +38,8 @@ import { Combobox } from "./combobox";
 import { QuickAddContact, QuickAddProduct } from "./quick-add";
 import { formActions, transfersFrom } from "./form-actions";
 import { ShareLinksPanel } from "./share-links";
+import { showsSupplierCopy } from "./attachments-logic";
+import { SupplierCopy } from "./supplier-copy";
 import { TracePanel } from "@/features/common/trace/trace-panel";
 
 type FormProps = { base: string; group: DocumentGroup; type: DocumentType; role: User["role"] };
@@ -258,6 +260,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     terms: termOptions(paymentTerms.data ?? []),
   }), [contactList, productList, recentRows, sales, draft.currency, accounts.data, taxCodes.data, banks.data, paymentTerms.data]);
   const printed = PRINTED_TYPES.has(type);
+  // A typed bill or supplier note shows the supplier's attached copy where sales documents show their printed preview.
+  const supplierCopy = showsSupplierCopy(type);
+  const beside = printed || supplierCopy;
   const admin = role === "LOCAL_ADMIN";
   const delivery = deliveryRecord(document?.fields);
   const liveInput = useMemo(() => documentInput(type, draft, document), [type, draft, document]);
@@ -512,8 +517,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       description={document?.displayName ?? undefined}
       actions={<>
         <Link className="btn" href={listHref}>Back to list</Link>
-        {printed && <button type="button" className="btn" aria-pressed={showPreview} onClick={() => setShowPreview((shown) => !shown)}>
-          {showPreview ? "Hide preview" : "Show preview"}</button>}
+        {beside && <button type="button" className="btn" aria-pressed={showPreview} onClick={() => setShowPreview((shown) => !shown)}>
+          {supplierCopy ? (showPreview ? "Hide supplier's copy" : "Show supplier's copy")
+            : showPreview ? "Hide preview" : "Show preview"}</button>}
         {document && type === "delivery-order" && status === "ready" && !delivery && <button type="button" className="btn primary"
           disabled={locked} onClick={() => setDelivering(true)}>Mark delivered</button>}
         {actions.map(renderAction)}
@@ -544,7 +550,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     {lookups.map(({ label, resource }) => resource.error && <RequestError key={label} message={`${label} · ${resource.error}`} retry={resource.refresh} />)}
     {lookups.some(({ resource }) => resource.loading) && <p role="status">Loading form choices…</p>}
     {document && <DocumentFacts base={base} document={document} />}
-    <div className={printed && showPreview ? "doc-work split" : "doc-work"}>
+    <div className={beside && showPreview ? "doc-work split" : "doc-work"}>
     <div className="doc-work-main">
     <form id={formId} ref={form} aria-busy={locked} onSubmit={(event) => {
       event.preventDefault();
@@ -681,6 +687,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     </div>
     {printed && showPreview && <LivePreview type={type} input={liveInput} documentId={document?.id} editable={editable}
       stored={document ? (latest ? documentFileUrl(type, document.id, latest.revision, true) : documentPreviewUrl(type, document.id)) : null} />}
+    {supplierCopy && showPreview && <SupplierCopy type={type} documentId={document?.id} />}
     </div>
     {quickAdd?.kind === "contact" && contactKind && <QuickAddContact kind={contactKind} name={quickAdd.name}
       onClose={() => setQuickAdd(null)} onCreated={(contact) => {
