@@ -2,10 +2,11 @@
 import { useState } from "react";
 import type { MissingLineInput } from "@/lib/api/document.service";
 
-export function MissingLineForm({ revision, disabled, onSave }: { revision: number; disabled: boolean; onSave: (input: MissingLineInput) => Promise<void> }) {
+/** One printed row that reading missed. `embedded`: the form alone, for the review page's "Add missing information" menu. */
+export function MissingLineForm({ revision, disabled, onSave, embedded = false }: { revision: number; disabled: boolean; onSave: (input: MissingLineInput) => Promise<void>; embedded?: boolean }) {
   const [values, setValues] = useState({ description: "", quantity: "", unitPrice: "", amount: "", sourcePage: "1", sourceNote: "" });
   const [error, setError] = useState("");
-  return <details className="shoebox-lines"><summary>Add a missing printed item</summary>
+  const body = <>
     <p>Read the original document and enter one printed row. Leave quantity or unit price empty if it is unprinted or includes a line discount. Explain any discount in the source note. Every addition is audited and revalidated.</p>
     <form onSubmit={async event => {
       event.preventDefault(); setError("");
@@ -24,5 +25,6 @@ export function MissingLineForm({ revision, disabled, onSave }: { revision: numb
       {error && <p role="alert">{error}</p>}
       <button className="btn" type="submit" disabled={disabled}>Save item &amp; revalidate</button>
     </form>
-  </details>;
+  </>;
+  return embedded ? <div className="shoebox-lines">{body}</div> : <details className="shoebox-lines"><summary>Add a missing printed item</summary>{body}</details>;
 }

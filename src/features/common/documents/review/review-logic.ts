@@ -238,10 +238,35 @@ export function documentTarget(queue: readonly string[], currentId: string, dire
   return busy ? null : neighbourDocument(queue, currentId, direction);
 }
 
-/** The line above the original document saying where the selected field was read. A missing page is said, not assumed. */
-export function evidenceCaption(selected: { label: string; evidence: SourceEvidence[] } | undefined, placeShown: boolean): string {
+/** "25 Nov" in Malaysia time, whatever the browser's zone; null when the time is missing or unreadable. */
+export function shortDay(at: string | null | undefined): string | null {
+  if (!at) return null;
+  const parsed = new Date(at.includes("T") ? at : at.replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur" });
+}
+
+/** A person's correction of a field: who and when. */
+export interface FieldCorrection { by?: string | null; byName?: string | null; at?: string | null }
+
+/** "Jonathan, 25 Nov" (or "a reviewer" when the name was not sent). Empty for a field nobody corrected. */
+export function correctionBy(correction: FieldCorrection | null | undefined): string {
+  if (!correction?.by && !correction?.byName) return "";
+  const day = shortDay(correction.at);
+  return `${correction.byName || "a reviewer"}${day ? `, ${day}` : ""}`;
+}
+
+/**
+ * The line above the original document saying where the selected field was read. A missing page is said, not assumed.
+ * A field a person typed or corrected says so ("Invoice number: typed by Jonathan, 25 Nov."), instead of
+ * "where it was read is not recorded" (25 Nov review findings).
+ */
+export function evidenceCaption(selected: { label: string; evidence: SourceEvidence[]; correction?: FieldCorrection | null } | undefined, placeShown: boolean): string {
   if (!selected) return "Select a field to see where it was read.";
   const first = selected.evidence[0];
+  const who = correctionBy(selected.correction);
+  if (who && !first) return `${selected.label}: typed by ${who}. It was not read from the document.`;
+  if (who) return `${selected.label}: corrected by ${who}. The reading was ${first.page != null ? `on page ${first.page}` : "on the document"}${first.text ? `, "${first.text}"` : ""}.`;
   if (!first) return `${selected.label}: where it was read is not recorded.`;
   const where = first.page != null ? `read on page ${first.page}` : "read on the document (page not recorded)";
   return `${selected.label}: ${where}${first.text ? `, "${first.text}"` : ""}.` + (placeShown ? "" : " Its place on the page is not recorded.");

@@ -11,9 +11,11 @@ const EMITTED_BY_BACKEND = [
   "EX-001", "EX-002", "EX-003", "EX-004", "EX-005", "EX-006", "EX-007", "EX-008", "EX-009", "EX-010",
   "BR-CO-10", "BR-CO-13", "BR-CO-14", "BR-CO-15", "BR-CO-16", "BR-CO-17",
   "PROFILE-001", "PROFILE-REQUIRED", "RCP-TRANSACTION-TIME", "RCP-PAYMENT-METHOD", "RCP-005",
-  "AP-RECEIVED-DATE", "AP-009", "NOTE-LINK", "TAX-STATUS", "MODEL-DISAGREEMENT", "AMOUNT-PLAUSIBLE",
+  "AP-RECEIVED-DATE", "AP-009", "NOTE-LINK", "TAX-STATUS", "MODEL-DISAGREEMENT", "AMOUNT-PLAUSIBLE", "BUYER-NOT-COMPANY",
+  "RCP-007", "SUBTOTAL-DERIVED", "PRETAX-BASIS", "TOTAL-COMPONENTS", "ARITHMETIC-PREREQ",
   ...["BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"].flatMap((kind) =>
-    ["FORMAT", "REQUIRED", "DATES", "LINE_MATH", "SUBTOTAL", "AMOUNT_DUE", "SIGN", "TOTAL"].map((rule) => `${kind}-${rule}`)),
+    ["FORMAT", "REQUIRED", "DATES", "LINE_MATH", "SUBTOTAL", "AMOUNT_DUE", "SIGN", "TOTAL",
+     "FIELDS", "DUE_DATE", "BILLING_PERIOD", "LINE_DETAILS", "RETURNS", "NOTE_LINK", "NOTE_DIRECTION"].map((rule) => `${kind}-${rule}`)),
 ];
 const FALLBACK = ruleSentence("NOT-A-REAL-CODE");
 
@@ -26,6 +28,15 @@ test("every rule code the backend can emit has its own plain sentence", () => {
     assert.doesNotMatch(sentence, /EX-|BR-|PROFILE|OCR|Docling|model|JSON/i, `${code} leaks a system term`);
   }
   for (const code of BACKEND_RULE_CODES) assert.ok(EMITTED_BY_BACKEND.includes(code), `${code} is not emitted by the backend list`);
+});
+
+test("the bill checks seen on a local KNT bill have their own sentence, not 'Needs a check'", () => {
+  assert.equal(ruleSentence("BILL-LINE_DETAILS"), "Item rows not read: check the printed items and add any that are missing.");
+  assert.equal(ruleSentence("BILL-BILLING_PERIOD"), "Billing period unclear: enter the period's start and end dates as printed.");
+  assert.equal(ruleSentence("BILL-DUE_DATE"), "Due date unclear: check the bill date and due date on the document.");
+  assert.equal(ruleSentence("BILL-FIELDS"), "Key details unclear: check the number, date, currency and amounts against the document.");
+  for (const code of ["BILL-LINE_DETAILS", "BILL-BILLING_PERIOD", "BILL-DUE_DATE", "BILL-FIELDS", "RECEIPT-RETURNS", "CREDIT_NOTE-NOTE_LINK"])
+    assert.notEqual(ruleSentence(code), FALLBACK, code);
 });
 
 test("unknown, empty and prefixed codes never give a blank sentence", () => {

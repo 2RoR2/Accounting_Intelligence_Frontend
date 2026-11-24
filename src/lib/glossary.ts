@@ -49,6 +49,12 @@ const OTHER_RULES: Record<string, Rule> = {
   "TAX-STATUS": { title: "Tax treatment unclear", action: "check whether tax is printed, then confirm it." },
   "MODEL-DISAGREEMENT": { title: "Second reading differs", action: "compare the value with the document." },
   "AMOUNT-PLAUSIBLE": { title: "Amounts do not fit together", action: "check tax, subtotal and total on the document; they may be swapped or misread." },
+  "BUYER-NOT-COMPANY": { title: "Not addressed to this company", action: "if it isn't yours, set it aside." },
+  "RCP-007": { title: "Refund receipt", action: "record it as a refund, not as an ordinary expense." },
+  "SUBTOTAL-DERIVED": { title: "Subtotal not printed", action: "compare the total of the lines with the document." },
+  "PRETAX-BASIS": { title: "Subtotal not printed", action: "check the amount before tax used for the checks." },
+  "TOTAL-COMPONENTS": { title: "Total does not add up", action: "check the subtotal, tax and total against the document." },
+  "ARITHMETIC-PREREQ": { title: "Amounts not compared", action: "check which currency the document prints." },
 };
 
 /** Document kinds whose rules are named "<KIND>-<RULE>" by the backend. */
@@ -63,6 +69,13 @@ const SUFFIX_RULES: Record<string, (noun: string) => Rule> = {
   AMOUNT_DUE: () => ({ title: "Amount due does not add up", action: "check the charges, payments and amount due." }),
   SIGN: (noun) => ({ title: "Negative amount", action: `enter the ${noun} amounts as positive numbers.` }),
   TOTAL: () => ({ title: "Total does not add up", action: "check the subtotal, tax and total against the document." }),
+  FIELDS: () => ({ title: "Key details unclear", action: "check the number, date, currency and amounts against the document." }),
+  DUE_DATE: (noun) => ({ title: "Due date unclear", action: `check the ${noun} date and due date on the document.` }),
+  BILLING_PERIOD: () => ({ title: "Billing period unclear", action: "enter the period's start and end dates as printed." }),
+  LINE_DETAILS: () => ({ title: "Item rows not read", action: "check the printed items and add any that are missing." }),
+  RETURNS: () => ({ title: "Negative amount or return", action: "check whether this is a return or refund before approving." }),
+  NOTE_LINK: () => ({ title: "Note not linked", action: "link it to the original invoice." }),
+  NOTE_DIRECTION: () => ({ title: "Note direction unclear", action: "check whether it is a credit note or a debit note." }),
 };
 
 /** Every rule code the backend can emit today. Used by tests to prove each has a sentence. */
@@ -116,6 +129,49 @@ export function ruleSentence(code: string | null | undefined, field?: string | n
   const rule = findRule(code, field) ?? FALLBACK_RULE;
   return `${rule.title}: ${rule.action}`;
 }
+
+/* ---------- The duplicate check's three states (25 Nov review findings) ---------- */
+
+/** The result fields the check sentences read. */
+type CheckLike = { rule: string; field?: string | null; result?: string | null; checkStatus?: string | null; message?: string | null };
+
+/**
+ * EX-007 in one of three states: it could not run (a supplier or number is missing), it found a possible duplicate,
+ * or it passed. A check that did not run must never read as "possible duplicate".
+ */
+export type DuplicateState = "not-run" | "found" | "passed" | "off";
+export function duplicateState(item: CheckLike): DuplicateState | null {
+  if (ruleCode(item.rule) !== "EX-007") return null;
+  const result = String(item.result ?? "").toUpperCase();
+  if (result === "FAIL" || result === "FAILED") return "found";
+  if (result === "PASS" || result === "PASSED") return "passed";
+  if (result === "NOT_APPLICABLE") return "off";
+  return "not-run";
+}
+
+/** Older results said "A duplicate check needs both a supplier and an invoice number" without saying what to fill. */
+const DUPLICATE_NOT_RUN = "Duplicate check can't run yet: fill the supplier and invoice number.";
+
+/**
+ * The sentence for one check, by its result. EX-007 and BUYER-NOT-COMPANY speak for themselves (the backend message
+ * names the missing field, the other document, or the other company); every other rule uses ruleSentence.
+ */
+export function checkSentence(item: CheckLike): string {
+  const message = (item.message ?? "").trim();
+  const duplicate = duplicateState(item);
+  if (duplicate === "not-run") return message.startsWith("Duplicate check can't run yet") ? message : DUPLICATE_NOT_RUN;
+  if (duplicate === "found") return message.startsWith("Possible duplicate of") ? message : ruleSentence(item.rule, item.field);
+  if (duplicate === "passed") return "No duplicate: no other invoice from this supplier has this number.";
+  // "This document is addressed to …, not …" when it fails; "Addressed to this company." when it passes.
+  if (ruleCode(item.rule) === "BUYER-NOT-COMPANY" && message) return message;
+  // A check that does not apply says why ("Supplier matching is skipped: this document is addressed to another
+  // company"), not the rule's instruction ("New supplier: add it to Contacts"), which would ask for something not needed.
+  if (String(item.result ?? "").toUpperCase() === "NOT_APPLICABLE" && message) return message;
+  return ruleSentence(item.rule, item.field);
+}
+
+/** True when checkSentence already said the backend message, so a screen need not repeat it beside the sentence. */
+export const sentenceIsMessage = (item: CheckLike) => checkSentence(item) === (item.message ?? "").trim();
 
 /* ---------- Why reading left the type or the details empty ---------- */
 
