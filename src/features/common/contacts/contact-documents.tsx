@@ -37,7 +37,7 @@ export function ContactDocumentsPanel({ base, contact }: { base: string; contact
     {error && !data && <ErrorState message={error} retry={refresh} />}
     {data && <>
       <div className="panel-body detail-list">
-        <div><span>{contact.kind === "customer" ? "Owed to us" : "We owe"}</span>
+        <div><span>{contact.kind === "customer" ? "Owed by customer" : "Owed to supplier"}</span>
           <strong>{money(data.balance ? (contact.kind === "customer" ? data.balance.receivable : data.balance.payable) : "0")}</strong></div>
         <div><span>Overdue</span><strong>{money(data.balance?.overdue ?? "0")}</strong></div>
         <div><span>Open items</span><strong>{data.balance?.openItems ?? 0}</strong></div>

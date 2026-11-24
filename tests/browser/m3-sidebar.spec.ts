@@ -119,10 +119,10 @@ test.describe("Plan M3 sidebar", () => {
         await toggle.click();
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
         await page.locator("#workspace-navigation a.nav-subitem[href='/company/reports?view=month-pack']").click();
-        await expect(page.getByRole("heading", { name: "Month pack", level: 1 })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Monthly Accounting Pack", level: 1 })).toBeVisible();
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
         await toggle.click();
-        await expect(page.locator("#workspace-navigation a[aria-current='page']")).toHaveText("Month pack");
+        await expect(page.locator("#workspace-navigation a[aria-current='page']")).toHaveText("Monthly Accounting Pack");
       }
       await page.screenshot({ path: testInfo.outputPath(`sidebar-${name}.png`) });
       for (const [slug, href] of [["reports", "/company/reports"], ["performance", "/company/evaluation"], ["exceptions", "/company/exceptions"], ["to-review", "/company/documents?lane=to-review"]] as const) {

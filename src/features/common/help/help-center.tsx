@@ -97,7 +97,7 @@ export function HelpCenter({
             <LifeBuoy size={22} />
           </span>
           <div>
-            <h2>How can we help?</h2>
+            <h2>What do you need help with?</h2>
             <p>
               Follow the guided tutorial for Accounting Intelligence, or request
               a helpline callback from the AccordAI support team.
@@ -162,7 +162,7 @@ export function HelpCenter({
           <h2>Helpline request received</h2>
           <p>
             A AccordAI support specialist will review your request. Your submission
-            has been recorded and our team will follow up using your preferred
+            has been recorded and the AccordAI support team will follow up using your preferred
             contact method.
           </p>
           <button className="btn" type="button" onClick={() => setSuccess(false)}>
@@ -215,7 +215,7 @@ export function HelpCenter({
               </select>
             </Field>
           </div>
-          <Field label="How can we help? *">
+          <Field label="What do you need help with? *">
             <textarea
               name="message"
               rows={compact ? 3 : 4}

@@ -110,7 +110,7 @@ export function MonthPack() {
     if (selected) void save(() => downloadMonthPack(selected));
   }
 
-  return <Panel title="Month pack">
+  return <Panel title="Monthly Accounting Pack">
     {!data && !error && <LoadingState variant="form" />}
     {error && <ReportNotice message={error} retry={refresh} />}
     {data && (periods.length > 0 ? <form className="report-toolbar report-date-filters" onSubmit={exportPack} aria-busy={downloading}>
@@ -122,8 +122,8 @@ export function MonthPack() {
           </option>)}
         </select>
       </Field>
-      <button type="submit" className="btn" disabled={!selected || downloading}>Download month pack (Excel)</button>
-    </form> : <EmptyState message="No accounting periods yet. Open a period under Accounting, then return here to download its month pack." />)}
+      <button type="submit" className="btn" disabled={!selected || downloading}>Download Monthly Accounting Pack (Excel)</button>
+    </form> : <EmptyState message="No accounting periods yet. Open a period under Accounting, then return here to download its Monthly Accounting Pack." />)}
     {downloadError && <ReportNotice message={downloadError} />}
   </Panel>;
 }

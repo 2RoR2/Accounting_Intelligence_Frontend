@@ -43,7 +43,7 @@ function SetAsideReasonForm({ documentId, onDone, onCancel, inputId, stacked = f
   const cancel = <button type="button" className="btn" disabled={saving} onClick={onCancel}>Cancel</button>;
   // Inline under the review tab; stacked (label, full-width input, then the buttons) inside the row-action dialog.
   return <div className={stacked ? "set-aside-form" : "review-set-aside"} role="group" aria-label="Set this document aside">
-    <label htmlFor={inputId}>Why? (a duplicate, not ours, unreadable…)</label>
+    <label htmlFor={inputId}>Why? (a duplicate, not this company’s, unreadable…)</label>
     <input id={inputId} value={reason} disabled={saving} maxLength={500} autoFocus={stacked} onChange={(event) => setReason(event.target.value)} />
     {stacked ? <div className="modal-actions">{cancel}{setAside}</div> : <>{setAside}{cancel}</>}
     {failure && <p className="notice danger" role="alert">{failure}</p>}

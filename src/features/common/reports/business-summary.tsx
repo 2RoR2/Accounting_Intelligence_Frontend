@@ -59,7 +59,7 @@ function Position({ result }: { result: SummaryResult }) {
           <span>{account.name}</span><strong>{money(account.balance)}</strong>
         </li>)}</ul>}
     </Panel>
-    <Panel title="Owed to us" subtitle="Customers still to pay" className="biz-card">
+    <Panel title="Owed to the company" subtitle="Customers still to pay" className="biz-card">
       <p className="biz-total">{money(receivables.total)}</p>
       <Unallocated owed={receivables} noun="invoices" />
       <p className={Number(receivables.overdue) > 0 ? "biz-overdue" : "biz-muted"}>
@@ -68,7 +68,7 @@ function Position({ result }: { result: SummaryResult }) {
           : "Nothing overdue"}
       </p>
     </Panel>
-    <Panel title="Owed by us" subtitle="Suppliers we still owe" className="biz-card">
+    <Panel title="Owed by the company" subtitle="Suppliers the company still owes" className="biz-card">
       <p className="biz-total">{money(payables.total)}</p>
       <Unallocated owed={payables} noun="bills" />
       <p className={Number(payables.overdue) > 0 ? "biz-overdue" : "biz-muted"}>

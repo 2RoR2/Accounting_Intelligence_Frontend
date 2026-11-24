@@ -143,15 +143,15 @@ export function InboxPage({ user }: { user: User }) {
     <div className="upload-reference-page inbox-page">
       <PageHeader
         title="Upload documents"
-        description="Drop the day’s bills, invoices and receipts, many at once. We work out the type and read each one; you only check what needs you."
+        description="Drop the day’s bills, invoices and receipts, many at once. The type is worked out and each one is read; you only check what needs you."
       />
       <div className="upload-layout">
         <Panel title="Add your documents" subtitle="PDFs and phone photos · up to 20 MB each">
           <div className="panel-body">
             <Field label="Who sent these?" hint="Applies to the files you add next. The document type is detected for you.">
               <select value={category} onChange={(event) => setCategory(event.target.value as InboxCategory)}>
-                <option value="ACCOUNTS_PAYABLE">Suppliers: bills and receipts we pay (money out)</option>
-                <option value="ACCOUNTS_RECEIVABLE">Us: invoices we sent to customers (money in)</option>
+                <option value="ACCOUNTS_PAYABLE">Suppliers: bills and receipts the company pays (money out)</option>
+                <option value="ACCOUNTS_RECEIVABLE">Company: invoices the company sent to customers (money in)</option>
               </select>
             </Field>
             <div className="upload-sources">

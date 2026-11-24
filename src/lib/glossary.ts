@@ -49,7 +49,7 @@ const OTHER_RULES: Record<string, Rule> = {
   "TAX-STATUS": { title: "Tax treatment unclear", action: "check whether tax is printed, then confirm it." },
   "MODEL-DISAGREEMENT": { title: "Second reading differs", action: "compare the value with the document." },
   "AMOUNT-PLAUSIBLE": { title: "Amounts do not fit together", action: "check tax, subtotal and total on the document; they may be swapped or misread." },
-  "BUYER-NOT-COMPANY": { title: "Not addressed to this company", action: "if it isn't yours, set it aside." },
+  "BUYER-NOT-COMPANY": { title: "Not addressed to this company", action: "if it isn't for this company, set it aside." },
   "RCP-007": { title: "Refund receipt", action: "record it as a refund, not as an ordinary expense." },
   "SUBTOTAL-DERIVED": { title: "Subtotal not printed", action: "compare the total of the lines with the document." },
   "PRETAX-BASIS": { title: "Subtotal not printed", action: "check the amount before tax used for the checks." },

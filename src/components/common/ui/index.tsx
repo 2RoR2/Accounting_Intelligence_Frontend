@@ -222,14 +222,14 @@ export function ErrorState({
   if (dismissible) return <div className="error-popup-backdrop" role="presentation">
     <div role="alertdialog" aria-modal="true" aria-labelledby="error-popup-title" className="error-box error-popup">
       <button type="button" className="error-popup-close" aria-label="Close error" onClick={onClose}>×</button>
-      <strong id="error-popup-title">We couldn’t complete that request.</strong>
+      <strong id="error-popup-title">That request could not be completed.</strong>
       <p>{message}</p>
       {retry && <button className="btn" onClick={retry}>Try again</button>}
     </div>
   </div>;
   return (
     <div role="alert" className="error-box">
-      <strong>We couldn’t complete that request.</strong>
+      <strong>That request could not be completed.</strong>
       <p>{message}</p>
       {retry && (
         <button className="btn" onClick={retry}>

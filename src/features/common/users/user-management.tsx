@@ -346,7 +346,7 @@ export function UserManagement({
                 </Field>
                 <div className="info-box">
                   <span>
-                    We email a single-use activation link. The person chooses their own password; Company
+                    A single-use activation link is emailed to the person. They choose their own password; Company
                     Admins also set up an authenticator at first sign-in.
                   </span>
                 </div>

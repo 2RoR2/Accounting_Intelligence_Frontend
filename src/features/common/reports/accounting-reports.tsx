@@ -46,7 +46,7 @@ export function AccountingReportsPage() {
 
   if (monthPack) {
     return <div className="dashboard-page reports-page">
-      <PageHeader title="Month pack" description="Download posted figures for one accounting period." />
+      <PageHeader title="Monthly Accounting Pack" description="Download the Monthly Accounting Pack: posted figures for one accounting period." />
       <MonthPack />
     </div>;
   }

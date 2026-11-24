@@ -123,7 +123,7 @@ test("the field and line forms sit behind one button; the reading notes moved in
 
 test("another company's document reads as such, with a Set aside shortcut", () => {
   const finding = result({ rule: "BUYER-NOT-COMPANY", result: "FAIL", field: "customer", preventsApproval: true,
-    message: "This document is addressed to Puncak Tanjung Catering, not Ketapang Nibong Trading Sdn. Bhd. If it isn't yours, set it aside." });
+    message: "This document is addressed to Puncak Tanjung Catering, not Ketapang Nibong Trading Sdn. Bhd. If it isn't for this company, set it aside." });
   assert.equal(checkSentence(finding), finding.message);
   assert.equal(checkShortcut(finding), "set-aside");
   assert.deepEqual(reviewNoticeChecks([finding], () => true), [finding]);
@@ -133,7 +133,7 @@ test("another company's document reads as such, with a Set aside shortcut", () =
   assert.equal(checkShortcut(own), null);
   assert.deepEqual(reviewNoticeChecks([own], () => false), []);
   // The exceptions list uses the rule title, which must not leak the code.
-  assert.equal(ruleSentence("VALIDATION:BUYER-NOT-COMPANY"), "Not addressed to this company: if it isn't yours, set it aside.");
+  assert.equal(ruleSentence("VALIDATION:BUYER-NOT-COMPANY"), "Not addressed to this company: if it isn't for this company, set it aside.");
 });
 
 test("a supplier check skipped for another company's document does not say 'New supplier: add it to Contacts'", () => {

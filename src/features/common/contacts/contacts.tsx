@@ -81,7 +81,7 @@ function ContactList({ user, base }: { user: User; base: string }) {
               { label: "Open balance", render: (row) => { const balance = balanceOf.get(row.id);
                 if (!balance) return "—";
                 const amount = row.kind === "customer" ? balance.receivable : balance.payable;
-                return <>{money(amount)}<small> {row.kind === "customer" ? "owes us" : "we owe"}</small>{Number(balance.overdue) > 0 && <small className="fail-text"> · {money(balance.overdue)} overdue</small>}</>; } },
+                return <>{money(amount)}<small> {row.kind === "customer" ? "owed by customer" : "owed to supplier"}</small>{Number(balance.overdue) > 0 && <small className="fail-text"> · {money(balance.overdue)} overdue</small>}</>; } },
               { label: "Registration no.", render: (row) => row.registrationNumber || "—" },
               { label: "Email", render: (row) => row.email || "—" },
               { label: "Phone", render: (row) => row.phone || "—" },
