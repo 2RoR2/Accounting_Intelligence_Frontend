@@ -1,0 +1,33 @@
+/* Document checks panel and the fields it highlights (document-form.tsx). */
+.checks-panel { border: 1px solid var(--line, #d8dee8); border-left: 4px solid #2f8f5b; border-radius: 10px; background: var(--panel, #fff); margin: 0 0 16px; padding: 12px 16px; }
+.checks-panel.checks-warn { border-left-color: #d99a27; }
+.checks-panel.checks-block { border-left-color: #c2413b; }
+.checks-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.checks-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.checks-head span { font-size: 13px; color: var(--muted, #526176); }
+.checks-note { margin: 6px 0 0; font-size: 13px; color: var(--muted, #526176); }
+.checks-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.check-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: #f7f9fc; }
+.check-item.check-block { background: #fdf0ef; }
+.check-item.check-warn { background: #fff8e9; }
+.check-badge { flex: none; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 6px; border-radius: 6px; background: #e4e9f1; color: #34445a; }
+.check-block .check-badge { background: #c2413b; color: #fff; }
+.check-warn .check-badge { background: #d99a27; color: #2b1a00; }
+.check-body { min-width: 0; flex: 1; }
+.check-message { all: unset; cursor: pointer; font-size: 13.5px; font-weight: 600; color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.check-message:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 2px; border-radius: 3px; }
+.check-fix { margin: 2px 0 0; font-size: 12.5px; color: var(--muted, #526176); }
+.check-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.checks-ignored { margin-top: 8px; }
+.check-ignored { opacity: .75; }
+/* Highlighted fields and lines. */
+.check-flag-warn { outline: 2px solid #e5b04f; outline-offset: 3px; border-radius: 8px; }
+.check-flag-block { outline: 2px solid #d4605a; outline-offset: 3px; border-radius: 8px; }
+.check-jumped { animation: check-pulse 1.2s ease-out 1; }
+@keyframes check-pulse { 0% { box-shadow: 0 0 0 0 rgba(47, 111, 214, .45); } 100% { box-shadow: 0 0 0 12px rgba(47, 111, 214, 0); } }
+.app-shell.theme-dark .checks-panel { background: #142235; border-color: #2b3d57; }
+.app-shell.theme-dark .check-item { background: #1b2c44; }
+.app-shell.theme-dark .check-item.check-block { background: #3d1f22; }
+.app-shell.theme-dark .check-item.check-warn { background: #3b2e14; }
+.app-shell.theme-dark .checks-head span, .app-shell.theme-dark .checks-note, .app-shell.theme-dark .check-fix { color: #b8cde6; }
+@media (prefers-reduced-motion: reduce) { .check-jumped { animation: none; } }
