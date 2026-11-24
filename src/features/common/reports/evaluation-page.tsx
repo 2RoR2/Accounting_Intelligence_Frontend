@@ -3,6 +3,7 @@
 import { EmptyState, ErrorState, LoadingState, PageHeader, Panel } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getLatestBenchmark } from "@/lib/api/benchmark.service";
+import { WorkloadPanel } from "./workload-panel";
 
 const percentage = (value: number) => new Intl.NumberFormat("en-MY", { style: "percent", maximumFractionDigits: 1 }).format(value);
 
@@ -26,5 +27,6 @@ export function EvaluationPage() {
         <div><dt>Exception rate</dt><dd>{data.exception_rate == null ? "Not measured yet" : percentage(data.exception_rate)}</dd></div>
       </dl>}
     </Panel>
+    <WorkloadPanel />
   </>;
 }
