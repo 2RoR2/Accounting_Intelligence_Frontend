@@ -136,3 +136,10 @@
 .review-status-reading-notes { display: grid; gap: 4px; margin-block: 8px; font-size: 13px; }
 .review-status-reading-notes ul { margin: 0; padding-left: 18px; }
 .review-blocking-notice li .btn.small { margin-left: 6px; }
+/* Dark theme: the field-state colour (common.css) overrode the pill's text colour, leaving light text on a light pill. */
+.app-shell.theme-dark .shoebox-field-state.review-signal.is-check { color: #ffd8a8; background: #4a2f12; }
+.app-shell.theme-dark .shoebox-field-state.review-signal.is-suggestion { color: #bfdbfe; background: #1e3a5f; }
+.app-shell.theme-dark .shoebox-field-state.review-signal.is-missing { color: #fecaca; background: #4c1d1d; }
+.app-shell.theme-dark .shoebox-field-state.review-signal.is-verified { color: #bbf7d0; background: #14391f; }
+/* Dark theme: --ink turns light while --color-4 stays light, so the line above the original was unreadable. */
+.app-shell.theme-dark .review-source-caption { background: #12263f; color: #dbeafe; border-bottom-color: #23415f; }

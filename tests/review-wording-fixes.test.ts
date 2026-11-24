@@ -127,8 +127,23 @@ test("another company's document reads as such, with a Set aside shortcut", () =
   assert.equal(checkSentence(finding), finding.message);
   assert.equal(checkShortcut(finding), "set-aside");
   assert.deepEqual(reviewNoticeChecks([finding], () => true), [finding]);
+  // KNT's own bill: the passed row says so, not "Not addressed to this company" beside OK.
+  const own = result({ rule: "BUYER-NOT-COMPANY", result: "PASS", field: "customer", message: "Addressed to this company." });
+  assert.equal(checkSentence(own), "Addressed to this company.");
+  assert.equal(checkShortcut(own), null);
+  assert.deepEqual(reviewNoticeChecks([own], () => false), []);
   // The exceptions list uses the rule title, which must not leak the code.
   assert.equal(ruleSentence("VALIDATION:BUYER-NOT-COMPANY"), "Not addressed to this company: if it isn't yours, set it aside.");
+});
+
+test("a supplier check skipped for another company's document does not say 'New supplier: add it to Contacts'", () => {
+  const skipped = result({ rule: "EX-008", result: "NOT_APPLICABLE", checkStatus: "NOT_APPLICABLE",
+    message: "Supplier matching is skipped: this document is addressed to another company." });
+  assert.equal(checkSentence(skipped), skipped.message);
+  assert.doesNotMatch(checkSentence(skipped), /add it to Contacts/);
+  // A real "new supplier" finding keeps its instruction.
+  assert.equal(checkSentence(result({ rule: "EX-008", result: "FAIL", field: "supplier", message: "Supplier matching requires review." })),
+    "New supplier: add it to Contacts.");
 });
 
 test("Set aside… reuses the page's SetAsideControl, and set-aside.tsx is not changed", () => {

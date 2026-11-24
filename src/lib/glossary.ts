@@ -150,7 +150,11 @@ export function checkSentence(item: CheckLike): string {
   if (duplicate === "not-run") return message.startsWith("Duplicate check can't run yet") ? message : DUPLICATE_NOT_RUN;
   if (duplicate === "found") return message.startsWith("Possible duplicate of") ? message : ruleSentence(item.rule, item.field);
   if (duplicate === "passed") return "No duplicate: no other invoice from this supplier has this number.";
-  if (ruleCode(item.rule) === "BUYER-NOT-COMPANY" && String(item.result ?? "").toUpperCase() === "FAIL" && message) return message;
+  // "This document is addressed to …, not …" when it fails; "Addressed to this company." when it passes.
+  if (ruleCode(item.rule) === "BUYER-NOT-COMPANY" && message) return message;
+  // A check that does not apply says why ("Supplier matching is skipped: this document is addressed to another
+  // company"), not the rule's instruction ("New supplier: add it to Contacts"), which would ask for something not needed.
+  if (String(item.result ?? "").toUpperCase() === "NOT_APPLICABLE" && message) return message;
   return ruleSentence(item.rule, item.field);
 }
 
