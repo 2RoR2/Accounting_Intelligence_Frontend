@@ -42,6 +42,22 @@
 .review-evidence-box:hover { border-color: var(--color-0); background: rgb(60 146 247 / 18%); }
 .review-evidence-box.is-selected { z-index: 1; border: 2px solid #f59e0b; background: rgb(251 191 36 / 22%); box-shadow: 0 0 0 3px rgb(251 191 36 / 35%); }
 
+/* Roadmap P1-lite: the random spot check and the reasons behind the risk order. */
+.review-spot-check { display: grid; gap: 2px; margin: 12px 16px 0; padding: 10px 12px; border: 1px solid #9cc3f0; border-left: 4px solid #1d6abd;
+  border-radius: 8px; background: #eef5fd; color: #16355d; font-size: 13px; }
+.review-risk-note { margin: 12px 16px 0; font-size: 13px; color: #607995; }
+.review-risk-note.is-high strong { color: #b42318; }
+.review-risk-note.is-medium strong { color: #92530a; }
+.app-shell.theme-dark .review-spot-check { background: #17304f; border-color: #4f8fd6; color: #dbeafe; }
+.app-shell.theme-dark .review-risk-note { color: #b9d5f2; }
+.app-shell.theme-dark .review-risk-note.is-high strong { color: #ff9b8f; }
+.app-shell.theme-dark .review-risk-note.is-medium strong { color: #ffd06b; }
+/* Roadmap P10: the proposed journal next to the approval decision. */
+.review-posting-preview { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #d7e6f6; border-radius: 8px; font-size: 13px; }
+.review-posting-preview ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.review-posting-preview .review-section-help { padding: 0; }
+.app-shell.theme-dark .review-posting-preview { border-color: #2b4a6e; }
+
 @media (max-width: 760px) {
   .review-key-hint { display: none; }
   .review-queue-nav { width: 100%; justify-content: space-between; }

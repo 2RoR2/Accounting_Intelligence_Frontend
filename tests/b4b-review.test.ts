@@ -280,7 +280,8 @@ test("P2: after a submit the next document comes from the lane the page opened i
   globalThis.fetch = (async () => new Response(JSON.stringify(lanes[Math.min(call++, 1)]), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
   try {
     const opened = await loadReviewQueue("a");
-    assert.deepEqual(opened, { source: { kind: "lanes", lane: "to_check" }, ids: ["a", "b"] });
+    // `entry` is the document's own lanes item (its risk and spot-check pick, roadmap P1-lite).
+    assert.deepEqual(opened, { source: { kind: "lanes", lane: "to_check" }, ids: ["a", "b"], entry: { id: "a" } });
     const fresh = await reloadReviewQueue(opened.source);
     assert.deepEqual(fresh, ["b"]);
     assert.equal(nextAfterSubmit(opened.ids, fresh, "a"), "b", "stays in to_check, never jumps to ready");

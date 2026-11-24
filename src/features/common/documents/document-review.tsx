@@ -67,6 +67,7 @@ import { ReviewSource } from "./review/source-pages";
 import { AddFieldControl, BlockingChecksNotice, DueDateHelper } from "./review/review-extras";
 import { addableFields, approvalBlockers, blockingChecks, blockingFields, keyFieldsPresent } from "./review/key-fields";
 import { useReviewQueue } from "./review/use-review-queue";
+import { PostingPreviewPanel } from "./review/posting-preview";
 import { LINE_ITEM_FIELDS, SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
@@ -375,7 +376,11 @@ function DocumentReviewPage({
 
   /* ---------- Keyboard review (task B4b) ---------- */
   const router = useRouter();
-  const { queue, reload: reloadQueue } = useReviewQueue(documentId);
+  const { queue, reload: reloadQueue, entry: laneEntry } = useReviewQueue(documentId);
+  // Spot check (roadmap P1-lite guardrail): a ready document picked at random opens with every field shown, so a
+  // value wrongly marked "read from the document" still gets a person's look.
+  const spotCheck = !!laneEntry?.spotCheck;
+  useEffect(() => { if (spotCheck) setOnlyToCheck(false); }, [spotCheck, documentId]);
   // Fields that needed a check when this document opened. They stay on screen after a correction, so the list does not jump.
   // `order` is the field order at opening: the keyboard keeps it, so corrected fields do not move.
   const [openingChecks, setOpeningChecks] = useState<{ doc: string; keys: Set<string>; order: string[] }>();
@@ -702,6 +707,13 @@ function DocumentReviewPage({
                     {data.validationReport && <li className="is-validation"><b>Validation</b><span>{summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked</span></li>}
                   </ul>
                 </div>}
+                {spotCheck && <div className="review-spot-check" role="status">
+                  <strong>Spot check: compare every field</strong>
+                  <span>This ready document was picked at random (about 1 in 20) for a full check, so every field is shown, not only the flagged ones.</span>
+                </div>}
+                {!spotCheck && laneEntry?.risk && laneEntry.risk.level !== "low" && laneEntry.risk.why.length > 0 &&
+                  <p className={`review-risk-note is-${laneEntry.risk.level}`} role="status">
+                    <strong>{laneEntry.risk.level === "high" ? "Look closely" : "Check"}:</strong> {laneEntry.risk.why.join(" ")}</p>}
                 <BlockingChecksNotice items={blockingChecks(validation, (name) => { const key = fieldForCheck(name); return !!key && visibleKeys.includes(key) && signalOf.get(key) === "check"; })}
                   labelFor={(name) => fieldLabel(kind, fieldForCheck(name) ?? name, extraction.fields[fieldForCheck(name) ?? name]?.label)} onOpenChecks={viewIssues} />
                 {visible.length > 0 && <div className="shoebox-fields review-field-list" aria-label={onlyToCheck ? "Fields to check" : "All fields"}>
@@ -812,6 +824,8 @@ function DocumentReviewPage({
                           if (decision === "approved") await standardiseDocument(user, documentId).catch((e: Error) => { throw new Error(`Approved, but not saved to records: ${e.message} Use Save to records on the Checks tab.`); });
                         }, done);
                       return <div className="review-admin-decision" role="group" aria-label="Approval decision">
+                        {/* Roadmap P10: what approval would do to the books, before the admin decides. */}
+                        <PostingPreviewPanel documentId={documentId} revision={revision} />
                         <button className="btn primary" disabled={busy || reasons.length > 0} onClick={() => decide("approved", "Approved", "Document approved and saved to records.")}>Approve document</button>
                         <button className="btn" disabled={busy || !canDecide} onClick={() => decide("returned", "Returned for changes", "Document returned to the accountant.")}>Return</button>
                         <button className="btn danger" disabled={busy || !canDecide} onClick={() => decide("rejected", "Rejected", "Document rejected.")}>Reject</button>
