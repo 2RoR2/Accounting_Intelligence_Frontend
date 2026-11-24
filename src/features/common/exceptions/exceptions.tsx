@@ -28,6 +28,7 @@ import {
 } from "@/components/common/ui";
 import { documentKindLabel, ruleSentence, ruleTitle, statusLabel } from "@/lib/glossary";
 import { documentDisplayName } from "@/lib/document-display-name";
+import { SetAsideRowAction, canSetAside } from "@/features/common/documents/set-aside";
 export function ExceptionsPage({ user }: { user: User }) {
   const base = user.role === "LOCAL_ADMIN" ? "/company" : "/workspace";
   const { data, error, loading, refresh } = useResource(
@@ -44,6 +45,7 @@ export function ExceptionsPage({ user }: { user: User }) {
           ...exception,
           documentName: doc ? documentDisplayName(doc, doc.name) : exception.documentId,
           documentType: doc?.type ?? "",
+          documentStatus: doc?.status ?? "",
         };
       });
       return { rows, users };
@@ -198,6 +200,10 @@ export function ExceptionsPage({ user }: { user: User }) {
                     <button className="text-link" onClick={() => { setResolving({ id: e.id, documentId: e.documentId, title: ruleSentence(e.type) }); setResolveNote(""); setFailure(""); }}>
                       Resolve
                     </button>
+                  )}
+                  {e.status !== "RESOLVED" && canSetAside(e.documentStatus) && (
+                    <SetAsideRowAction documentId={e.documentId} label={e.documentName}
+                      onDone={(message) => { setToast(message); void refresh(); }} />
                   )}
                   {user.role === "LOCAL_ADMIN" && e.status !== "RESOLVED" && (
                     <button

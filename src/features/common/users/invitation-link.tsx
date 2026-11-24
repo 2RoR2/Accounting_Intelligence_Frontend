@@ -32,6 +32,14 @@ export function undeliveredInvitation(
   return { email, link: activationUrlForThisSite(delivery.activationLink, origin), expiresAt: delivery.expiresAt };
 }
 
+/** The API gives "invited by" as the inviter's user id; show their name (or a dash), never a raw id. */
+export function inviterName(invitedBy: string | null | undefined, people: ReadonlyArray<{ id: string; name: string }>): string {
+  if (!invitedBy) return "—";
+  const person = people.find((candidate) => candidate.id === invitedBy);
+  if (person) return person.name;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invitedBy) ? "Another administrator" : invitedBy;
+}
+
 export function invitationMessage(delivery: InvitationDelivery | undefined, email: string) {
   if (delivery && !delivery.emailSent) return `Invitation created for ${email}, but the email could not be sent.`;
   return `Invitation email sent to ${email}.`;
