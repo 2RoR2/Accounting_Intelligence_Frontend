@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { get } from "@/lib/api/client";
-import { findLane, laneIds, toReviewIds, type LanesResponse } from "./review-logic";
+import { findLane, laneEntry, laneIds, toReviewIds, type LaneEntry, type LanesResponse } from "./review-logic";
 
 /** Where the queue came from: a named lane of the lanes API, or the "to review" document list. */
 export type QueueSource = { kind: "lanes"; lane: string } | { kind: "to-review" };
@@ -15,10 +15,12 @@ export type QueueSource = { kind: "lanes"; lane: string } | { kind: "to-review" 
 const toReviewList = async () => toReviewIds(await get<Array<{ id: string }>>("/api/documents?lane=to-review"));
 
 /** The queue for the open document, and where it came from. */
-export async function loadReviewQueue(currentId: string): Promise<{ source: QueueSource; ids: string[] }> {
+export async function loadReviewQueue(currentId: string): Promise<{ source: QueueSource; ids: string[]; entry?: LaneEntry | null }> {
   try {
-    const found = findLane(await get<LanesResponse>("/api/review/lanes"), currentId);
-    if (found) return { source: { kind: "lanes", lane: found.lane }, ids: found.ids };
+    const response = await get<LanesResponse>("/api/review/lanes");
+    const found = findLane(response, currentId);
+    // The entry carries the document's risk and spot-check pick (roadmap P1-lite).
+    if (found) return { source: { kind: "lanes", lane: found.lane }, ids: found.ids, entry: laneEntry(response, currentId) };
   } catch {
     // Not deployed yet (404) or not allowed for this role: use the document list below.
   }
@@ -33,6 +35,7 @@ export async function reloadReviewQueue(source: QueueSource): Promise<string[]> 
 
 export function useReviewQueue(documentId: string) {
   const [queue, setQueue] = useState<string[]>([]);
+  const [entry, setEntry] = useState<{ doc: string; value: LaneEntry | null }>();
   const source = useRef<QueueSource>({ kind: "to-review" });
   useEffect(() => {
     let cancelled = false;
@@ -40,10 +43,12 @@ export function useReviewQueue(documentId: string) {
       if (cancelled) return;
       source.current = result.source;
       setQueue(result.ids);
+      setEntry({ doc: documentId, value: result.entry ?? null });
     }).catch(() => { if (!cancelled) setQueue([]); });
     return () => { cancelled = true; };
   }, [documentId]);
   /** The lane this page opened in, read again now. */
   const reload = useCallback(() => reloadReviewQueue(source.current).catch(() => [] as string[]), []);
-  return { queue, reload };
+  // Only the open document's entry: the previous document's stays hidden while the next one loads.
+  return { queue, reload, entry: entry?.doc === documentId ? entry.value : null };
 }

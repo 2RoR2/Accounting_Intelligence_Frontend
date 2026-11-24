@@ -249,8 +249,20 @@ export function evidenceCaption(selected: { label: string; evidence: SourceEvide
 
 /* ---------- Next document in the same lane ---------- */
 
-/** GET /api/review/lanes (backend #12). Only the ids are used here. */
-export interface LanesResponse { lanes?: Record<string, Array<{ id: string }>> }
+/** The risk order the lanes API gives each document (roadmap P1-lite): highest first, with the reasons. */
+export interface LaneRisk { score: number; level: "high" | "medium" | "low" | string; why: string[] }
+export interface LaneEntry { id: string; risk?: LaneRisk; spotCheck?: boolean }
+/** GET /api/review/lanes (backend #12). The order is the server's risk order; `risk` and `spotCheck` are optional. */
+export interface LanesResponse { lanes?: Record<string, LaneEntry[]> }
+
+/** The lanes entry of one document (its risk and whether it was picked for a spot check), or null. */
+export function laneEntry(response: LanesResponse | null | undefined, currentId: string): LaneEntry | null {
+  for (const items of Object.values(response?.lanes ?? {})) {
+    const found = items.find(item => String(item.id) === currentId);
+    if (found) return found;
+  }
+  return null;
+}
 
 /** The lane that holds the current document, as an ordered list of ids; empty when no lane has it. */
 export function laneQueue(response: LanesResponse | null | undefined, currentId: string): string[] {
