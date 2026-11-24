@@ -50,6 +50,11 @@ const OTHER_RULES: Record<string, Rule> = {
   "MODEL-DISAGREEMENT": { title: "Second reading differs", action: "compare the value with the document." },
   "AMOUNT-PLAUSIBLE": { title: "Amounts do not fit together", action: "check tax, subtotal and total on the document; they may be swapped or misread." },
   "BUYER-NOT-COMPANY": { title: "Not addressed to this company", action: "if it isn't yours, set it aside." },
+  "RCP-007": { title: "Refund receipt", action: "record it as a refund, not as an ordinary expense." },
+  "SUBTOTAL-DERIVED": { title: "Subtotal not printed", action: "compare the total of the lines with the document." },
+  "PRETAX-BASIS": { title: "Subtotal not printed", action: "check the amount before tax used for the checks." },
+  "TOTAL-COMPONENTS": { title: "Total does not add up", action: "check the subtotal, tax and total against the document." },
+  "ARITHMETIC-PREREQ": { title: "Amounts not compared", action: "check which currency the document prints." },
 };
 
 /** Document kinds whose rules are named "<KIND>-<RULE>" by the backend. */
@@ -64,6 +69,13 @@ const SUFFIX_RULES: Record<string, (noun: string) => Rule> = {
   AMOUNT_DUE: () => ({ title: "Amount due does not add up", action: "check the charges, payments and amount due." }),
   SIGN: (noun) => ({ title: "Negative amount", action: `enter the ${noun} amounts as positive numbers.` }),
   TOTAL: () => ({ title: "Total does not add up", action: "check the subtotal, tax and total against the document." }),
+  FIELDS: () => ({ title: "Key details unclear", action: "check the number, date, currency and amounts against the document." }),
+  DUE_DATE: (noun) => ({ title: "Due date unclear", action: `check the ${noun} date and due date on the document.` }),
+  BILLING_PERIOD: () => ({ title: "Billing period unclear", action: "enter the period's start and end dates as printed." }),
+  LINE_DETAILS: () => ({ title: "Item rows not read", action: "check the printed items and add any that are missing." }),
+  RETURNS: () => ({ title: "Negative amount or return", action: "check whether this is a return or refund before approving." }),
+  NOTE_LINK: () => ({ title: "Note not linked", action: "link it to the original invoice." }),
+  NOTE_DIRECTION: () => ({ title: "Note direction unclear", action: "check whether it is a credit note or a debit note." }),
 };
 
 /** Every rule code the backend can emit today. Used by tests to prove each has a sentence. */
