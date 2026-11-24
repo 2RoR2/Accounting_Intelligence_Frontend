@@ -16,6 +16,7 @@ import {
   type DocumentType, type ErpDocument, type PostingPreview, type Product, type TypedDocument,
 } from "@/lib/api/erp.service";
 import { download, fetchBlob, openInNewTab } from "@/lib/api/client";
+import { runDocumentChecks, type CheckFinding } from "@/lib/api/checks.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import { statusLabel } from "@/lib/glossary";
 import type { User } from "@/types";
@@ -41,6 +42,11 @@ import { ShareLinksPanel } from "./share-links";
 import { showsSupplierCopy } from "./attachments-logic";
 import { SupplierCopy } from "./supplier-copy";
 import { TracePanel } from "@/features/common/trace/trace-panel";
+import {
+  CHECK_DELAY_MS, CHECKED_TYPES, PRINTED_TOTAL_TYPES, applySuggestion, checkTarget, deviceStorage, draftStorageKey, findingKey,
+  flaggedTargets, forgetDraft, keepDraft, leavesPage, openWarnings, readDraft, sentLineKeys, type StoredDraft,
+} from "./checks-logic";
+import { ChecksPanel } from "./checks-panel";
 
 type FormProps = { base: string; group: DocumentGroup; type: DocumentType; role: User["role"] };
 type DraftLine = { key: number; value: DocumentLine };
@@ -52,6 +58,8 @@ type Draft = {
   paymentTerms: string; termDays: number | null; dueDateAuto: boolean;
   /** Printed with the contact block (fields.attention, fields.deliveryAddress) and as the terms (fields.terms). */
   attention: string; deliveryAddress: string; terms: string;
+  /** Bills and supplier notes: the total printed on the supplier's copy (fields.printedTotal), checked against the lines. */
+  printedTotal: string;
 };
 
 // A quotation needs its customer to be sent (the API refuses "Send" without one).
@@ -95,6 +103,7 @@ function makeDraft(document: TypedDocument | null, startLine = false, type?: Doc
     attention: text(document?.fields.attention),
     deliveryAddress: text(document?.fields.deliveryAddress),
     terms: text(document?.fields.terms),
+    printedTotal: text(document?.fields.printedTotal),
   };
 }
 
@@ -138,6 +147,7 @@ function documentInput(type: DocumentType, draft: Draft, document: TypedDocument
     put("deliveryAddress", draft.deliveryAddress);
     put("terms", draft.terms);
   }
+  if (PRINTED_TOTAL_TYPES.has(type)) put("printedTotal", draft.printedTotal);
   if (edited) input.fields = fields;
   return input;
 }
@@ -189,7 +199,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const [voidReason, setVoidReason] = useState("");
   // The A4 preview beside the form (below it on narrow screens), the Send / Issue confirm step, and Mark delivered.
   const [showPreview, setShowPreview] = useState(true);
-  const [sheet, setSheet] = useState<{ action: DocumentAction; posting: PostingPreview | null; postingError: string } | null>(null);
+  const [sheet, setSheet] = useState<{
+    action: DocumentAction; posting: PostingPreview | null; postingError: string; warnings: CheckFinding[];
+  } | null>(null);
   const [delivering, setDelivering] = useState(false);
   // Duplicate matches the user has already seen; issuing stops once when a save reveals a new one (Codex review P2).
   const seenDuplicates = useRef(new Set((initialDocument?.possibleDuplicates ?? []).map(({ id }) => id)));
@@ -271,6 +283,126 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     ? liveDuplicates(siblings, { id: document?.id, referenceNo: draft.referenceNo, documentDate: draft.documentDate, total: totals.total })
       .filter(({ id }) => !savedDuplicates.some((saved) => saved.id === id))
     : [];
+
+  // Checks: rerun (debounced) as the user types and after each save. They flag; the user decides what to change.
+  const checked = editable && CHECKED_TYPES.has(type);
+  const [findings, setFindings] = useState<CheckFinding[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState("");
+  const [checkRun, setCheckRun] = useState(0);
+  const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set());
+  const checkBody = JSON.stringify(liveInput);
+  const [checkedBody, setCheckedBody] = useState("");
+  useEffect(() => {
+    if (!checked) return;
+    const controller = new AbortController();
+    const timer = globalThis.setTimeout(async () => {
+      setChecking(true);
+      try {
+        const result = await runDocumentChecks(type, JSON.parse(checkBody) as DocumentInput, document?.id, controller.signal);
+        if (controller.signal.aborted) return;
+        setFindings(result.findings);
+        setCheckError("");
+        setCheckedBody(checkBody);
+      } catch (problem) {
+        if (!controller.signal.aborted) setCheckError(problem instanceof Error ? problem.message : "Unable to run the checks.");
+      } finally {
+        if (!controller.signal.aborted) setChecking(false);
+      }
+    }, CHECK_DELAY_MS);
+    return () => { controller.abort(); globalThis.clearTimeout(timer); };
+  }, [checked, type, checkBody, document?.id, document?.updatedAt, checkRun]);
+  const flags = useMemo(() => flaggedTargets(findings, ignored), [findings, ignored]);
+  const flagClass = (target: string) => { const severity = flags.get(target); return severity ? `check-flag-${severity}` : undefined; };
+  const sentIndex = new Map(sentLineKeys(draft.lines, isBlankLine).map((key, index) => [key, index]));
+
+  function jumpTo(finding: CheckFinding) {
+    const element = globalThis.document?.getElementById(checkTarget(finding));
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    const field = element.querySelector<HTMLElement>(`[data-check-field="${finding.field}"] input, [data-check-field="${finding.field}"] textarea`)
+      ?? element.querySelector<HTMLElement>("input:not([disabled]):not([readonly]), textarea");
+    field?.focus({ preventScroll: true });
+    element.classList.remove("check-jumped");
+    void element.offsetWidth;  // restart the highlight pulse
+    element.classList.add("check-jumped");
+  }
+
+  /** Apply sets the suggested value only on the user's click; the checks then run again on the changed form. */
+  function applyFinding(finding: CheckFinding) {
+    if (!finding.suggestion) return;
+    const change = applySuggestion(finding.suggestion, draft.lines, isBlankLine);
+    if (!change) return;
+    if (change.kind === "line") changeLine(change.key, change.changes);
+    else setDraft((current) => ({ ...current, ...change.changes }));
+  }
+
+  function setIgnoredFinding(finding: CheckFinding, ignore: boolean) {
+    setIgnored((current) => {
+      const next = new Set(current);
+      if (ignore) next.add(findingKey(finding));
+      else next.delete(findingKey(finding));
+      return next;
+    });
+  }
+
+  // Unsaved changes: kept on this device per type and id, offered back on return, and guarded on leaving.
+  const storageKey = draftStorageKey(type, document?.id);
+  const baseline = useMemo(() => JSON.stringify(documentInput(type, makeDraft(document, !AMOUNT_ONLY_TYPES.has(type), type), document)),
+    [type, document]);
+  const dirty = editable && checkBody !== baseline;
+  const [restore, setRestore] = useState<StoredDraft<Draft> | null>(null);
+  const restoreRead = useRef<string | null>(null);
+  useEffect(() => {
+    if (restoreRead.current === storageKey) return;
+    restoreRead.current = storageKey;
+    const stored = editable ? readDraft<Draft>(deviceStorage(), storageKey) : null;
+    const usable = stored && Array.isArray(stored.draft?.lines)
+      && JSON.stringify(documentInput(type, { ...makeDraft(document, false, type), ...stored.draft }, document)) !== baseline;
+    if (usable) setRestore(stored);
+    else if (stored) forgetDraft(deviceStorage(), storageKey);
+  }, [storageKey, editable, type, document, baseline]);
+  useEffect(() => {
+    if (!editable || restore || restoreRead.current !== storageKey) return;
+    const timer = globalThis.setTimeout(() => {
+      if (dirty) keepDraft(deviceStorage(), storageKey, draft, document?.updatedAt ?? null);
+      else forgetDraft(deviceStorage(), storageKey);
+    }, 400);
+    return () => globalThis.clearTimeout(timer);
+  }, [editable, restore, dirty, draft, storageKey, document?.updatedAt]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    // In-app links: ask first (the changes stay on this device either way).
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!anchor || !leavesPage({ href: anchor.href, target: anchor.target, download: anchor.hasAttribute("download") }, globalThis.location)) return;
+      if (!globalThis.confirm("Leave without saving? Your changes stay on this device and are offered back when you return.")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    globalThis.addEventListener("beforeunload", warn);
+    globalThis.document.addEventListener("click", onClick, true);
+    return () => {
+      globalThis.removeEventListener("beforeunload", warn);
+      globalThis.document.removeEventListener("click", onClick, true);
+    };
+  }, [dirty]);
+
+  function restoreDraft() {
+    if (!restore) return;
+    const next = { ...makeDraft(document, false, type), ...restore.draft };
+    setDraft(next);
+    nextLine.current = next.lines.reduce((max, line) => Math.max(max, line.key + 1), 0);
+    setRestore(null);
+  }
+
+  function discardDraft() {
+    forgetDraft(deviceStorage(), storageKey);
+    setRestore(null);
+  }
 
   function setField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -355,6 +487,9 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   }
 
   function acceptSaved(saved: TypedDocument) {
+    // What was kept on this device is now saved on the server.
+    forgetDraft(deviceStorage(), draftStorageKey(type, document?.id));
+    forgetDraft(deviceStorage(), draftStorageKey(type, saved.id));
     setDocument(saved);
     const next = makeDraft(saved);
     setDraft(next);
@@ -461,7 +596,16 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
           postingError = error instanceof Error ? error.message : "Unable to show the posting.";
         }
       }
-      setSheet({ action, posting, postingError });
+      // The checks on what was just saved: their open warnings are listed in the confirm step.
+      let latestFindings = findings;
+      if (CHECKED_TYPES.has(type)) {
+        try {
+          latestFindings = (await runDocumentChecks(type, documentInput(type, makeDraft(saved), saved), saved.id)).findings;
+        } catch {
+          // keep the last result; the step still opens
+        }
+      }
+      setSheet({ action, posting, postingError, warnings: openWarnings(latestFindings, ignored) });
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to prepare this step.");
     } finally {
@@ -552,6 +696,19 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     {document && <DocumentFacts base={base} document={document} />}
     <div className={beside && showPreview ? "doc-work split" : "doc-work"}>
     <div className="doc-work-main">
+    {restore && <div className="notice info" role="alert">
+      Restore unsaved changes from {new Date(restore.savedAt).toLocaleString()}?
+      {restore.baseUpdatedAt && document?.updatedAt && restore.baseUpdatedAt !== document.updatedAt
+        ? " The document was saved again after them; restoring replaces what is in the form." : ""}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className="btn small primary" onClick={restoreDraft}>Restore</button>
+        <button type="button" className="btn small" onClick={discardDraft}>Discard</button>
+      </div>
+    </div>}
+    {checked && <ChecksPanel findings={findings} ignored={ignored} loading={checking} error={checkError}
+      stale={checkedBody !== "" && checkedBody !== checkBody} editable={editable} onJump={jumpTo} onApply={applyFinding}
+      onIgnore={(finding) => setIgnoredFinding(finding, true)} onRestore={(finding) => setIgnoredFinding(finding, false)}
+      onRetry={() => setCheckRun((run) => run + 1)} />}
     <form id={formId} ref={form} aria-busy={locked} onSubmit={(event) => {
       event.preventDefault();
       if (editable) void perform({ kind: "save", label: "Save" });
@@ -560,7 +717,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
         <Panel title="Details">
           <div className="p-5 pb-0">
             <div className="grid gap-x-5 sm:grid-cols-2 lg:grid-cols-3">
-              {contactKind && <div>
+              {contactKind && <div id="check-field-contactId" className={flagClass("check-field-contactId")}>
                 <Field label={`${contactLabel}${REQUIRES_CONTACT.has(type) ? " *" : ""}`}
                   hint={editable && !draft.contactId ? "Type a name, code or TIN" : undefined}>
                   <Combobox value={draft.contactId} options={options.contacts} required={REQUIRES_CONTACT.has(type)}
@@ -593,24 +750,30 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
                     ? { ...current, documentDate, dueDate: current.dueDateAuto && documentDate ? addDays(documentDate, QUOTATION_VALID_DAYS) : current.dueDate }
                     : withTerms(current, changeDocumentDate(termsOf(current), documentDate)));
                 }} /></Field>
-              {type === "quotation" && <Field label="Valid until"
+              {type === "quotation" && <div id="check-field-dueDate" className={flagClass("check-field-dueDate")}><Field label="Valid until"
                 hint={draft.dueDateAuto ? `${QUOTATION_VALID_DAYS} days after the document date until you change it.` : "How long the prices hold. Printed on the quotation."}>
                 <input type="date" value={draft.dueDate} min={draft.documentDate || undefined}
                   onChange={(event) => { const dueDate = event.target.value; setDraft((current) => ({ ...current, dueDate, dueDateAuto: false })); }} />
-              </Field>}
-              {hasOutstanding(type) && <Field label="Payment terms" hint="Choosing terms sets the due date from the document date.">
+              </Field></div>}
+              {hasOutstanding(type) && <div id="check-field-paymentTerms" className={flagClass("check-field-paymentTerms")}><Field label="Payment terms" hint="Choosing terms sets the due date from the document date.">
                 <Combobox value={draft.paymentTerms} options={options.terms} placeholder="No payment terms" loading={paymentTerms.loading}
                   fallbackLabel={draft.paymentTerms} onChange={(name) => {
                     const term = activeTerms.find((entry) => entry.name === name) ?? null;
                     setDraft((current) => withTerms({ ...current, paymentTerms: name }, chooseTerms(termsOf(current), term)));
                   }} />
-              </Field>}
-              {hasOutstanding(type) && <Field label="Due date" hint={draft.dueDateAuto && draft.termDays !== null ? "Follows the payment terms until you change it." : undefined}>
+              </Field></div>}
+              {hasOutstanding(type) && <div id="check-field-dueDate" className={flagClass("check-field-dueDate")}><Field label="Due date" hint={draft.dueDateAuto && draft.termDays !== null ? "Follows the payment terms until you change it." : undefined}>
                 <input type="date" value={draft.dueDate}
-                  onChange={(event) => { const dueDate = event.target.value; setDraft((current) => withTerms(current, editDueDate(termsOf(current), dueDate))); }} /></Field>}
+                  onChange={(event) => { const dueDate = event.target.value; setDraft((current) => withTerms(current, editDueDate(termsOf(current), dueDate))); }} /></Field></div>}
+              <div id="check-field-referenceNo" className={flagClass("check-field-referenceNo")}>
               <Field label={type === "bill" ? "Supplier invoice no." : "Reference no."} hint={sales ? "The customer's PO or their reference" : undefined}>
                 <input value={draft.referenceNo} maxLength={200} onChange={(event) => setField("referenceNo", event.target.value)} />
-              </Field>
+              </Field></div>
+              {PRINTED_TOTAL_TYPES.has(type) && <div id="check-field-printedTotal" className={flagClass("check-field-printedTotal")}>
+                <Field label={`Total on the supplier's copy (${draft.currency || "MYR"})`} hint="Optional. Typed from the paper; checked against the lines and tax">
+                  <input type="number" min="0" step="0.01" inputMode="decimal" value={draft.printedTotal} placeholder="0.00"
+                    onChange={(event) => setField("printedTotal", event.target.value)} />
+                </Field></div>}
               {printed && sales && type !== "payment" && <Field label="Attention" hint="The person the document is for">
                 <input value={draft.attention} maxLength={200} placeholder="e.g. Purchasing manager"
                   onChange={(event) => setField("attention", event.target.value)} />
@@ -643,7 +806,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               <textarea rows={2} value={draft.terms} maxLength={4000} onChange={(event) => setField("terms", event.target.value)} /></Field>}
           </div>
         </Panel>
-        {!amountOnly && <Panel title="Lines" action={editable && <>
+        {!amountOnly && <div id="check-field-lines" className={flagClass("check-field-lines")}><Panel title="Lines" action={editable && <>
           {contactKind && <button className="btn small" type="button" disabled={!draft.contactId || copying || draft.lines.length >= 500}
             title={draft.contactId ? undefined : `Choose the ${contactKind} first`} onClick={() => void copyLastLines()}>
             Copy lines from last {label.toLowerCase()}</button>}
@@ -655,6 +818,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               currency={draft.currency || "MYR"} products={productList} options={options}
               sales={sales} requiresAccount={type === "money-in" || type === "money-out"} autoFocus={focusLine === line.key}
               lastPrice={line.value.itemId ? prices.get(line.value.itemId) : undefined}
+              checkIndex={sentIndex.get(line.key)} flags={flags}
               onChange={(changes) => changeLine(line.key, changes)}
               onCreateProduct={(name) => setQuickAdd({ kind: "product", name, lineKey: line.key })}
               onRemove={() => setDraft((current) => ({ ...current, lines: current.lines.filter(({ key }) => key !== line.key) }))} />)}
@@ -663,7 +827,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
             <button className="btn small" type="button" disabled={draft.lines.length >= 500} onClick={() => addLine(true)}>+ Add line</button>
             <small>Enter moves to the next field; Enter in the last field adds a line.</small>
           </div>}
-        </Panel>}
+        </Panel></div>}
         {ALLOCATES_TO[type] && NOTE_TARGETS[type] && draft.relatedDocumentId
           ? <Panel title="Allocations"><p className="p-5">Applied in full to the document it corrects when issued.</p></Panel>
           : ALLOCATES_TO[type] && (editable && draft.contactId
@@ -727,7 +891,8 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       </form>
     </Modal>}
     {sheet && document && <Modal title={`${sheet.action.label} ${document.number}?`} onClose={() => setSheet(null)}>
-      <IssueSheet type={type} document={document} draft={draft} posting={sheet.posting} postingError={sheet.postingError} />
+      <IssueSheet type={type} document={document} draft={draft} posting={sheet.posting} postingError={sheet.postingError}
+        warnings={sheet.warnings} ignoredCount={ignored.size} />
       <div className="modal-actions">
         <button type="button" className="btn" disabled={locked} onClick={() => setSheet(null)}>Back to editing</button>
         <button type="button" className="btn primary" disabled={locked} onClick={() => {
@@ -787,14 +952,18 @@ function LivePreview({ type, input, documentId, editable, stored }: {
 }
 
 /** The confirm step: what Send / Confirm / Issue does, reminders, and the journal it posts. */
-function IssueSheet({ type, document, draft, posting, postingError }: {
+function IssueSheet({ type, document, draft, posting, postingError, warnings, ignoredCount }: {
   type: DocumentType; document: TypedDocument; draft: Draft; posting: PostingPreview | null; postingError: string;
+  /** Open check findings (blocks and warnings) on what was just saved. */
+  warnings: CheckFinding[]; ignoredCount: number;
 }) {
   const verb = issueLabel(type).toLowerCase();
   const lines = draft.lines.map(({ value }) => value).filter((line) => !isBlankLine(line));
+  // The duplicate warning is already listed from the document; the rest of the open checks follow the reminders.
+  const checkWarnings = warnings.filter((finding) => finding.code !== "POSSIBLE_DUPLICATE");
   const checklist = issueChecklist(type, {
     contactId: draft.contactId, lines, dueDate: draft.dueDate, attention: draft.attention, deliveryAddress: draft.deliveryAddress,
-  });
+  }).filter((line) => !checkWarnings.some((finding) => finding.message === line));
   const what = [
     type === "quotation" ? "It becomes Sent and can no longer be edited."
       : type === "sales-order" ? "It becomes Confirmed and can no longer be edited."
@@ -807,10 +976,13 @@ function IssueSheet({ type, document, draft, posting, postingError }: {
     <h3>What happens</h3>
     <ul>{what.map((line) => <li key={line}>{line}</li>)}</ul>
     <h3>Before you {verb}</h3>
-    {checklist.length || document.possibleDuplicates?.length ? <ul className="issue-reminders">
+    {checklist.length || checkWarnings.length || document.possibleDuplicates?.length ? <ul className="issue-reminders">
       {checklist.map((line) => <li key={line}>{line}</li>)}
+      {checkWarnings.map((finding) => <li key={findingKey(finding)}>{finding.message} <span className="issue-note">{finding.howToFix}</span></li>)}
       {document.possibleDuplicates?.map((duplicate) => <li key={duplicate.id}>Possible duplicate of {duplicate.number} ({duplicate.reason}).</li>)}
-    </ul> : <p>Everything usually printed is filled in.</p>}
+    </ul> : <p>Everything usually printed is filled in, and the checks found nothing open.</p>}
+    {ignoredCount > 0 && <p className="issue-note">{ignoredCount} check{ignoredCount === 1 ? "" : "s"} ignored on this form.</p>}
+    {checkWarnings.length > 0 && <p className="issue-note">These do not stop you: go back to fix them, or continue if they are intended.</p>}
     {POSTING_TYPES.has(type) && <>
       <h3>Posting</h3>
       {postingError && <p className="notice warning">{postingError}</p>}
@@ -897,18 +1069,26 @@ type LineChoices = { products: ComboOption[]; descriptions: Suggestion[]; accoun
 
 function LineFields({
   line, index, editable, currency, products, options, sales, requiresAccount, autoFocus, onChange, onCreateProduct, onRemove, lastPrice,
+  checkIndex, flags,
 }: {
   line: DocumentLine; index: number; editable: boolean; currency: string; products: readonly Product[]; options: LineChoices;
   sales: boolean; requiresAccount: boolean; autoFocus: boolean; onChange: (changes: Partial<DocumentLine>) => void;
   onCreateProduct: (name: string) => void; onRemove: () => void; lastPrice?: LastPrice;
+  /** This line's index among the lines sent for checking, and the highlighted targets. */
+  checkIndex?: number; flags?: ReadonlyMap<string, string>;
 }) {
+  const target = checkIndex === undefined ? undefined : `check-line-${checkIndex}`;
+  const flag = (field?: string) => {
+    const severity = target ? flags?.get(field ? `${target}:${field}` : target) : undefined;
+    return severity ? `check-flag-${severity}` : undefined;
+  };
   const fields = [
     { key: "quantity", label: "Quantity *", min: "0.001", step: "0.001", required: true },
     { key: "unitPrice", label: `Unit price (${currency}) *`, min: "0", step: "0.0001", required: true },
     { key: "discount", label: "Discount", min: "0", step: "0.01", required: false },
   ] as const;
   const taxHint = options.taxes.length || line.taxCode ? "A label only; it does not calculate tax" : "No tax codes yet. Add them under Catalog › Tax codes.";
-  return <section className="p-5 pb-0" aria-label={`Line ${index + 1}`}>
+  return <section id={target} className={["p-5 pb-0", flag()].filter(Boolean).join(" ")} aria-label={`Line ${index + 1}`}>
     <div className="mb-3 flex items-center justify-between gap-3">
       <h3>Line {index + 1}</h3>
       {editable && <button className="btn small" type="button" aria-label={`Remove line ${index + 1}`} onClick={onRemove}>Remove</button>}
@@ -924,24 +1104,25 @@ function LineFields({
             onChange(product ? productLine(product, sales) : { itemId: null });
           }} />
       </Field>
+      <div data-check-field="description" className={flag("description")}>
       <Field label="Description" hint={options.descriptions.length ? "Type to see catalog items and lines used before" : undefined}>
         <Combobox options={options.descriptions} text={line.description} maxLength={500} placeholder="What was sold or bought"
           onTextChange={(description) => onChange({ description })}
           onChange={(_, suggestion) => { if (suggestion) onChange(lineFromSuggestion(suggestion, sales)); }} />
-      </Field>
-      {fields.map(({ key, label, min, step, required }) => <Field key={key} label={label}>
+      </Field></div>
+      {fields.map(({ key, label, min, step, required }) => <div key={key} data-check-field={key} className={flag(key)}><Field label={label}>
         <input type="number" min={min} step={step} required={required} inputMode="decimal" value={line[key] ?? ""}
           onChange={(event) => onChange({ [key]: event.target.value })} />
-      </Field>)}
+      </Field></div>)}
       {/* Tax is never calculated: the code is a label and the amount is typed as shown on the document. */}
       <Field label="Tax code" hint={taxHint}>
         <Combobox value={line.taxCode ?? ""} options={options.taxes} placeholder="No tax code"
           fallbackLabel={line.taxCode ? `${line.taxCode} (not in the catalog)` : null}
           onChange={(code) => onChange({ taxCode: code || null })} />
       </Field>
-      <Field label="Tax amount" hint="Typed as recorded; not calculated">
+      <div data-check-field="tax" className={flag("tax")}><Field label="Tax amount" hint="Typed as recorded; not calculated">
         <input type="number" min="0" step="0.01" inputMode="decimal" value={line.tax ?? ""} onChange={(event) => onChange({ tax: event.target.value })} />
-      </Field>
+      </Field></div>
       <Field label={requiresAccount ? "Account *" : "Account"} hint={requiresAccount ? undefined : "Empty uses the posting rules"}>
         <Combobox value={line.accountId ?? ""} options={options.accounts} required={requiresAccount}
           placeholder={requiresAccount ? "Type an account code or name" : "Use posting rules"}
