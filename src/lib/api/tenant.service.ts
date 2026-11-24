@@ -1,4 +1,4 @@
-import type { AccountLimitRequest, CompanyRequest, Tenant, User } from "@/types";
+import type { AccountLimitRequest, CompanyRequest, InvitationDelivery, Tenant, User } from "@/types";
 import { assertTenant, requireRole } from "../permissions";
 import { api, get } from "./client";
 export async function getTenants(user: User) {
@@ -58,8 +58,7 @@ export async function approveCompanyRequest(
   limit: number,
 ) {
   requireRole(user, ["SUPER_ADMIN"]);
-  const result = await api<{ tenantId: string }>(`/api/company-requests/${requestId}/approve`, { method: "POST", body: JSON.stringify({ limit }) });
-  return result.tenantId; /*
+  return api<{ tenantId: string; userId: string; invitation?: InvitationDelivery }>(`/api/company-requests/${requestId}/approve`, { method: "POST", body: JSON.stringify({ limit }) }); /*
   return mutate((db) => {
     assertActive(db, user);
     const request = db.requests.find((r) => r.id === requestId);
