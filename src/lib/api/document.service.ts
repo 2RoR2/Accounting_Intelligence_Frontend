@@ -211,6 +211,14 @@ export async function resolveException(
   });
   return revalidateDocument(user, documentId, note);
 }
+/** Close one exception with a reason (audited). A check that still fails is raised again when the document is checked. */
+export async function resolveExceptionById(exceptionId: string, note: string) {
+  if (note.trim().length < 5) throw new Error("Say why this exception can be closed (at least 5 characters).");
+  return api<{ id: string; status: string; note: string; resolvedAt: string }>(`/api/exceptions/${encodeURIComponent(exceptionId)}/resolve`, {
+    method: "PATCH",
+    body: JSON.stringify({ note: note.trim() }),
+  });
+}
 export async function assignException(
   user: User,
   exceptionId: string,

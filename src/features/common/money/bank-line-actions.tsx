@@ -9,8 +9,8 @@ import { decimalDisplay } from "@/lib/api/document-contract";
 import { listCatalog } from "@/lib/api/erp.service";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import {
-  getBankPaymentPreview, getMoneyTransactionDetail, postBankPayment, recordBankExpense, searchMatchRecords,
-  type BankPaymentPosting, type ManualMatchRecord,
+  getBankPaymentPreview, getMoneyTransactionDetail, matchRecordedDocument, postBankPayment, recordBankExpense, searchMatchRecords,
+  searchRecordedDocuments, type BankPaymentPosting, type ManualMatchRecord, type RecordedDocumentCandidate,
 } from "@/lib/api/money.service";
 import type { User } from "@/types";
 import type { BankMoneyTransaction, BankMoneyTransactionDetail } from "@/types/money";
@@ -151,6 +151,7 @@ export function BankLineActions({ user, line, busy, onBusyChange, onLineLoaded }
         onClick={postPayment}>Post payment to ledger</button>}
     </section>}
     {canAllocate && isUnallocated(line) && <RecordBankLine line={line} busy={disabled} run={run} />}
+    {canAllocate && isUnallocated(line) && <MatchRecordedDocument line={line} busy={disabled} run={run} />}
     {canAllocate && <MatchBankLine user={user} line={line} busy={disabled} run={run} />}
   </>;
 }
@@ -341,4 +342,46 @@ function MatchBankLine({ user, line, busy, run }: {
       <button type="button" className="btn primary" disabled={!canMatch} onClick={() => void match()}>Match selected records</button>
     </section>
   );
+}
+
+/**
+ * 24 Nov demo (bug f): a bill already paid by a payment voucher could not be matched to its bank line, because only
+ * open records were offered. The line is the bank's copy of the voucher: link the two, nothing is posted again.
+ */
+function MatchRecordedDocument({ line, busy, run }: { line: BankMoneyTransactionDetail; busy: boolean; run: RunBankAction }) {
+  const [query, setQuery] = useState("");
+  const [rows, setRows] = useState<RecordedDocumentCandidate[]>();
+  const [searching, setSearching] = useState(false);
+  const [failure, setFailure] = useState("");
+  async function search() {
+    if (busy || searching) return;
+    setSearching(true); setFailure("");
+    try { setRows(await searchRecordedDocuments(line.id, query.trim())); setSearched(query.trim()); }
+    catch (e) { setFailure(e instanceof Error ? e.message : "Unable to search payments."); }
+    finally { setSearching(false); }
+  }
+  const label = line.direction === "money_in" ? "payment received or money-in document" : "payment voucher or money-out document";
+  // Without a search, only documents that can be this line's copy; a search also shows why others cannot.
+  const [searched, setSearched] = useState("");
+  const shown = rows && (searched ? rows : rows.filter((row) => !row.problem));
+  const hidden = rows && shown ? rows.length - shown.length : 0;
+  return <section className="transaction-review-section">
+    <div className="transaction-review-section-heading"><h3>Already recorded as a payment</h3></div>
+    <p>If this line is a {label} you already issued, match it here. Nothing is posted again.</p>
+    <form onSubmit={(event) => { event.preventDefault(); void search(); }}>
+      <Field label="Number, contact or reference (optional)">
+        <input value={query} disabled={busy || searching} onChange={(event) => setQuery(event.target.value)} placeholder="PV-2026-00001" />
+      </Field>
+      <button type="submit" className="btn" disabled={busy || searching}>{searching ? "Searching…" : "Find payments"}</button>
+    </form>
+    {shown?.length === 0 && <p role="status">No issued {label} in {line.currency} for this amount is waiting for a bank line.
+      {hidden > 0 ? ` ${hidden} other ${hidden === 1 ? "document differs" : "documents differ"}; search by number to see why.` : ""}</p>}
+    {shown && shown.length > 0 && <ul>{shown.map((row) => <li key={row.documentId}>
+      <strong>{row.number}</strong> · {row.documentDate}{row.contactName ? ` · ${row.contactName}` : ""} · {bankLineMoney(row.amount, row.currency)}
+      {row.problem ? <small> · {row.problem}</small> : <> <button type="button" className="btn small primary" disabled={busy}
+        onClick={() => void run(async () => { await matchRecordedDocument(line.id, row.documentId); setRows(undefined); return `Matched to ${row.number}.`; },
+          "Unable to match this payment.")}>Match to {row.number}</button></>}
+    </li>)}</ul>}
+    {failure && <p className="notice danger" role="alert">{failure}</p>}
+  </section>;
 }

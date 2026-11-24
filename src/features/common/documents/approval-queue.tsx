@@ -7,7 +7,8 @@ import type { Extraction, User } from "@/types";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { getDocuments, getExtraction, getValidationReport } from "@/lib/api/document.service";
 import { canDecideReview } from "@/lib/permissions/document-review";
-import { decimalDisplay } from "@/lib/api/document-contract";
+import { decimalDisplay, validationSummary } from "@/lib/api/document-contract";
+import { approvalBlockers } from "@/features/common/documents/review/key-fields";
 import { bulkApproveReviews, decideDocumentReview, getDocumentReviews } from "@/lib/api/workflow.service";
 import { BulkControls, useBulkSelection } from "@/features/common/bulk-actions";
 import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
@@ -88,8 +89,12 @@ export function ApprovalQueuePage({ user }: { user: User }) {
   ).map((row) => {
     const { doc, extraction, reviews, validation } = row;
     const revision = doc.contentRevision ?? extraction?.contentRevision;
-    const canApprove = canDecideReview(user, doc, reviews) && validation?.validationStatus === "PASS" && validation.coverageComplete !== false;
-    return { ...row, revision, canApprove, selectionKey: `${doc.id}:${revision}` };
+    const canDecide = canDecideReview(user, doc, reviews);
+    const canApprove = canDecide && validation?.validationStatus === "PASS" && validation.coverageComplete !== false;
+    // Bug b (24 Nov demo): the Approve button was greyed out with no reason.
+    const blockers = canApprove ? [] : approvalBlockers({ canDecide, ownSubmission: reviews?.submissions?.[0]?.submittedBy === user.id,
+      report: validation, blocking: validationSummary(validation?.results ?? []).blocking });
+    return { ...row, revision, canApprove, blockers, selectionKey: `${doc.id}:${revision}` };
   });
   const canBulkApprove = user.role === "LOCAL_ADMIN";
   const eligible = canBulkApprove ? rows.filter((row) => row.canApprove && !!row.revision) : [];
@@ -158,7 +163,7 @@ export function ApprovalQueuePage({ user }: { user: User }) {
             : "Nothing is waiting for approval. Documents appear here when an accountant submits them."}</p></div>
         ) : (
           <div className="approval-list">
-            {rows.map(({ doc, extraction, reviews, revision, canApprove, selectionKey }) => {
+            {rows.map(({ doc, extraction, reviews, revision, canApprove, blockers, selectionKey }) => {
               const changes = changeList(extraction);
               const submitted = reviews?.submissions?.[0];
               const busy = !!busyId || bulkBusy;
@@ -207,6 +212,8 @@ export function ApprovalQueuePage({ user }: { user: User }) {
                     <button type="button" className="btn small danger" disabled={busy} onClick={() => decide(doc.id, "rejected", revision ?? 1)}><XCircle size={14} /> Reject</button>
                     <Link className="btn small" href={`${base}/documents/${doc.id}`}><ExternalLink size={14} /> Open file</Link>
                   </div>
+                  {blockers.length > 0 && <ul className="review-approve-reasons" aria-label={`Why ${doc.code || doc.name} cannot be approved`}>
+                    {blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
                 </article>
               );
             })}
@@ -237,12 +244,14 @@ function changeList(extraction: Extraction | null): Change[] {
       label: field.label || "Field",
       from: field.rawValue || field.normalizedValue || field.original || "",
       to: field.currentValue || field.value || "",
-    }));
+    }))
+    // A value changed and changed back is not a change (UAT H4 defect 2: "Supplier X -> X").
+    .filter((change) => change.from.trim() !== change.to.trim());
   const lineChanges = (extraction.lineCorrections ?? []).map((item) => ({
     label: `Line · ${item.field_key.replaceAll("_", " ")}`,
     from: item.old_value || "",
     to: item.new_value || "",
-  }));
+  })).filter((change) => change.from.trim() !== change.to.trim());
   return [...fieldChanges, ...lineChanges];
 }
 

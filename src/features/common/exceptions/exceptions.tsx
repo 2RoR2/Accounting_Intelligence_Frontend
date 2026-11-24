@@ -8,6 +8,7 @@ import {
   assignException,
   getDocuments,
   getExceptions,
+  resolveExceptionById,
 } from "@/lib/api/document.service";
 import { getTenantUsers } from "@/lib/api/user.service";
 import {
@@ -62,6 +63,10 @@ export function ExceptionsPage({ user }: { user: User }) {
   const [target, setTarget] = useState("");
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
+  // Close an exception that does not apply, with a reason (audit 24 Nov: the endpoint had no button).
+  const [resolving, setResolving] = useState<{ id: string; documentId: string; title: string } | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+  const [resolveBusy, setResolveBusy] = useState(false);
   if (loading) return <LoadingState variant="table" />;
   if (error || !data) return <ErrorState message={error} retry={refresh} />;
   const exceptions = openOnly ? data.rows.filter((row) => row.status !== "RESOLVED") : data.rows;
@@ -189,6 +194,11 @@ export function ExceptionsPage({ user }: { user: User }) {
                   >
                     Review
                   </Link>
+                  {e.status !== "RESOLVED" && (user.role === "LOCAL_ADMIN" || e.assignedTo === user.id) && (
+                    <button className="text-link" onClick={() => { setResolving({ id: e.id, documentId: e.documentId, title: ruleSentence(e.type) }); setResolveNote(""); setFailure(""); }}>
+                      Resolve
+                    </button>
+                  )}
                   {user.role === "LOCAL_ADMIN" && e.status !== "RESOLVED" && (
                     <button
                       className="text-link"
@@ -240,6 +250,33 @@ export function ExceptionsPage({ user }: { user: User }) {
             >
               Save assignment
             </button>
+          </div>
+        </Modal>
+      )}
+      {resolving && (
+        <Modal title="Resolve exception" onClose={() => setResolving(null)} closeDisabled={resolveBusy}>
+          <div className="panel-body">
+            <p>{resolving.title}</p>
+            {failure && <ErrorState message={failure} />}
+            <Field label="Why can this be closed? *" hint="Saved with your name. If the check still fails, it is raised again when the document is checked.">
+              <textarea rows={3} value={resolveNote} disabled={resolveBusy} onChange={(event) => setResolveNote(event.target.value)} />
+            </Field>
+            <div className="modal-actions">
+              <button type="button" className="btn" disabled={resolveBusy} onClick={() => setResolving(null)}>Cancel</button>
+              <button type="button" className="btn primary" disabled={resolveBusy || resolveNote.trim().length < 5} onClick={async () => {
+                setResolveBusy(true);
+                try {
+                  await resolveExceptionById(resolving.id, resolveNote);
+                  setResolving(null);
+                  setToast("Exception resolved. Open the document and run the checks again before submitting.");
+                  await refresh();
+                } catch (e) {
+                  setFailure((e as Error).message);
+                } finally {
+                  setResolveBusy(false);
+                }
+              }}>{resolveBusy ? "Saving…" : "Resolve"}</button>
+            </div>
           </div>
         </Modal>
       )}

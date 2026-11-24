@@ -48,6 +48,7 @@ const OTHER_RULES: Record<string, Rule> = {
   "NOTE-LINK": { title: "Note not linked", action: "link it to the original invoice." },
   "TAX-STATUS": { title: "Tax treatment unclear", action: "check whether tax is printed, then confirm it." },
   "MODEL-DISAGREEMENT": { title: "Second reading differs", action: "compare the value with the document." },
+  "AMOUNT-PLAUSIBLE": { title: "Amounts do not fit together", action: "check tax, subtotal and total on the document; they may be swapped or misread." },
 };
 
 /** Document kinds whose rules are named "<KIND>-<RULE>" by the backend. */

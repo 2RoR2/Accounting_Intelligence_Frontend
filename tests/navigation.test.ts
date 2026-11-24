@@ -10,7 +10,7 @@ const children = (group: string) => topLevel.find((item) => item.label === group
 
 test("the menu follows Plan M3", () => {
   assert.deepEqual(topLevel.map(({ label }) => label), ["Dashboard", "Inbox", "Sales", "Purchases", "Bank", "Contacts", "Accounting", "Reports", "Settings"]);
-  assert.deepEqual(children("Inbox"), ["Upload & capture", "All documents", "To review", "Exceptions"]);
+  assert.deepEqual(children("Inbox"), ["Upload & capture", "All documents", "To review", "Exceptions", "Approved records"]);
   assert.deepEqual(children("Sales"), ["Quotations", "Invoices", "Credit notes", "Debit notes", "Payments received"]);
   assert.deepEqual(children("Purchases"), ["Bills", "Expense receipts", "Supplier credit notes", "Supplier debit notes", "Payments made"]);
   assert.deepEqual(children("Bank"), ["Bank accounts", "Money in", "Money out", "Transfers", "Reconciliation"]);
@@ -88,4 +88,16 @@ test("the highlighted entry follows the page", () => {
   assert.equal(activeNavItem(menu, "dashboard")?.label, "Dashboard");
   const receipts = navLeaves(menu).find((item) => item.label === "Expense receipts");
   assert.equal(receipts && navHref("company", receipts), "/company/documents?tab=receipts");
+});
+
+test("the local admin's menu has an Admin group with the approval queue (24 Nov demo: approve could not be found)", () => {
+  const admin = jobNavigation("LOCAL_ADMIN");
+  const top = admin[0].items.map(({ label }) => label);
+  assert.deepEqual(top, ["Dashboard", "Inbox", "Sales", "Purchases", "Bank", "Contacts", "Accounting", "Reports", "Admin", "Settings"]);
+  const group = admin[0].items.find(({ label }) => label === "Admin");
+  assert.deepEqual(group?.children?.map(({ label }) => label), ["Approval queue", "Users & roles", "Check rules", "Audit trail", "System"]);
+  for (const item of group?.children ?? []) assert.ok(isAllowedWorkspaceRoute(["company", item.page], "LOCAL_ADMIN"), item.page);
+  assert.equal(activeNavItem(admin, "approvals", "")?.label, "Approval queue");
+  assert.equal(jobNavigation("ACCOUNTANT"), jobNavigation());
+  assert.ok(!jobNavigation("ACCOUNTANT")[0].items.some(({ label }) => label === "Admin"));
 });

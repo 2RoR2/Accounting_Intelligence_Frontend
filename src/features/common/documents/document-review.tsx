@@ -47,6 +47,7 @@ import { TransactionAnomalyVisual } from "@/features/common/documents/transactio
 import { SourceEvidenceList } from "@/components/common/documents/document-viewer";
 import { DocumentDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
+import { TracePanel } from "@/features/common/trace/trace-panel";
 import {
   addDocumentComment,
   createCustomer,
@@ -62,6 +63,8 @@ import {
 import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewSource } from "./review/source-pages";
+import { AddFieldControl, BlockingChecksNotice, DueDateHelper } from "./review/review-extras";
+import { addableFields, approvalBlockers, blockingChecks, blockingFields, keyFieldsPresent } from "./review/key-fields";
 import { useReviewQueue } from "./review/use-review-queue";
 import { LINE_ITEM_FIELDS, SIGNAL_TEXT, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
@@ -341,6 +344,8 @@ function DocumentReviewPage({
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
   const [selectedLine, setSelectedLine] = useState<{ index: number; key: string; label: string }>();
   const [lineItemsOpen, setLineItemsOpen] = useState<boolean>();
+  // "Change type" after a confident reading (the AI type can be wrong while it says "classified").
+  const [changingType, setChangingType] = useState(false);
   const validationHeadingRef = useRef<HTMLDivElement>(null);
 
   async function run(op: () => Promise<unknown>, message: string, propagate = false) {
@@ -391,7 +396,7 @@ function DocumentReviewPage({
   const openingDoc = openingChecks?.doc;
   useEffect(() => {
     if (!current || openingDoc === documentId) return;
-    const failed = (current.validation ?? []).filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
+    const failed = blockingFields(current.validation ?? []);
     const order = reviewOrder(current.extraction?.fields ?? {}, failed);
     setOpeningChecks({ doc: documentId, keys: new Set(order.filter(entry => isToCheck(entry.signal)).map(entry => entry.key)), order: order.map(entry => entry.key) });
     pendingValues.current.clear();
@@ -422,13 +427,15 @@ function DocumentReviewPage({
   const workflow = data.workflow ?? { overdue: false, duplicates: [], relatedNotes: [] };
   const validation = data.validation ?? [];
   const summary = validationSummary(validation);
-  const failedFields = validation.filter(item => item.result === "FAIL" && item.field).map(item => item.field as string);
+  // A blocking warning (not only a FAIL) on a field makes that field "Please check" (bug d, 24 Nov demo).
+  const failedFields = blockingFields(validation);
   const allFieldCount = Object.keys(extraction.fields).length;
   // Review order and the "Only fields to check" filter (task B4b).
   const order = reviewOrder(extraction.fields, failedFields);
   const signalOf = new Map(order.map(entry => [entry.key, entry.signal]));
   const opened = openingChecks?.doc === documentId ? openingChecks : undefined;
-  const keepKeys = opened?.keys;
+  // Key fields (supplier, number, dates, terms, totals) stay on screen with the filter on (bug a, 24 Nov demo).
+  const keepKeys = new Set([...(opened?.keys ?? []), ...keyFieldsPresent(extraction.fields)]);
   const visible = stableOrder(visibleEntries(order, onlyToCheck, keepKeys), opened?.order ?? []);
   const notFound = notFoundEntries(order, onlyToCheck, keepKeys);
   const visibleKeys = visible.map(entry => entry.key);
@@ -509,7 +516,7 @@ function DocumentReviewPage({
   const detected = extraction.classification;
   const typeFinding = validation.some(item => ruleCode(item.rule) === "EX-002" && item.field === "document_type" && item.result === "FAIL");
   const needsType = !decision && (typeFinding || data.doc.kindDetected === false || String(data.doc.type).toUpperCase() === "AUTO"
-    || (!!detected?.status && detected.status !== "classified"));
+    || (!!detected?.status && detected.status !== "classified") || kind === "UNKNOWN");
   const disagreement = !decision && detected?.status === "classified" && detected.value && data.doc.type
     && detected.value.toUpperCase() !== String(data.doc.type).toUpperCase()
     ? `Reading found the type ${documentKindLabel(detected.value)}, but the document is filed as ${documentKindLabel(data.doc.type)}. Choose the right type.` : null;
@@ -623,7 +630,7 @@ function DocumentReviewPage({
 
       {failure && <ErrorState message={failure} dismissible onClose={() => setFailure("")} />}
 
-      {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType} canChoose={canChooseType}
+      {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType || changingType} canChoose={canChooseType}
         current={chosenKind} busy={busy} onChoose={chooseType} />}
 
       {!failed && !pending && (
@@ -657,7 +664,9 @@ function DocumentReviewPage({
               </div>
               <div className="shoebox-form">
                 <div className="shoebox-form-head">
-                  <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : documentKindLabel(kind) + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}</small></div>
+                  <div className="review-form-title-row"><span>{kind === "UNKNOWN" ? "Unknown / Needs Review" : documentKindLabel(kind) + " fields"}</span><small>{allFieldCount} fields · revision {extraction.contentRevision ?? "—"}
+                    {canChooseType && !needsType && !decision && <> · <button type="button" className="text-link" aria-expanded={changingType}
+                      onClick={() => setChangingType(value => !value)}>{changingType ? "Keep this type" : "Change type"}</button></>}</small></div>
                   <div className="review-filter-bar" role="toolbar" aria-label="Field filters">
                     <label className="review-only-toggle"><input type="checkbox" role="switch" checked={onlyToCheck} onChange={event => setOnlyToCheck(event.target.checked)} />
                       Only fields to check <b>{toCheckCount}</b></label>
@@ -690,12 +699,22 @@ function DocumentReviewPage({
                     {data.validationReport && <li className="is-validation"><b>Validation</b><span>{summary.passed} passed · {summary.failed} failed · {summary.notChecked} not checked</span></li>}
                   </ul>
                 </div>}
+                <BlockingChecksNotice items={blockingChecks(validation, (name) => { const key = fieldForCheck(name); return !!key && visibleKeys.includes(key) && signalOf.get(key) === "check"; })}
+                  labelFor={(name) => fieldLabel(kind, fieldForCheck(name) ?? name, extraction.fields[fieldForCheck(name) ?? name]?.label)} onOpenChecks={viewIssues} />
                 {visible.length > 0 && <div className="shoebox-fields review-field-list" aria-label={onlyToCheck ? "Fields to check" : "All fields"}>
                   {visible.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div>}
-                {allFieldCount > 0 && visible.length === 0 && <p className="review-all-read" role="status">Nothing to check: every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
+                {allFieldCount > 0 && toCheckCount === 0 && summary.blocking === 0 && <p className="review-all-read" role="status">Nothing to check: every field was read from the document. Compare the totals with the original, then press Ctrl+Enter to submit, or turn off &quot;Only fields to check&quot; to see them all.</p>}
                 {notFound.length > 0 && <details className="review-field-group review-not-found"><summary><span>Not found on the document</span><b>{notFound.length}</b></summary>
                   <p className="review-section-help">No check needs these. Fill one only if it is printed on the original.</p>
                   <div className="shoebox-fields">{notFound.map(entry => renderField([entry.key, extraction.fields[entry.key]]))}</div></details>}
+                {!readonly && extraction.contentRevision && <DueDateHelper party={receivable ? extraction.fields.customer?.value : (extraction.fields.supplier?.value ?? extraction.fields.merchant?.value)}
+                  partyKind={receivable ? "customer" : "supplier"} documentDate={extraction.fields.date?.value}
+                  due={extraction.fields.due?.value ?? extraction.fields.due_date?.value} printedTerms={extraction.fields.payment_terms?.value} busy={busy}
+                  onUse={(value) => void run(() => updateExtractedField(user, documentId, extraction.fields.due_date && !extraction.fields.due ? "due_date" : "due", value, extraction.contentRevision!),
+                    "Due date saved with a new revision.")} />}
+                {!readonly && extraction.contentRevision && <AddFieldControl keys={addableFields(kind, Object.keys(extraction.fields))} busy={busy}
+                  onAdd={(key, value) => run(() => updateExtractedField(user, documentId, key, value, extraction.contentRevision!),
+                    "Field added with a new revision. Run the checks again before submitting.", true)} />}
                 {!!extraction.warnings?.length && <div aria-label="Reading notes"><strong>Please check</strong>
                   <p>Notes about how the document was read. They are separate from the accounting checks.</p>
                   {extraction.warnings.map((warning, index) => <p role="status" key={warning.code + index}>{warning.message}</p>)}
@@ -774,13 +793,26 @@ function DocumentReviewPage({
                       </div>
                     </div>
                     {user.role === "ACCOUNTANT" && canRevalidate && blockingFindings > 0 && <div className="review-blocking-notice" role="status"><strong>{blockingFindings} {blockingFindings === 1 ? "issue blocks" : "issues block"} submission</strong><span>Review the validation findings to continue.</span><button type="button" className="text-link" onClick={viewIssues}>View issues</button></div>}
-                    {user.role === "LOCAL_ADMIN" && canRevalidate && <p role="status">An Accountant must submit this document for approval. A different Local Admin can then approve it.</p>}
+                    {user.role === "LOCAL_ADMIN" && canRevalidate && !readonly && <p role="status">An Accountant must submit this document for approval. A different Local Admin can then approve it.</p>}
                     {data.doc.status === "IN_REVIEW" && <p role="status">Submitted for independent Local Admin approval. Corrections require a new submission.</p>}
-                    {canDecideReview(user, data.doc, data.reviews) && data.validationReport?.validationStatus === "PASS" && data.validationReport.coverageComplete !== false && (
-                      <button className="btn primary" disabled={busy} onClick={() => run(() => decideDocumentReview(documentId, "approved", note || "Approved", data.doc.contentRevision ?? 1), "Document approved.")}>
-                        Approve document
-                      </button>
-                    )}
+                    {user.role === "LOCAL_ADMIN" && data.doc.status === "IN_REVIEW" && (() => {
+                      // Bug b (24 Nov demo): say why Approve is unavailable, and offer Return / Reject here as well.
+                      const canDecide = canDecideReview(user, data.doc, data.reviews);
+                      const reasons = approvalBlockers({ canDecide, ownSubmission: data.reviews?.submissions[0]?.submittedBy === user.id,
+                        report: data.validationReport, blocking: summary.blocking });
+                      const revision = data.doc.contentRevision ?? 1;
+                      const decide = (decision: "approved" | "returned" | "rejected", text: string, done: string) =>
+                        run(async () => {
+                          await decideDocumentReview(documentId, decision, note || text, revision);
+                          if (decision === "approved") await standardiseDocument(user, documentId).catch((e: Error) => { throw new Error(`Approved, but not saved to records: ${e.message} Use Save to records on the Checks tab.`); });
+                        }, done);
+                      return <div className="review-admin-decision" role="group" aria-label="Approval decision">
+                        <button className="btn primary" disabled={busy || reasons.length > 0} onClick={() => decide("approved", "Approved", "Document approved and saved to records.")}>Approve document</button>
+                        <button className="btn" disabled={busy || !canDecide} onClick={() => decide("returned", "Returned for changes", "Document returned to the accountant.")}>Return</button>
+                        <button className="btn danger" disabled={busy || !canDecide} onClick={() => decide("rejected", "Rejected", "Document rejected.")}>Reject</button>
+                        {reasons.length > 0 && <ul className="review-approve-reasons">{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+                      </div>;
+                    })()}
                   </details>
                 )}
               </div>
@@ -860,7 +892,11 @@ function DocumentReviewPage({
           )}
 
           {panel === "record" && (
-            record ? <RecordDetail record={record} /> : <Panel title="Saved record" subtitle="The record is saved only after the checks pass and you confirm the document.">
+            record ? <>
+              <RecordDetail record={record} />
+              {/* Audit 24 Nov: a saved bill must show its journal, payments and bank line, not only its fields. */}
+              <TracePanel base={base} type="record" id={record.id} title="Journal, payments and bank lines for this record" />
+            </> : <Panel title="Saved record" subtitle="The record is saved only after the checks pass and you confirm the document.">
               <div className="panel-body record-empty-state">
                 <FileCheck2 size={28} aria-hidden="true" />
                 <strong>Not saved to records yet</strong>

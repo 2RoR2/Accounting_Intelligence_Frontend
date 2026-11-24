@@ -28,6 +28,7 @@ const SECTIONS: NavSection[] = [
       leaf("All documents", "documents"),
       leaf("To review", "documents", "lane=to-review"),
       leaf("Exceptions", "exceptions", undefined, { count: "exceptions" }),
+      leaf("Approved records", "records"),
     ] },
     { label: "Sales", page: "sales", icon: "invoice", children: [
       leaf("Quotations", "sales", "type=quotation"),
@@ -67,8 +68,23 @@ const SECTIONS: NavSection[] = [
   ] },
 ];
 
-export function jobNavigation(): NavSection[] {
-  return SECTIONS;
+/**
+ * The local admin's own jobs (24 Nov demo: the admin could not find where to approve). Shown only to LOCAL_ADMIN;
+ * every page here is refused to accountants by the routes and the backend.
+ */
+const ADMIN_ITEM: NavItem = { label: "Admin", page: "approvals", icon: "approve", children: [
+  leaf("Approval queue", "approvals"),
+  leaf("Users & roles", "users"),
+  leaf("Check rules", "validation-rules"),
+  leaf("Audit trail", "audit"),
+  leaf("System", "system"),
+] };
+
+export function jobNavigation(role?: string): NavSection[] {
+  if (role !== "LOCAL_ADMIN") return SECTIONS;
+  const [main] = SECTIONS;
+  const settings = main.items.length - 1; // Admin sits just above Settings
+  return [{ ...main, items: [...main.items.slice(0, settings), ADMIN_ITEM, ...main.items.slice(settings)] }];
 }
 
 /** Every entry that opens a page: plain items and sub-items (groups themselves are not links). */

@@ -75,6 +75,15 @@ export async function decideMatch(
 }
 
 export type ManualMatchRecord = { recordId: string; recordCode: string; documentId: string; category: string; party: string | null; reference: string | null; invoiceNumber: string | null; currency: string | null; totalAmount: string | null; allocatedAmount: string; remainingAmount: string };
+/** An issued money document (PV, payment received, money in/out, transfer) a bank line may be the bank's copy of. */
+export type RecordedDocumentCandidate = { documentId: string; documentType: string; number: string; documentDate: string;
+  contactName: string | null; currency: string; amount: string; reference: string | null; problem: string | null };
+export const searchRecordedDocuments = (id: string, query = "") =>
+  get<RecordedDocumentCandidate[]>(`/api/bank/transactions/${encodeURIComponent(id)}/recorded-documents?q=${encodeURIComponent(query)}`);
+/** Closes the bank line as that document's bank copy. Nothing is posted or allocated again. */
+export const matchRecordedDocument = (id: string, documentId: string) =>
+  api<{ status: string; documentId: string; documentType: string; number: string }>(
+    `/api/bank/transactions/${encodeURIComponent(id)}/match-document`, json("POST", { documentId }));
 export const searchMatchRecords = (id: string, query: string) => get<ManualMatchRecord[]>(`/api/bank/transactions/${encodeURIComponent(id)}/match-search?q=${encodeURIComponent(query)}`);
 export const recordBankExpense = (id: string, ledgerAccountId: string, description?: string, bankAccountId?: string) =>
   api<{ documentId: string; documentNumber: string; journalId: string; bankTransactionStatus: BankTransactionStatus }>(

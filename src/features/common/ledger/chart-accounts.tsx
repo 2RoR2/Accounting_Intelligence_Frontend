@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { DataTable, ErrorState, Field, LoadingState, Panel } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { createChartAccount, getChartAccounts, type AccountClass } from "@/lib/api/ledger.service";
+import { createChartAccount, getChartAccounts, getLedgerAccounts, getTrialBalance, type AccountClass } from "@/lib/api/ledger.service";
 
 const classes: AccountClass[] = ["asset", "liability", "equity", "revenue", "cogs", "expense"];
 
@@ -64,5 +64,30 @@ export function ChartAccounts({ canEdit }: { canEdit: boolean }) {
       { label: "Class", render: (row) => row.accountClass },
       { label: "Status", render: (row) => row.isActive ? "Active" : "Inactive" },
     ]} />
+  </Panel>;
+}
+
+/**
+ * The accounts journals post to (1010 Bank, 2000 Payables...), with their posted balance. Audit 24 Nov: the Chart of
+ * accounts page showed only the bank-coding categories, so an accountant could not see the ledger chart at all.
+ */
+export function LedgerAccountsPanel() {
+  const { data, loading, error, refresh } = useResource(async () => {
+    const [accounts, trial] = await Promise.all([getLedgerAccounts(), getTrialBalance().catch(() => [])]);
+    const balance = new Map(trial.map((row) => [row.accountId, row]));
+    return accounts.map((account) => ({ ...account, row: balance.get(account.id) }))
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  }, "ledger-accounts");
+  return <Panel title="Ledger accounts" subtitle="The accounts journals post to, with their posted balance (debit less credit).">
+    {loading && <LoadingState variant="table" />}
+    {error && !data && <ErrorState message={error} retry={refresh} />}
+    {data && <DataTable rows={data} rowKey={(row) => row.id} emptyMessage="No ledger accounts yet." columns={[
+      { label: "Code", render: (row) => row.code },
+      { label: "Name", render: (row) => row.name },
+      { label: "Type", render: (row) => row.accountType },
+      { label: "Debit", render: (row) => row.row?.totalDebit ?? "0.00" },
+      { label: "Credit", render: (row) => row.row?.totalCredit ?? "0.00" },
+      { label: "Balance", render: (row) => row.row?.netBalance ?? "0.00" },
+    ]} />}
   </Panel>;
 }

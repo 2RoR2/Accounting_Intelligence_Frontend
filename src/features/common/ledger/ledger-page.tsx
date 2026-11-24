@@ -6,7 +6,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import { DataTable, ErrorState, LoadingState, Modal, PageHeader, Panel, StatCard } from "@/components/common/ui";
 import { ApiError } from "@/lib/api/client";
 import { getLedgerJournals, getSettlements, getAllocations, getTrialBalance, reverseJournal, type Journal } from "@/lib/api/ledger.service";
-import { ChartAccounts } from "./chart-accounts";
+import { ChartAccounts, LedgerAccountsPanel } from "./chart-accounts";
 import { JournalPostingForm } from "./journal-posting-form";
 import { currencyTotals } from "@/lib/api/document-contract";
 import { MonthlyFinance } from "@/features/common/today/monthly-finance";
@@ -202,7 +202,7 @@ function LedgerActivity({ base, canPost, section, tabs }: {
           { label: "Status", render: (r) => r.status },
         ]} />
       </Panel>}
-      {section === "accounts" && <ChartAccounts canEdit={canPost} />}
+      {section === "accounts" && <><LedgerAccountsPanel /><ChartAccounts canEdit={canPost} /></>}
     </div>
   </>;
 }
