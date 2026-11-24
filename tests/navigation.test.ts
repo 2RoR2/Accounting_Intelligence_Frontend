@@ -11,7 +11,8 @@ const children = (group: string) => topLevel.find((item) => item.label === group
 test("the menu follows Plan M3", () => {
   assert.deepEqual(topLevel.map(({ label }) => label), ["Dashboard", "Inbox", "Sales", "Purchases", "Bank", "Contacts", "Accounting", "Reports", "Settings"]);
   assert.deepEqual(children("Inbox"), ["Upload & capture", "All documents", "To review", "Exceptions", "Approved records"]);
-  assert.deepEqual(children("Sales"), ["Quotations", "Invoices", "Credit notes", "Debit notes", "Payments received"]);
+  assert.deepEqual(children("Sales"), ["Quotations", "Sales orders", "Delivery orders", "Invoices", "Credit notes", "Debit notes",
+    "Payments received"]);
   assert.deepEqual(children("Purchases"), ["Bills", "Expense receipts", "Supplier credit notes", "Supplier debit notes", "Payments made"]);
   assert.deepEqual(children("Bank"), ["Bank accounts", "Money in", "Money out", "Transfers", "Reconciliation"]);
   assert.deepEqual(children("Accounting"), ["Chart of accounts", "Journals", "General ledger", "Periods & month-end"]);

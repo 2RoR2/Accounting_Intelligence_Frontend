@@ -3,7 +3,7 @@
  * One contact list (suppliers = the vendors the scanner matches, customers, employees), products and
  * catalog lists, and documents that post to the ledger when they become ready.
  */
-import { api, get, json } from "@/lib/api/client";
+import { api, fetchBlob, get, json } from "@/lib/api/client";
 
 const q = (params: Record<string, string | number | boolean | undefined | null>) => {
   const search = new URLSearchParams();
@@ -110,8 +110,8 @@ export const NOTE_TARGETS: Partial<Record<DocumentType, readonly DocumentType[]>
   "purchase-credit-note": ["bill", "purchase-debit-note"], "purchase-debit-note": ["bill"],
 };
 /** Documents the company prints and sends: edited only as drafts; issuing stores a PDF copy that never changes. */
-export const PRINTED_TYPES: ReadonlySet<DocumentType> = new Set(["quotation", "invoice", "credit-note", "debit-note", "payment",
-  "purchase-payment", "delivery-order"]);
+export const PRINTED_TYPES: ReadonlySet<DocumentType> = new Set(["quotation", "sales-order", "invoice", "credit-note", "debit-note",
+  "payment", "purchase-payment", "delivery-order"]);
 /** Lists that also show approved scanned documents (source "scanned"). */
 // Plan M: captured documents are purchases only; Sales lists hold typed documents.
 export const SCANNED_LIST_TYPES: ReadonlySet<DocumentType> = new Set(["bill", "purchase-credit-note"]);
@@ -199,6 +199,21 @@ const documentPath = (type: DocumentType, id: string) => `/api/erp/documents/${s
 export const documentPreviewUrl = (type: DocumentType, id: string) => `${documentPath(type, id)}/preview.pdf`;
 export const documentFileUrl = (type: DocumentType, id: string, revision: number, inline = false) =>
   `${documentPath(type, id)}/files/${seg(String(revision))}${inline ? "?inline=true" : ""}`;
+/** The PDF exactly as it would print from what the form holds now. Stores nothing and takes no number; an existing
+ * draft (documentId) keeps its number. Tax is printed as typed. */
+export const previewUnsavedPdf = (type: DocumentType, input: DocumentInput, documentId?: string) =>
+  fetchBlob(`/api/erp/documents/${seg(type)}/preview.pdf${q({ documentId })}`, json("POST", input));
+/** Who signed for an issued delivery order, kept in its fields (it never posts). */
+export type DeliveryRecord = { receivedBy: string; receivedOn: string; note?: string | null; recordedAt?: string };
+export const markDelivered = (id: string, input: { receivedBy: string; receivedOn: string; note?: string | null }) =>
+  api<TypedDocument>(`/api/erp/documents/delivery-order/${seg(id)}/delivered`, json("POST", input));
+/** What issuing posts, in accounts and amounts (the journal itself once posted). */
+export type PostingPreview = {
+  posts: boolean; posted: boolean; problem: string | null; balanced: boolean; totalDebit: string; totalCredit: string;
+  lines: { accountId: string; code: string; name: string; description: string; debit: string; credit: string }[];
+};
+export const documentPostingPreview = (type: DocumentType, id: string) =>
+  get<PostingPreview>(`${documentPath(type, id)}/posting-preview`);
 export const listDocumentFiles = (type: DocumentType, id: string) => get<{ items: DocumentFile[] }>(`${documentPath(type, id)}/files`);
 export const documentHistory = (type: DocumentType, id: string) =>
   get<DocumentHistory>(`/api/erp/documents/${seg(type)}/${seg(id)}/history`);

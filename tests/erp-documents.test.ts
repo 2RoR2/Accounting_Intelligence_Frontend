@@ -116,7 +116,7 @@ test("only open typed documents for the chosen contact and matching scanned docu
 test("printed sales documents: accountants draft, only the company admin issues, issued ones are read-only", () => {
   const accountant = documentActions("draft", "invoice", "ACCOUNTANT");
   assert.deepEqual(accountant, [
-    { kind: "save", label: "Save" },
+    { kind: "save", label: "Save draft" },
     { kind: "preview", label: "Preview PDF" },
     { kind: "transition", label: "Submit for approval", status: "pending_approval" },
     { kind: "transition", label: "Issue", status: "ready", disabledReason: ONLY_ADMIN_ISSUES },
@@ -134,9 +134,9 @@ test("printed sales documents: accountants draft, only the company admin issues,
   const labels = (status: "ready" | "void", type: DocumentType, role: "ACCOUNTANT" | "LOCAL_ADMIN") =>
     documentActions(status, type, role).map(({ label }) => label);
   assert.deepEqual(labels("ready", "invoice", "LOCAL_ADMIN"),
-    ["Receive payment", "Credit note", "Debit note", "Void", "Print", "Download PDF", "Duplicate"]);
+    ["Receive payment", "Credit note", "Debit note", "Delivery order", "Void", "Print", "Download PDF", "Duplicate"]);
   assert.deepEqual(labels("ready", "invoice", "ACCOUNTANT"),
-    ["Receive payment", "Credit note", "Debit note", "Print", "Download PDF", "Duplicate"]);
+    ["Receive payment", "Credit note", "Debit note", "Delivery order", "Print", "Download PDF", "Duplicate"]);
   assert.deepEqual(labels("ready", "debit-note", "LOCAL_ADMIN"),
     ["Receive payment", "Credit note", "Void", "Print", "Download PDF", "Duplicate"]);
   for (const type of ["credit-note", "payment", "purchase-payment"] as const) {
@@ -147,6 +147,7 @@ test("printed sales documents: accountants draft, only the company admin issues,
     { kind: "transfer", label: "Receive payment", target: "payment" },
     { kind: "transfer", label: "Credit note", target: "credit-note" },
     { kind: "transfer", label: "Debit note", target: "debit-note" },
+    { kind: "transfer", label: "Delivery order", target: "delivery-order" },
   ]);
   assert.deepEqual(labels("void", "invoice", "LOCAL_ADMIN"), ["Print", "Download PDF", "Duplicate"]);
   // Supplier debit notes are captured, not printed: they keep the ordinary flow.
@@ -157,7 +158,7 @@ test("printed sales documents: accountants draft, only the company admin issues,
 test("quotations are sent, then accepted, expired or converted to an invoice by accountants and admins", () => {
   for (const role of ["ACCOUNTANT", "LOCAL_ADMIN"] as const) {
     assert.deepEqual(documentActions("draft", "quotation", role), [
-      { kind: "save", label: "Save" },
+      { kind: "save", label: "Save draft" },
       { kind: "preview", label: "Preview PDF" },
       { kind: "transition", label: "Send", status: "sent" },
       { kind: "delete", label: "Delete" },
@@ -165,11 +166,13 @@ test("quotations are sent, then accepted, expired or converted to an invoice by 
     assert.deepEqual(documentActions("sent", "quotation", role).filter(({ kind }) => kind === "transition" || kind === "transfer"), [
       { kind: "transition", label: "Mark accepted", status: "accepted" },
       { kind: "transition", label: "Mark expired", status: "expired" },
+      { kind: "transfer", label: "Convert to sales order", target: "sales-order" },
+      { kind: "transfer", label: "Convert to delivery order", target: "delivery-order" },
       { kind: "transfer", label: "Convert to invoice", target: "invoice" },
       { kind: "transition", label: "Void", status: "void" },
     ]);
     assert.deepEqual(documentActions("accepted", "quotation", role).map(({ label }) => label),
-      ["Convert to invoice", "Void", "Print", "Download PDF", "Duplicate"]);
+      ["Convert to sales order", "Convert to delivery order", "Convert to invoice", "Void", "Print", "Download PDF", "Duplicate"]);
     assert.deepEqual(documentActions("expired", "quotation", role)[0], { kind: "transition", label: "Send again", status: "sent" });
   }
 });
