@@ -1,4 +1,4 @@
-import type { BANK_TYPES } from "@/lib/api/erp.service";
+import type { BANK_TYPES, DocumentType } from "@/lib/api/erp.service";
 
 export type MoneyDirection = "money_in" | "money_out";
 
@@ -79,7 +79,10 @@ export interface BankMoneyTransaction {
   relatedDocumentCode?: string | null;
   recordedDocumentId: string | null;
   recordedDocumentNumber: string | null;
-  recordedDocumentType: (typeof BANK_TYPES)[number] | null;
+  /** A money document recorded from the line (money in/out), or a voucher / payment received matched to it by hand. */
+  recordedDocumentType: (typeof BANK_TYPES)[number] | DocumentType | null;
+  /** True when the link was a manual match: it can be unmatched with a reason. */
+  recordedByMatch?: boolean;
   amountDelta?: string | null;
   createdAt: string | null;
   candidateId?: string | null;

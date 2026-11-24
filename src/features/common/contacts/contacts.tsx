@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { DataTable, ErrorState, Field, LoadingState, Modal, PageHeader, Panel, SearchInput } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
-import { createContact, listContacts, type ContactKind } from "@/lib/api/erp.service";
+import { createContact, getContactBalances, listContacts, type ContactKind } from "@/lib/api/erp.service";
+import { money } from "@/components/common/ui";
 import type { User } from "@/types";
 import { ContactDetail } from "./contact-detail";
 import {
@@ -41,6 +42,9 @@ function ContactList({ user, base }: { user: User; base: string }) {
     `contacts:${user.id}:${appliedSearch}:${includeInactive}`,
   );
 
+  // Who to chase and who to pay (audit 24 Nov): balances from the ageing open items, shown beside each contact.
+  const balances = useResource(() => getContactBalances().catch(() => null), `contact-balances:${user.id}`);
+  const balanceOf = new Map((balances.data?.contacts ?? []).map((row) => [row.contactId, row]));
   const rows = filterByTab(data ?? [], tab);
 
   return <>
@@ -73,6 +77,10 @@ function ContactList({ user, base }: { user: User; base: string }) {
               { label: "Name", render: (row) => <Link className="text-link" href={`${base}/contacts/${encodeURIComponent(row.id)}`}>{row.legalName}</Link> },
               { label: "Type", render: (row) => <span className="badge neutral"><span className="badge-dot" />{kindLabel(row.kind)}</span> },
               { label: "Code", render: (row) => row.code || "—" },
+              { label: "Balance", render: (row) => { const balance = balanceOf.get(row.id);
+                if (!balance) return "—";
+                const amount = row.kind === "customer" ? balance.receivable : balance.payable;
+                return <>{money(amount)}{Number(balance.overdue) > 0 && <small className="fail-text"> · {money(balance.overdue)} overdue</small>}</>; } },
               { label: "Registration no.", render: (row) => row.registrationNumber || "—" },
               { label: "Email", render: (row) => row.email || "—" },
               { label: "Phone", render: (row) => row.phone || "—" },

@@ -117,7 +117,9 @@ export async function decideDocumentReview(documentId: string, decision: "approv
   const result = await api<{ documentId: string; decision: string; reviewedBy: string; status: string }>(`/api/documents/${documentId}/review/decision`, {
     method: "POST", body: JSON.stringify({ decision, note, expectedContentRevision }),
   });
-  const status = { approved: "VALIDATED", rejected: "EXCEPTION", returned: "IN_REVIEW" }[decision];
+  // The backend sends a returned document back to the accountant (status EXCEPTION), like a rejection. Expecting
+  // IN_REVIEW made every "Return" report "The server did not confirm the review decision".
+  const status = { approved: "VALIDATED", rejected: "EXCEPTION", returned: "EXCEPTION" }[decision];
   if (!result || result.documentId !== documentId || result.decision !== decision || !result.reviewedBy || result.status !== status) throw new Error("The server did not confirm the review decision. Refresh before trying again.");
   return result;
 }

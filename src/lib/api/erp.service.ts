@@ -28,6 +28,12 @@ export type ContactEvent = { action: string; by: string; at: string };
 
 export const listContacts = (params: { kind?: ContactKind; search?: string; includeInactive?: boolean } = {}) =>
   get<Contact[]>(`/api/erp/contacts${q(params)}`);
+/** Receivable, payable and overdue per contact, from the ageing open items (posted books, MYR). */
+export type ContactBalance = { contactId: string; kind: ContactKind; receivable: string; payable: string; overdue: string;
+  openItems: number; oldestDue: string | null };
+export const getContactBalances = (asOf?: string) =>
+  get<{ asOf: string; currency: string; contacts: ContactBalance[]; unmatched: Array<{ contactName: string; side: string; outstanding: string }> }>(
+    `/api/erp/contacts/balances${asOf ? `?asOf=${encodeURIComponent(asOf)}` : ""}`);
 export const getContact = (id: string) => get<Contact>(`/api/erp/contacts/${seg(id)}`);
 export const createContact = (input: ContactInput) => api<Contact>("/api/erp/contacts", json("POST", input));
 export const updateContact = (id: string, input: ContactInput) => api<Contact>(`/api/erp/contacts/${seg(id)}`, json("PUT", input));

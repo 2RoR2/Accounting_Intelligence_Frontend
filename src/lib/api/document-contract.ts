@@ -239,13 +239,18 @@ export function mapSupportView(record: SupportViewResponse): SupportViewRecord {
 }
 
 /** Source classification overrides stored intake kind, including explicit unknown. */
+/** Document types the review page edits and the backend standardises. */
+export const EDITABLE_KINDS = ["INVOICE", "BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"];
+
 export function sourceKind(extraction: Pick<Extraction, "classification" | "kindDecision">, intake?: string): string {
   // A person's choice for this reading settles the type, including credit and debit notes.
   const chosen = extraction.kindDecision?.value?.toUpperCase();
   if (chosen && ["INVOICE", "BILL", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"].includes(chosen)) return chosen;
   if (extraction.classification?.value !== undefined) {
+    // Credit and debit notes read by the AI are real types too (24 Nov demo: a classified credit note showed
+    // "Unknown / Needs Review", read-only, with no way to choose the type).
     const kind = extraction.classification.value.toUpperCase();
-    return ["INVOICE", "BILL", "RECEIPT"].includes(kind) ? kind : "UNKNOWN";
+    return EDITABLE_KINDS.includes(kind) ? kind : "UNKNOWN";
   }
   return intake?.toUpperCase() ?? "UNKNOWN";
 }

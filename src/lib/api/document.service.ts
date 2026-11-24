@@ -211,6 +211,23 @@ export async function resolveException(
   });
   return revalidateDocument(user, documentId, note);
 }
+/** Set a wrong upload aside with a reason (a duplicate, another company's, unreadable); restorable by a local admin. */
+export const excludeDocument = (documentId: string, reason: string) =>
+  api<{ documentId: string; excluded: boolean; reason: string; idempotent: boolean }>(`/api/documents/${encodeURIComponent(documentId)}/exclude`, {
+    method: "POST", body: JSON.stringify({ reason }),
+  });
+export const restoreDocument = (documentId: string) =>
+  api<{ documentId: string; excluded: boolean }>(`/api/documents/${encodeURIComponent(documentId)}/restore`, { method: "POST" });
+export type ExcludedDocument = { id: string; code: string | null; name: string; kind: string; status: string; excludedAt: string; reason: string | null };
+export const listExcludedDocuments = () => api<ExcludedDocument[]>("/api/documents/excluded");
+/** Close one exception with a reason (audited). A check that still fails is raised again when the document is checked. */
+export async function resolveExceptionById(exceptionId: string, note: string) {
+  if (note.trim().length < 5) throw new Error("Say why this exception can be closed (at least 5 characters).");
+  return api<{ id: string; status: string; note: string; resolvedAt: string }>(`/api/exceptions/${encodeURIComponent(exceptionId)}/resolve`, {
+    method: "PATCH",
+    body: JSON.stringify({ note: note.trim() }),
+  });
+}
 export async function assignException(
   user: User,
   exceptionId: string,

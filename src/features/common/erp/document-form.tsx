@@ -797,7 +797,7 @@ function DocumentFacts({ base, document }: { base: string; document: TypedDocume
       {document.related && <span>Corrects{" "}
         <RelatedDocument base={base} type={document.related.type} id={document.related.id} number={document.related.number} />
       </span>}
-      {document.posted && <Link href={ledger}>Posted to the ledger</Link>}
+      {document.posted && <Link href={document.journalId ? `${ledger}&q=${encodeURIComponent(document.journalId)}` : ledger}>Posted to the ledger</Link>}
       {document.reversalJournalId && <Link href={ledger}>Reversed by journal {document.reversalJournalId}</Link>}
       {hasOutstanding(document.type) && <>
         {document.outstanding != null && <span>Outstanding <strong>{money(document.outstanding)}</strong></span>}
