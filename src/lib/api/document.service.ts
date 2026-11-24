@@ -218,7 +218,7 @@ export const excludeDocument = (documentId: string, reason: string) =>
   });
 export const restoreDocument = (documentId: string) =>
   api<{ documentId: string; excluded: boolean }>(`/api/documents/${encodeURIComponent(documentId)}/restore`, { method: "POST" });
-export type ExcludedDocument = { id: string; code: string | null; name: string; kind: string; status: string; excludedAt: string; reason: string | null };
+export type ExcludedDocument = { id: string; code: string | null; name: string; kind: string; status: string; excludedAt: string; reason: string | null; excludedBy?: string | null };
 export const listExcludedDocuments = () => api<ExcludedDocument[]>("/api/documents/excluded");
 /** Close one exception with a reason (audited). A check that still fails is raised again when the document is checked. */
 export async function resolveExceptionById(exceptionId: string, note: string) {

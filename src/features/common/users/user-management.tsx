@@ -16,6 +16,7 @@ import {
 import {
   InvitationLinkModal,
   invitationMessage,
+  inviterName,
   undeliveredInvitation,
   type UndeliveredInvitation,
 } from "@/features/common/users/invitation-link";
@@ -231,7 +232,7 @@ export function UserManagement({
             { label: "Status", render: (u) => <Badge>{u.status}</Badge> },
             {
               label: "Invited by",
-              render: (u) => u.invitedBy,
+              render: (u) => inviterName(u.invitedBy, data.users),
             },
             {
               label: "Invitation date",
@@ -476,7 +477,7 @@ export function UserManagement({
             </div>
             <div>
               <span>Invited by</span>
-              <strong>{view.invitedBy}</strong>
+              <strong>{inviterName(view.invitedBy, data.users)}</strong>
             </div>
             <div>
               <span>Invited</span>
