@@ -4899,6 +4899,20 @@ dialog {
   background: #ffffff;
 }
 
+/* "Set aside…" row action dialog (All documents, Exceptions): label, full-width reason, then the buttons. */
+/* The dialog opens from inside a table cell, which would otherwise pass on its no-wrap and alignment. */
+.set-aside-dialog { white-space: normal; text-align: left; }
+.set-aside-form { display: grid; gap: 8px; }
+.set-aside-form input { width: 100%; }
+.set-aside-form .modal-actions { margin-top: 6px; }
+
+/* Preview journal (Approved records): four money columns do not fit the 560px default, which hid the Credit column. */
+dialog:has(.journal-preview-body) {
+  width: min(880px, calc(100% - 30px));
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+}
+
 dialog:has(.help-center) {
   width: min(760px, calc(100% - 30px));
   max-height: min(88vh, 900px);

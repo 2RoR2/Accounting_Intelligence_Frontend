@@ -53,7 +53,7 @@ export function JournalPostingPreview({ recordId, canPost, onClose, onPosted }: 
 
   return (
     <Modal title="Preview journal" onClose={onClose} closeDisabled={posting}>
-      <div className="panel-body">
+      <div className="panel-body journal-preview-body">
         {!canPost && <p>A company admin posts approved documents.</p>}
         {loading && <LoadingState />}
         {error && <>

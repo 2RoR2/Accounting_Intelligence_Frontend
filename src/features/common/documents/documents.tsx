@@ -38,7 +38,7 @@ import { documentKindLabel, readyLabel, statusLabel } from "@/lib/glossary";
 import { READ_TOTAL_HINT, listedTotal } from "@/features/common/documents/document-total";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
-import { SetAsideList } from "@/features/common/documents/set-aside";
+import { SetAsideList, SetAsideRowAction, canSetAside } from "@/features/common/documents/set-aside";
 import {
   documentTabCounts, documentTabEmptyMessage, documentTabTitle, documentTabs,
   filterDocumentsByTab, isCapturedDocument, laneFromParam, laneTitle, resolveDocumentTab, reviewTabs,
@@ -79,6 +79,9 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSummary, setSubmitSummary] = useState("");
+  // A row set aside from the Action column: the list refreshes and an open Set-aside list reloads.
+  const [setAsideNotice, setSetAsideNotice] = useState("");
+  const [setAsideVersion, setSetAsideVersion] = useState(0);
   const queryKey = JSON.stringify([user.id, search, status, date, amount, business, lane]);
   const { data, error, loading, refresh } = useResource(
     async () => ({ queryKey, documents: await getDocuments(user, { q: search, status, date, amount, business, lane }) }),
@@ -158,6 +161,7 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
         }
       />
       <Panel>
+        {setAsideNotice && <p className="notice" role="status">{setAsideNotice}</p>}
         {canBulkSubmit && submitSummary && <p className="notice" role="status">{submitSummary}</p>}
         {canBulkSubmit && submitError && <p className="notice danger" role="alert">{submitError}</p>}
         {lane && <DocumentTabBar label="Review lanes" tabs={reviewTabs(base, user.role, { lane })} />}
@@ -260,15 +264,20 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
             {
               label: "Action",
               render: (d) => (
-                <Link className="text-link" href={`${base}/documents/${d.id}`}>
-                  Review <ArrowRight size={14} />
-                </Link>
+                <div className="row-actions">
+                  <Link className="text-link" href={`${base}/documents/${d.id}`}>
+                    Review <ArrowRight size={14} />
+                  </Link>
+                  {canSetAside(d.status) && <SetAsideRowAction documentId={d.id} label={d.code || d.name}
+                    onDone={(message) => { setSetAsideNotice(message); setSetAsideVersion((version) => version + 1); void refresh(); }} />}
+                </div>
               ),
             },
           ]}
         />
       </Panel>
-      {!lane && !embedded && <SetAsideList base={base} canRestore={user.role === "LOCAL_ADMIN"} />}
+      {!lane && !embedded && <SetAsideList base={base} canRestore={user.role === "LOCAL_ADMIN"} version={setAsideVersion}
+        onRestored={() => { setSetAsideNotice(""); void refresh(); }} />}
     </>
   );
 }
