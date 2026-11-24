@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useMemo, useState, type ReactNode, type SyntheticEvent, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useResource } from "@/features/common/hooks/use-resource";
 import { DataTable, ErrorState, LoadingState, Modal, PageHeader, Panel, StatCard } from "@/components/common/ui";
 import { ApiError } from "@/lib/api/client";
 import { getLedgerJournals, getSettlements, getAllocations, getTrialBalance, reverseJournal, type Journal } from "@/lib/api/ledger.service";
 import { ChartAccounts, LedgerAccountsPanel } from "./chart-accounts";
+import { JournalDetailPanel } from "./journal-detail";
 import { JournalPostingForm } from "./journal-posting-form";
 import { currencyTotals } from "@/lib/api/document-contract";
 import { MonthlyFinance } from "@/features/common/today/monthly-finance";
@@ -87,6 +88,13 @@ function LedgerActivity({ base, canPost, section, tabs }: {
   const unmatched = useMemo(() => currencyTotals((settlements ?? []).map((settlement) => ({
     currency: settlement.currency, total: settlement.unmatchedAmount,
   }))), [settlements]);
+  // A link that names one journal (?q=<id>, from a document's "Posted to the ledger") opens its lines straight away.
+  const requestedJournal = useSearchParams().get("q");
+  const journals = data?.journals;
+  useEffect(() => {
+    const match = requestedJournal ? journals?.find((journal) => journal.id === requestedJournal) : undefined;
+    if (match) setTraceTarget(match);
+  }, [requestedJournal, journals]);
   if (loading || error || !data) return <>
     <section className="ledger-browser" aria-label="Ledger sections">{tabs}</section>
     {loading ? <LoadingState /> : <ErrorState message={error} retry={refresh} />}
@@ -164,7 +172,7 @@ function LedgerActivity({ base, canPost, section, tabs }: {
           columns={[
           { label: "Date", render: (r) => r.date }, { label: "Description", render: (r) => r.description }, { label: "Source", render: (r) => r.sourceType },
           { label: "Debit", render: (r) => r.totalDebit }, { label: "Credit", render: (r) => r.totalCredit }, { label: "Status", render: (r) => r.status },
-          { label: "Trace", render: (journal: Journal) => <button type="button" className="btn small" onClick={() => setTraceTarget(journal)}>Trace</button> },
+          { label: "Lines", render: (journal: Journal) => <button type="button" className="btn small" aria-label={`Open journal ${journal.description}`} onClick={() => setTraceTarget(journal)}>Open</button> },
           ...(canPost ? [{ label: "Actions", render: (journal: Journal) => {
             if (journal.sourceType === "erp_document") return "Void the document instead";
             if (journal.sourceType === "document" || journal.sourceType === "adjustment") return "Posted from a scanned document";
@@ -176,6 +184,7 @@ function LedgerActivity({ base, canPost, section, tabs }: {
           } }] : []),
         ]} />
         {traceTarget && <Modal title={`Journal: ${traceTarget.description}`} onClose={() => setTraceTarget(null)}>
+          <JournalDetailPanel base={base} journalId={traceTarget.id} />
           <TracePanel base={base} type="journal" id={traceTarget.id} />
         </Modal>}
         {canPost && reverseTarget && <Modal title="Reverse journal" onClose={(event?: SyntheticEvent) => {

@@ -46,6 +46,14 @@ export const postSupplierPayment = (transactionId: string, input: {
   { method: "POST", body: JSON.stringify(input) },
 );
 
+export type JournalDetail = {
+  id: string; date: string; description: string; status: string; sourceType: string; periodCode: string | null;
+  postedBy: string | null; postedAt: string | null; reversesJournalId: string | null; reversedByJournalId: string | null;
+  source: { kind: string; type: string; id: string; number: string; amount?: string | null } | null;
+  totalDebit: string; totalCredit: string; balanced: boolean;
+  lines: Array<{ lineNumber: number; accountId: string; code: string; name: string; accountType: string; description: string; debit: string; credit: string }>;
+};
+export const getLedgerJournal = (id: string) => get<JournalDetail>(`/api/ledger/journals/${encodeURIComponent(id)}`);
 export const getLedgerAccounts = () => api<LedgerAccount[]>("/api/ledger/accounts");
 const periodsPath = "/api/ledger/periods";
 export const getAccountingPeriods = () => get<AccountingPeriod[]>(periodsPath);

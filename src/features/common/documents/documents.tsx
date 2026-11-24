@@ -37,6 +37,7 @@ import {
 import { documentKindLabel, statusLabel } from "@/lib/glossary";
 import { CameraCapture } from "@/features/common/documents/camera-capture";
 import { DocumentTabBar } from "@/features/common/documents/document-tab-bar";
+import { SetAsideList } from "@/features/common/documents/set-aside";
 import {
   documentTabCounts, documentTabEmptyMessage, documentTabTitle, documentTabs,
   filterDocumentsByTab, isCapturedDocument, laneFromParam, laneTitle, resolveDocumentTab, reviewTabs,
@@ -267,6 +268,7 @@ export function DocumentList({ user, tab }: { user: User; tab?: string }) {
           ]}
         />
       </Panel>
+      {!lane && !embedded && <SetAsideList base={base} canRestore={user.role === "LOCAL_ADMIN"} />}
     </>
   );
 }

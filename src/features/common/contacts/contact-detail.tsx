@@ -13,6 +13,7 @@ import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import type { User } from "@/types";
 import { buildContactInput, contactFormProblems, contactToForm, historyActionLabel, kindLabel, relatedDocuments, type ContactForm } from "./contact-logic";
 import { ContactStatementPanel } from "./contact-statement";
+import { ContactDocumentsPanel } from "./contact-documents";
 
 const message = (reason: unknown, fallback: string) => (reason instanceof Error && reason.message ? reason.message : fallback);
 
@@ -100,6 +101,7 @@ export function ContactDetail({ user, contactId, base }: { user: User; contactId
     </div>}
     {/* Keyed on the saved version so the form shows what the backend stored after each save. */}
     <ContactEditor key={`${contact.id}:${contact.updatedAt}`} contact={contact} busy={busy} onSave={(form) => void save(form)} />
+    <ContactDocumentsPanel base={base} contact={contact} />
     <Panel title="History" subtitle="Changes made to this contact.">
       {data.history === null
         ? <p className="empty-state">The history could not be loaded.</p>

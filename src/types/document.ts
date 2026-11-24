@@ -30,5 +30,8 @@ export interface Document extends DocumentDisplayName {
   totalAmount?: string | number | null;
   supplier?: string | null;
   customer?: string | null;
+  /** Set aside as a wrong upload (left out of every list); detail responses only. */
+  excludedAt?: string | null;
+  excludedReason?: string | null;
 }
 export interface ProcessingJob { id: string; documentId: string; tenantId: string; status: DocumentStatus; seconds: number; startedAt: string; completedAt: string; }

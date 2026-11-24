@@ -48,6 +48,7 @@ import { SourceEvidenceList } from "@/components/common/documents/document-viewe
 import { DocumentDetailPreview } from "@/features/common/documents/invoice-detail-preview";
 import { RecordDetail } from "@/features/common/records/records";
 import { TracePanel } from "@/features/common/trace/trace-panel";
+import { SET_ASIDE_STATUSES, SetAsideBanner, SetAsideControl } from "./set-aside";
 import {
   addDocumentComment,
   createCustomer,
@@ -629,6 +630,8 @@ function DocumentReviewPage({
       />
 
       {failure && <ErrorState message={failure} dismissible onClose={() => setFailure("")} />}
+      {data.doc.excludedAt && <SetAsideBanner excludedAt={data.doc.excludedAt} reason={data.doc.excludedReason} documentId={documentId}
+        canRestore={user.role === "LOCAL_ADMIN"} onRestored={() => void refresh().then(() => setToast("Restored to the lists."))} />}
 
       {!failed && !pending && <DocumentTypeNotice reason={typeReason} decision={decision} needsType={needsType || changingType} canChoose={canChooseType}
         current={chosenKind} busy={busy} onChoose={chooseType} />}
@@ -787,6 +790,8 @@ function DocumentReviewPage({
                       {failure && <p className="notice danger" role="alert">{failure}</p>}
                       <div className="review-action-buttons">
                         <button className="btn" disabled={readonly || busy} onClick={() => run(() => saveDocumentDraft(documentId), "Draft saved.")}>Save draft</button>
+                        {!data.doc.excludedAt && SET_ASIDE_STATUSES.has(data.doc.status) && canEditDocument(user, data.doc, !!record) &&
+                          <SetAsideControl documentId={documentId} busy={busy} onDone={(message) => void refresh().then(() => setToast(message))} />}
                         {canRevalidate && <button className="btn primary" disabled={readonly || busy || unsaved.length > 0} onClick={() => run(() => revalidateDocument(user, documentId), "Review saved and revalidated.")}><CheckCircle2 size={16} /> Save & revalidate</button>}
                         {canSubmit && <button ref={submitButton} type="button" className="btn primary review-save-submit" disabled={busy} aria-keyshortcuts="Control+Enter" onClick={() => void saveAndSubmit()}>
                           Save, check and submit <kbd>Ctrl+Enter</kbd></button>}
