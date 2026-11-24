@@ -88,7 +88,7 @@ async function request<T>(path: string, read: (response: Response) => Promise<T>
     return await read(response);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The request timed out. Check that the backend and database are running, then try again.");
+      throw transportFailure(new Error("The request timed out. Check that the backend and database are running, then try again."));
     }
     if (error instanceof Error && (error.message.startsWith("Your session expired") || error.message.startsWith("Request failed") || error.message.startsWith("Unable to reach") || error.message.startsWith("The request timed out") || error.message.includes("not allowed") || error.message.includes("required") || error.message.includes("invalid"))) {
       throw error;
@@ -96,14 +96,82 @@ async function request<T>(path: string, read: (response: Response) => Promise<T>
     // Preserve API/application errors. Only browser transport failures should
     // be rewritten as an unreachable-backend message.
     if (error instanceof Error && error.name !== "TypeError") throw error;
-    throw new Error("Unable to reach the backend API. Check your connection, then try again.");
+    throw transportFailure(new Error("Unable to reach the backend API. Check your connection, then try again."));
   } finally {
     globalThis.clearTimeout(timeout);
   }
 }
 
+export const IDEMPOTENCY_HEADER = "Idempotency-Key";
+
+/** A new key for one user action (a save, an approve). Reused on that action's automatic retries only. */
+export function newIdempotencyKey(): string {
+  const crypto = globalThis.crypto;
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (crypto?.getRandomValues) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// POST writes the backend makes safe to retry with an Idempotency-Key (services/routes/idempotency.py): typed document
+// create, issue/send/void/post, duplicate, convert, delivered, scanned post, and the scanned-document review actions.
+const RETRY_SAFE_WRITES: readonly RegExp[] = [
+  /^\/api\/erp\/documents\/[^/]+$/,
+  /^\/api\/erp\/documents\/[^/]+\/[^/]+\/(transition|duplicate|transfer)$/,
+  /^\/api\/erp\/documents\/delivery-order\/[^/]+\/delivered$/,
+  /^\/api\/erp\/scanned\/([^/]+\/post|post-bulk)$/,
+  /^\/api\/documents\/[^/]+\/(exclude|review|review\/decision)$/,
+  /^\/api\/documents\/review\/(bulk-submit|bulk-decision)$/,
+  /^\/api\/records\/from-document\/[^/]+$/,
+  /^\/api\/review\/(bulk-submit|bulk-approve)$/,
+];
+
+export function isRetrySafeWrite(method: string | undefined, path: string): boolean {
+  if ((method ?? "GET").toUpperCase() !== "POST") return false;
+  const bare = path.split(/[?#]/, 1)[0];
+  return RETRY_SAFE_WRITES.some((pattern) => pattern.test(bare));
+}
+
+const transportFailures = new WeakSet<Error>();
+function transportFailure(error: Error): Error {
+  transportFailures.add(error);
+  return error;
+}
+
+/** A failure where the server may or may not have acted: a timeout, a dropped connection, a gateway error. */
+function mayHaveReachedServer(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status === 502 || error.status === 503 || error.status === 504;
+  return error instanceof Error && transportFailures.has(error);
+}
+
+const RETRY_DELAY_MS = 800;
+
+/** One attempt, then (for a keyed write) one more with the same key: the server answers a repeat with the first result. */
+async function keyedRequest<T>(path: string, read: (response: Response) => Promise<T>, init: RequestInit, allowRefresh: boolean): Promise<T> {
+  try {
+    return await request(path, read, init, allowRefresh);
+  } catch (error) {
+    if (!mayHaveReachedServer(error)) throw error;
+    await new Promise((resolve) => globalThis.setTimeout(resolve, RETRY_DELAY_MS));
+    return await request(path, read, init, allowRefresh);
+  }
+}
+
+/** Adds an Idempotency-Key to a retry-safe write that has none (one key per call = one user action). */
+export function withIdempotencyKey(path: string, init: RequestInit, key = newIdempotencyKey()): RequestInit {
+  if (!isRetrySafeWrite(init.method, path)) return init;
+  const headers = new Headers(init.headers);
+  if (headers.has(IDEMPOTENCY_HEADER)) return init;
+  headers.set(IDEMPOTENCY_HEADER, key);
+  return { ...init, headers };
+}
+
 export function api<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
-  return request(path, (response) => response.json().catch(() => null), init, allowRefresh);
+  const read = (response: Response) => response.json().catch(() => null) as Promise<T>;
+  const keyed = withIdempotencyKey(path, init);
+  if (new Headers(keyed.headers).has(IDEMPOTENCY_HEADER)) return keyedRequest(path, read, keyed, allowRefresh);
+  return request(path, read, init, allowRefresh);
 }
 
 export async function download(path: string, filename: string) {
