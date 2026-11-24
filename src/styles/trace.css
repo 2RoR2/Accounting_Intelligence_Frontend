@@ -22,28 +22,87 @@
 .trace-amount { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
 .trace-empty { color: var(--muted, #526176); }
 .app-shell.theme-dark .trace-here { color: #cfe3ff; background: rgba(103, 173, 255, 0.16); }
-.app-shell.theme-dark .trace-step { border-left-color: rgba(255, 255, 255, 0.16); }
-.app-shell.theme-dark .trace-step::before { background: #0f1b2d; }
+.app-shell.theme-dark .trace-step { border-left-color: rgba(157, 202, 255, 0.3); }
+.app-shell.theme-dark .trace-step::before { background: #0c2a52; }
 .app-shell.theme-dark .trace-current::before { background: #67adff; }
 
-.global-search { position: relative; flex: 0 1 300px; min-width: 150px; margin-left: auto; margin-right: 12px; }
-.global-search-field { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 34px; border: 1px solid var(--border, #dfe5ed); border-radius: 8px; background: var(--surface, #f6f8fb); }
+/* Top-bar search. Same 40px height and 12px radius as the top-bar buttons; the dropdown starts at the field's left edge and is at least as wide. */
+.global-search { position: relative; flex: 0 1 320px; max-width: 320px; min-width: 190px; margin-left: auto; margin-right: 12px; }
+.global-search-toggle { display: none; }
+.global-search-field {
+  display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 10px 0 12px; cursor: text;
+  border: 1px solid var(--border, #dfe5ed); border-radius: 12px; background: var(--surface, #f6f8fb); color: var(--muted, #526176);
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.global-search-field:hover { border-color: var(--role-accent, #3c92f7); }
+.global-search-field:focus-within { border-color: var(--role-accent, #3c92f7); background: #fff; color: var(--ink, #172337); box-shadow: 0 0 0 3px rgba(60, 146, 247, 0.28); }
+.global-search-field > svg { flex: none; }
 /* `.app-shell input` (theme pass) sets its background with !important: match it so the field is not a white box inside the pill. */
 .global-search-field input,
-.app-shell .global-search-field input { flex: 1; min-width: 0; min-height: 0; height: auto; padding: 0; border: 0; outline: 0; background: transparent !important; box-shadow: none !important; color: inherit; font: inherit; }
-.global-search-field:focus-within { border-color: var(--role-accent, #3c92f7); }
-.global-search-results {
-  position: absolute; z-index: 60; left: 0; right: 0; top: calc(100% + 6px); max-height: min(70vh, 520px); overflow: auto;
-  background: var(--white, #fff); color: var(--ink, #172337); border: 1px solid var(--border, #dfe5ed); border-radius: 10px;
-  box-shadow: var(--shadow-md, 0 8px 24px rgba(6, 20, 51, 0.12)); padding: 6px 0; min-width: min(420px, 90vw);
+.app-shell .global-search-field input,
+.app-shell .global-search-field input:hover,
+.app-shell .global-search-field input:focus-visible {
+  flex: 1; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important;
+  color: var(--ink, #172337) !important; font: inherit; font-size: 14px; -webkit-appearance: none; appearance: none;
 }
-.global-search-group h3 { margin: 6px 12px 2px; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted, #526176); }
+.global-search-field input::placeholder { color: var(--muted, #526176); opacity: 1; }
+.global-search-field input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.global-search-kbd, .global-search-note kbd, .global-search-foot kbd {
+  display: inline-block; padding: 1px 6px; border: 1px solid var(--border, #dfe5ed); border-bottom-width: 2px; border-radius: 6px;
+  background: rgba(60, 146, 247, 0.08); color: var(--muted, #526176); font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+.global-search-clear { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted, #526176); cursor: pointer; }
+.global-search-clear:hover, .global-search-clear:focus-visible { background: rgba(60, 146, 247, 0.16); color: var(--ink, #172337); outline: 0; }
+.global-search-results {
+  position: absolute; z-index: 60; left: 0; top: calc(100% + 8px); width: max(100%, 400px); max-height: min(70vh, 520px); overflow: auto;
+  background: #fff; color: var(--ink, #172337); border: 1px solid var(--border, #dfe5ed); border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(6, 20, 51, 0.16); padding: 6px;
+}
+.global-search-group + .global-search-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-subtle, #eef2f7); }
+.global-search-group h3 { margin: 6px 10px 4px; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #526176); }
 .global-search-group ul { list-style: none; margin: 0; padding: 0; }
-.global-search-item { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; text-decoration: none; color: inherit; }
+.global-search-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 9px; text-decoration: none; color: inherit; }
+.global-search-main { min-width: 0; }
+.global-search-main strong { display: block; font-size: 14px; color: var(--ink, #172337); }
+.global-search-item small { display: block; margin-top: 1px; color: var(--muted, #526176); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .global-search-item:hover, .global-search-item[data-active="true"] { background: var(--role-accent-soft, #ecf5ff); }
-.global-search-item small { display: block; color: var(--muted, #526176); }
-.global-search-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.global-search-note { padding: 10px 12px; color: var(--muted, #526176); }
-.app-shell.theme-dark .global-search-results { background: #0f1b2d; color: #e6edf7; border-color: rgba(255, 255, 255, 0.14); }
-.app-shell.theme-dark .global-search-item:hover, .app-shell.theme-dark .global-search-item[data-active="true"] { background: rgba(103, 173, 255, 0.14); }
-@media (max-width: 760px) { .global-search { flex-basis: 140px; min-width: 110px; } }
+.global-search-item[data-active="true"] { box-shadow: inset 3px 0 0 var(--role-accent, #3c92f7); }
+.global-search-amount { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink, #172337); }
+.global-search-note { margin: 0; padding: 10px; color: var(--muted, #526176); font-size: 13px; line-height: 1.5; }
+.global-search-foot { display: flex; gap: 6px; align-items: center; margin: 4px 0 0; padding: 8px 10px 4px; border-top: 1px solid var(--border-subtle, #eef2f7); color: var(--muted, #526176); font-size: 12px; }
+.global-search-foot kbd { padding: 0 5px; font-size: 11px; }
+
+.app-shell.theme-dark .global-search-field { background: #102f57; border-color: rgba(157, 202, 255, 0.42); color: #cfe3ff; }
+.app-shell.theme-dark .global-search-field:hover { border-color: #9dcaff; background: #143a69; }
+.app-shell.theme-dark .global-search-field:focus-within { background: #143a69; border-color: #9dcaff; color: #f5f9ff; box-shadow: 0 0 0 3px rgba(103, 173, 255, 0.4); }
+.app-shell.theme-dark .global-search-field input,
+.app-shell.theme-dark .global-search-field input:hover,
+.app-shell.theme-dark .global-search-field input:focus-visible { color: #f5f9ff !important; background: transparent !important; border: 0 !important; outline: 0 !important; box-shadow: none !important; }
+.app-shell.theme-dark .global-search-field input::placeholder { color: #b9d5f2 !important; }
+.app-shell.theme-dark .global-search-kbd, .app-shell.theme-dark .global-search-note kbd, .app-shell.theme-dark .global-search-foot kbd { background: rgba(103, 173, 255, 0.16); border-color: rgba(157, 202, 255, 0.42); color: #dcecff; }
+.app-shell.theme-dark .global-search-clear { color: #cfe3ff; }
+.app-shell.theme-dark .global-search-clear:hover, .app-shell.theme-dark .global-search-clear:focus-visible { background: rgba(103, 173, 255, 0.24); color: #fff; }
+.app-shell.theme-dark .global-search-results { background: #0c2a52; color: #ecf5ff; border-color: rgba(157, 202, 255, 0.42); box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5); }
+.app-shell.theme-dark .global-search-group + .global-search-group, .app-shell.theme-dark .global-search-foot { border-top-color: rgba(157, 202, 255, 0.24); }
+.app-shell.theme-dark .global-search-group h3 { color: #9dcaff; }
+.app-shell.theme-dark .global-search-main strong, .app-shell.theme-dark .global-search-amount { color: #f5f9ff; }
+.app-shell.theme-dark .global-search-item small, .app-shell.theme-dark .global-search-note, .app-shell.theme-dark .global-search-foot { color: #b9d5f2; }
+.app-shell.theme-dark .global-search-item:hover, .app-shell.theme-dark .global-search-item[data-active="true"] { background: #1a4b82; }
+.app-shell.theme-dark .global-search-item:hover small, .app-shell.theme-dark .global-search-item[data-active="true"] small { color: #e6f0ff; }
+.app-shell.theme-dark .global-search-item[data-active="true"] { box-shadow: inset 3px 0 0 #67adff; }
+
+/* Phone: the field collapses to an icon button; tapping it lays the field over the top bar. */
+@media (max-width: 760px) {
+  .global-search { flex: 0 0 auto; min-width: 0; max-width: none; margin-right: 0; }
+  .global-search-toggle {
+    display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--border, #dfe5ed); border-radius: 12px;
+    background: var(--surface, #f6f8fb); color: var(--ink, #172337); cursor: pointer;
+  }
+  .global-search-field { display: none; }
+  .global-search.is-expanded .global-search-field { display: flex; position: fixed; z-index: 70; top: 14px; left: 10px; right: 10px; background: #fff; }
+  .global-search.is-expanded .global-search-toggle { visibility: hidden; }
+  .global-search.is-expanded .global-search-kbd { display: none; }
+  .global-search-results { position: fixed; z-index: 70; top: 62px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 80px); }
+  .app-shell.theme-dark .global-search-toggle { background: #102f57; border-color: rgba(157, 202, 255, 0.42); color: #f5f9ff; }
+  .app-shell.theme-dark .global-search.is-expanded .global-search-field { background: #143a69; }
+}
