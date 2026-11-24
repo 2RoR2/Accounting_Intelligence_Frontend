@@ -2,15 +2,37 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ATTACHABLE_TYPES, canAttach, fileProblem, formatBytes, isImage, linkHost, linkProblem, MAX_ATTACHMENT_BYTES,
+  showsSupplierCopy, SUPPLIER_COPY_TYPES, viewableCopies,
 } from "../src/features/common/erp/attachments-logic";
 
-test("only typed payments, refunds, money in/out, transfers and manual journals carry attachments", () => {
+test("typed payments, refunds, money in/out, transfers, manual journals and supplier documents carry attachments", () => {
   assert.deepEqual([...ATTACHABLE_TYPES].sort(), [
-    "bank-transfer", "journal-entry", "money-in", "money-out", "payment", "purchase-payment", "purchase-refund", "refund",
+    "bank-transfer", "bill", "journal-entry", "money-in", "money-out", "payment", "purchase-credit-note",
+    "purchase-debit-note", "purchase-payment", "purchase-refund", "refund",
   ]);
   assert.equal(canAttach("payment"), true);
+  assert.equal(canAttach("bill"), true);
+  // Documents the company prints itself keep their own stored PDF.
   assert.equal(canAttach("invoice"), false);
-  assert.equal(canAttach("bill"), false);
+  assert.equal(canAttach("quotation"), false);
+});
+
+test("only supplier documents show the supplier's copy beside the form", () => {
+  assert.deepEqual([...SUPPLIER_COPY_TYPES].sort(), ["bill", "purchase-credit-note", "purchase-debit-note"]);
+  assert.equal(showsSupplierCopy("bill"), true);
+  assert.equal(showsSupplierCopy("invoice"), false);
+  assert.equal(showsSupplierCopy("purchase-payment"), false);
+});
+
+test("the copy shown is a stored PDF or image, oldest first; links and other files are not drawn", () => {
+  const file = (id: string, mediaType: string | null) => ({ id, kind: "file", mediaType, fileUrl: `/f/${id}` });
+  const items = [
+    { id: "l", kind: "link", mediaType: null, fileUrl: null },
+    file("pdf", "application/pdf"), file("jpg", "image/jpeg"), file("odd", "application/zip"),
+    { id: "gone", kind: "file", mediaType: "application/pdf", fileUrl: null },
+  ];
+  assert.deepEqual(viewableCopies(items).map((item) => item.id), ["pdf", "jpg"]);
+  assert.deepEqual(viewableCopies([]), []);
 });
 
 test("files are checked for size and type before upload", () => {
