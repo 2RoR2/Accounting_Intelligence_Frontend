@@ -12,7 +12,8 @@ import {
   type DocumentType, type ErpDocument,
 } from "@/lib/api/erp.service";
 import {
-  documentHref, documentListTitle, documentStatusLabel, emptyListHint, hasOutstanding, statusFilterOptions, type DocumentGroup,
+  deliveryRecord, documentHref, documentListTitle, documentStatusLabel, emptyListHint, hasOutstanding, quotationValidity,
+  statusFilterOptions, type DocumentGroup,
 } from "./document-logic";
 
 type DocumentListProps = { base: string; group: DocumentGroup; type: DocumentType; canPost: boolean };
@@ -118,7 +119,10 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
     { label: "Payment", render: (row) => row.source === "typed" && row.paymentStatus ? <StatusBadge status={row.paymentStatus} /> : "—" },
   );
   columns.push(
-    { label: "Status", render: (row) => <StatusBadge status={documentStatusLabel(row.status, type)} /> },
+    { label: "Status", render: (row) => <>
+      <StatusBadge status={documentStatusLabel(row.status, type)} />
+      <ListNote row={row} type={type} />
+    </> },
     { label: "Ledger", render: (row) => !row.posts ? "Record only" : row.posted ? "Posted" : "Not posted" },
     { label: "Action", render: (row) => row.source === "typed"
       ? <Link className="btn small" href={documentHref(base, group, type, row.id)}>View</Link>
@@ -147,6 +151,26 @@ function DocumentResults({ base, group, type, canPost, filters, onPage }: Docume
         onClick={() => { if (data.nextPage != null) onPage(data.nextPage); }}>Next</button>
     </div>
   </>;
+}
+
+function todayIso() {
+  const date = new Date();
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
+}
+
+/** Under the status: a sent quotation about to pass its valid-until date, and whether an issued delivery order is signed for. */
+function ListNote({ row, type }: { row: ErpDocument; type: DocumentType }) {
+  if (row.source !== "typed") return null;
+  if (type === "quotation") {
+    const note = quotationValidity(row.dueDate, row.status, todayIso());
+    return note ? <small className={`list-note ${note.tone}`}>{note.label}</small> : null;
+  }
+  if (type === "delivery-order" && row.status === "ready") {
+    const record = deliveryRecord(row.fields);
+    return <small className={`list-note ${record ? "ok" : "warning"}`}>
+      {record ? `Delivered ${formatDate(record.receivedOn)}` : "Awaiting signed copy"}</small>;
+  }
+  return null;
 }
 
 const hasFilters = (filters: Filters) => Object.entries(filters).some(([key, value]) => key !== "page" && key !== "pageSize" && !!value && value !== "all");

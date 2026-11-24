@@ -32,6 +32,8 @@ const SECTIONS: NavSection[] = [
     ] },
     { label: "Sales", page: "sales", icon: "invoice", children: [
       leaf("Quotations", "sales", "type=quotation"),
+      leaf("Sales orders", "sales", "type=sales-order"),
+      leaf("Delivery orders", "sales", "type=delivery-order"),
       leaf("Invoices", "sales", "type=invoice"),
       leaf("Credit notes", "sales", "type=credit-note"),
       leaf("Debit notes", "sales", "type=debit-note"),

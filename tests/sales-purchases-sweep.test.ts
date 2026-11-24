@@ -27,7 +27,7 @@ test("a settled invoice or bill no longer offers a payment, but still offers cre
     documentActions("ready", type, "LOCAL_ADMIN", outstanding).map(({ label }) => label);
   assert.ok(labels("invoice", "200.00").includes("Receive payment"));
   assert.ok(labels("invoice").includes("Receive payment"), "unknown outstanding keeps today's actions");
-  assert.deepEqual(labels("invoice", "0.00"), ["Credit note", "Debit note", "Void", "Print", "Download PDF", "Duplicate"]);
+  assert.deepEqual(labels("invoice", "0.00"), ["Credit note", "Debit note", "Delivery order", "Void", "Print", "Download PDF", "Duplicate"]);
   assert.ok(!labels("debit-note", "0.00").includes("Receive payment"));
   assert.ok(labels("bill", "0.00").includes("Turn into supplier credit note"));
   assert.ok(!labels("bill", "0.00").includes("Turn into supplier payment"));

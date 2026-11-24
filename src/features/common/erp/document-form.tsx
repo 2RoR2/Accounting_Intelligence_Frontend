@@ -2,29 +2,31 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import {
   DataTable, EmptyState, Field, LoadingState, Modal, PageHeader, Panel, StatusBadge, formatDate, money,
 } from "@/components/common/ui";
 import { useResource } from "@/features/common/hooks/use-resource";
 import {
-  ALLOCATES_TO, AMOUNT_ONLY_TYPES, DOCUMENT_LABELS, NOTE_TARGETS, createDocument, deleteDocument, documentFileUrl,
+  ALLOCATES_TO, AMOUNT_ONLY_TYPES, DOCUMENT_LABELS, NOTE_TARGETS, POSTING_TYPES, PRINTED_TYPES, createDocument, deleteDocument,
+  documentFileUrl, documentPostingPreview, markDelivered, previewUnsavedPdf,
   documentHistory, documentPreviewUrl, duplicateDocument, getDocument, listCatalog, listContacts, listDocuments, listProducts,
   transferDocument, transitionDocument, updateDocument,
   type Contact, type DocumentAllocation, type DocumentFile, type DocumentHistory, type DocumentInput, type DocumentLine,
-  type DocumentType, type ErpDocument, type Product, type TypedDocument,
+  type DocumentType, type ErpDocument, type PostingPreview, type Product, type TypedDocument,
 } from "@/lib/api/erp.service";
-import { download, openInNewTab } from "@/lib/api/client";
+import { download, fetchBlob, openInNewTab } from "@/lib/api/client";
 import { getLedgerAccounts } from "@/lib/api/ledger.service";
 import { statusLabel } from "@/lib/glossary";
 import type { User } from "@/types";
 import {
   acceptsScannedAllocations, allocationCandidates, amountInCents, decimalAmount, documentActions, documentGroup, documentHref,
   documentStatusLabel, fileReasonLabel, formatFileSize, hasOutstanding, latestFile, noteTargetCandidates,
-  type DocumentAction, type DocumentGroup,
+  QUOTATION_VALID_DAYS, deliveryRecord, draftExplainer, issueChecklist, issueLabel, lastPrices, liveDuplicates,
+  type DocumentAction, type DocumentGroup, type LastPrice,
 } from "./document-logic";
 import {
-  changeDocumentDate, chooseContactTerms, chooseTerms, copiedLines, editDueDate, lastDocumentWithLines,
+  addDays, changeDocumentDate, chooseContactTerms, chooseTerms, copiedLines, editDueDate, lastDocumentWithLines,
   type TermsState,
 } from "./line-defaults";
 import {
@@ -46,6 +48,8 @@ type Draft = {
   lines: DraftLine[]; allocations: DocumentAllocation[];
   /** Payment terms text (saved with the document and printed), the days behind it, and whether the due date follows them. */
   paymentTerms: string; termDays: number | null; dueDateAuto: boolean;
+  /** Printed with the contact block (fields.attention, fields.deliveryAddress) and as the terms (fields.terms). */
+  attention: string; deliveryAddress: string; terms: string;
 };
 
 // A quotation needs its customer to be sent (the API refuses "Send" without one).
@@ -62,15 +66,18 @@ function today() {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()].map((part) => String(part).padStart(2, "0")).join("-");
 }
 
-/** A new document with lines starts with one empty line to type into (dropped on save if left empty). */
-function makeDraft(document: TypedDocument | null, startLine = false): Draft {
+const text = (value: unknown) => typeof value === "string" ? value : "";
+
+/** A new document with lines starts with one empty line to type into (dropped on save if left empty). A new quotation
+ * is valid for QUOTATION_VALID_DAYS from its date until the user changes it. */
+function makeDraft(document: TypedDocument | null, startLine = false, type?: DocumentType): Draft {
   const toBankAccountId = document?.fields.toBankAccountId;
   const lines = document?.lines.map((value, key) => ({ key, value })) ?? (startLine ? [{ key: 0, value: blankLine() }] : []);
   return {
     number: document?.number ?? "",
     contactId: document?.contactId ?? "",
     documentDate: document?.documentDate ?? today(),
-    dueDate: document?.dueDate ?? "",
+    dueDate: document?.dueDate ?? (type === "quotation" ? addDays(today(), QUOTATION_VALID_DAYS) : ""),
     currency: document?.currency ?? "MYR",
     referenceNo: document?.referenceNo ?? "",
     description: document?.description ?? "",
@@ -83,6 +90,9 @@ function makeDraft(document: TypedDocument | null, startLine = false): Draft {
     paymentTerms: typeof document?.fields.paymentTerms === "string" ? document.fields.paymentTerms : "",
     termDays: null,
     dueDateAuto: !document?.dueDate,
+    attention: text(document?.fields.attention),
+    deliveryAddress: text(document?.fields.deliveryAddress),
+    terms: text(document?.fields.terms),
   };
 }
 
@@ -111,19 +121,22 @@ function documentInput(type: DocumentType, draft: Draft, document: TypedDocument
   }
   if (NOTE_TARGETS[type]) input.relatedDocumentId = draft.relatedDocumentId || null;
   if (ALLOCATES_TO[type]) input.allocations =draft.allocations.filter(({ amount }) => amount && Number(amount) !== 0);
-  if (type === "bank-transfer") {
-    const fields = { ...document?.fields };
-    if (draft.toBankAccountId) fields.toBankAccountId = draft.toBankAccountId;
-    else delete fields.toBankAccountId;
-    input.fields = fields;
+  // Only the fields this form edits change; the other saved fields are kept as they are.
+  const fields: Record<string, unknown> = { ...document?.fields };
+  let edited = false;
+  const put = (key: string, value: string) => {
+    edited = true;
+    if (value.trim()) fields[key] = value.trim();
+    else delete fields[key];
+  };
+  if (type === "bank-transfer") put("toBankAccountId", draft.toBankAccountId);
+  if (hasOutstanding(type)) put("paymentTerms", draft.paymentTerms);  // printed as "Terms"
+  if (PRINTED_TYPES.has(type)) {
+    put("attention", draft.attention);
+    put("deliveryAddress", draft.deliveryAddress);
+    put("terms", draft.terms);
   }
-  if (hasOutstanding(type)) {
-    // Printed as "Terms" on the document; the other saved fields are kept as they are.
-    const fields = { ...document?.fields };
-    if (draft.paymentTerms.trim()) fields.paymentTerms = draft.paymentTerms.trim();
-    else delete fields.paymentTerms;
-    input.fields = fields;
-  }
+  if (edited) input.fields = fields;
   return input;
 }
 
@@ -157,7 +170,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const formId = useId();
   const form = useRef<HTMLFormElement>(null);
   const [document, setDocument] = useState(initialDocument);
-  const [draft, setDraft] = useState(() => makeDraft(initialDocument, !AMOUNT_ONLY_TYPES.has(type)));
+  const [draft, setDraft] = useState(() => makeDraft(initialDocument, !AMOUNT_ONLY_TYPES.has(type), type));
   const nextLine = useRef(draft.lines.length);
   /** The line whose first field takes the focus when it appears (a line added from the keyboard). */
   const [focusLine, setFocusLine] = useState<number | null>(null);
@@ -172,6 +185,10 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const [copyNote, setCopyNote] = useState("");
   const [confirmation, setConfirmation] = useState<"delete" | "void" | null>(null);
   const [voidReason, setVoidReason] = useState("");
+  // The A4 preview beside the form (below it on narrow screens), the Send / Issue confirm step, and Mark delivered.
+  const [showPreview, setShowPreview] = useState(true);
+  const [sheet, setSheet] = useState<{ action: DocumentAction; posting: PostingPreview | null; postingError: string } | null>(null);
+  const [delivering, setDelivering] = useState(false);
   // Duplicate matches the user has already seen; issuing stops once when a save reveals a new one (Codex review P2).
   const seenDuplicates = useRef(new Set((initialDocument?.possibleDuplicates ?? []).map(({ id }) => id)));
 
@@ -220,21 +237,35 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
   const contactName = selectedContact?.legalName ?? (document?.contactId === draft.contactId ? document?.contactName : null);
   const summary = contactSummary(selectedContact);
   // The contact's earlier lines (this type, and invoices or bills) feed the description typeahead.
-  const recent = useResource(async () => {
+  const contactHistory = useResource(async () => {
     if (amountOnly || !contactKind || !draft.contactId) return [];
     const types = [...new Set<DocumentType>([type, sales ? "invoice" : "bill"])];
     const pages = await Promise.all(types.map((each) => listDocuments(each, { contactId: draft.contactId, source: "typed", pageSize: 20 })));
-    return recentLines(pages.flatMap(({ items }) => items), document?.id);
+    return pages.flatMap(({ items }) => items);
   }, `recent:${type}:${draft.contactId}`);
+  const recentRows = useMemo(() => recentLines(contactHistory.data ?? [], document?.id), [contactHistory.data, document?.id]);
+  // What this customer was last charged per product (sales only), and the same-type documents for the duplicate rule.
+  const prices = useMemo(() => sales ? lastPrices(contactHistory.data ?? [], document?.id) : new Map<string, LastPrice>(),
+    [contactHistory.data, document?.id, sales]);
+  const siblings = useMemo(() => (contactHistory.data ?? []).filter((row) => row.type === type), [contactHistory.data, type]);
   const options = useMemo(() => ({
     contacts: contactOptions(contactList),
     products: productOptions(productList, sales, draft.currency || "MYR"),
-    descriptions: descriptionOptions(productList, recent.data ?? [], sales, draft.currency || "MYR"),
+    descriptions: descriptionOptions(productList, recentRows, sales, draft.currency || "MYR"),
     accounts: accountOptions(accounts.data ?? []),
     taxes: taxOptions(taxCodes.data ?? []),
     banks: bankOptions(banks.data ?? []),
     terms: termOptions(paymentTerms.data ?? []),
-  }), [contactList, productList, recent.data, sales, draft.currency, accounts.data, taxCodes.data, banks.data, paymentTerms.data]);
+  }), [contactList, productList, recentRows, sales, draft.currency, accounts.data, taxCodes.data, banks.data, paymentTerms.data]);
+  const printed = PRINTED_TYPES.has(type);
+  const admin = role === "LOCAL_ADMIN";
+  const delivery = deliveryRecord(document?.fields);
+  const liveInput = useMemo(() => documentInput(type, draft, document), [type, draft, document]);
+  const savedDuplicates = document?.possibleDuplicates ?? [];
+  const liveDups = editable && draft.contactId
+    ? liveDuplicates(siblings, { id: document?.id, referenceNo: draft.referenceNo, documentDate: draft.documentDate, total: totals.total })
+      .filter(({ id }) => !savedDuplicates.some((saved) => saved.id === id))
+    : [];
 
   function setField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -396,8 +427,40 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       setError("");
       setVoidReason("");
       setConfirmation(action.kind === "delete" ? "delete" : "void");
+    } else if (printed && action.kind === "transition" && (action.status === "ready" || action.status === "sent")) {
+      void openIssueSheet(action);
     } else {
       void perform(action);
+    }
+  }
+
+  /** Saves what changed, then shows what Send / Confirm / Issue will do (and post) before it is done. */
+  async function openIssueSheet(action: DocumentAction) {
+    if (locked || !document) return;
+    if (editable && !form.current?.reportValidity()) return;
+    setError("");
+    setBusy(true);
+    try {
+      let saved: TypedDocument = document;
+      if (editable) {
+        const input = documentInput(type, draft, document);
+        saved = await save(changedInput(input, documentInput(type, makeDraft(document), document))) ?? document;
+        newDuplicates(saved);  // listed in the confirm step, so issuing does not stop for them again
+      }
+      let posting: PostingPreview | null = null;
+      let postingError = "";
+      if (POSTING_TYPES.has(type)) {
+        try {
+          posting = await documentPostingPreview(type, saved.id);
+        } catch (error) {
+          postingError = error instanceof Error ? error.message : "Unable to show the posting.";
+        }
+      }
+      setSheet({ action, posting, postingError });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to prepare this step.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -417,11 +480,13 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
 
   function renderAction(action: DocumentAction) {
     if (action.kind === "save") {
-      return <button key={action.label} className="btn primary" type="submit" form={formId} disabled={locked}>Save</button>;
+      return <button key={action.label} className="btn" type="submit" form={formId} disabled={locked}>{action.label}</button>;
     }
-    if (action.kind === "preview") {
-      return document && <button key={action.label} className="btn" type="button" disabled={locked}
-        title="The last saved version, marked DRAFT" onClick={() => void openPdf(documentPreviewUrl(type, document.id))}>{action.label}</button>;
+    // The preview panel beside the form replaces the "Preview PDF" button.
+    if (action.kind === "preview") return null;
+    if (action.kind === "transition" && (action.status === "ready" || action.status === "sent") && !action.disabledReason) {
+      return <button key={action.label} className="btn primary" type="button" disabled={locked}
+        onClick={() => chooseAction(action)}>{action.label}…</button>;
     }
     if (action.kind === "print" || action.kind === "download") {
       if (!document) return null;
@@ -447,9 +512,22 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
       description={document?.displayName ?? undefined}
       actions={<>
         <Link className="btn" href={listHref}>Back to list</Link>
+        {printed && <button type="button" className="btn" aria-pressed={showPreview} onClick={() => setShowPreview((shown) => !shown)}>
+          {showPreview ? "Hide preview" : "Show preview"}</button>}
+        {document && type === "delivery-order" && status === "ready" && !delivery && <button type="button" className="btn primary"
+          disabled={locked} onClick={() => setDelivering(true)}>Mark delivered</button>}
         {actions.map(renderAction)}
       </>} />
+    {printed && editable && <p className="notice info" role="note">{draftExplainer(type, admin)}</p>}
     {blockedHints.map((hint) => <p key={hint} className="notice info" role="note">{hint}.</p>)}
+    {liveDups.length > 0 && <div className="notice warning" role="status">
+      Looks like{" "}
+      {liveDups.map((duplicate, index) => <span key={duplicate.id}>
+        {index > 0 && ", "}
+        <RelatedDocument base={base} type={type} id={duplicate.id} number={duplicate.number} /> ({duplicate.reason})
+      </span>)}
+      . Check it before you save; this does not block saving.
+    </div>}
     {converted.map((link) => <p key={link.targetId} className="notice info" role="note">
       Converted to <RelatedDocument base={base} type={link.targetType} id={link.targetId} number={link.targetNumber} />.
     </p>)}
@@ -466,6 +544,8 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
     {lookups.map(({ label, resource }) => resource.error && <RequestError key={label} message={`${label} · ${resource.error}`} retry={resource.refresh} />)}
     {lookups.some(({ resource }) => resource.loading) && <p role="status">Loading form choices…</p>}
     {document && <DocumentFacts base={base} document={document} />}
+    <div className={printed && showPreview ? "doc-work split" : "doc-work"}>
+    <div className="doc-work-main">
     <form id={formId} ref={form} aria-busy={locked} onSubmit={(event) => {
       event.preventDefault();
       if (editable) void perform({ kind: "save", label: "Save" });
@@ -503,8 +583,15 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               <Field label="Document date *"><input type="date" required value={draft.documentDate}
                 onChange={(event) => {
                   const documentDate = event.target.value;
-                  setDraft((current) => withTerms(current, changeDocumentDate(termsOf(current), documentDate)));
+                  setDraft((current) => type === "quotation"
+                    ? { ...current, documentDate, dueDate: current.dueDateAuto && documentDate ? addDays(documentDate, QUOTATION_VALID_DAYS) : current.dueDate }
+                    : withTerms(current, changeDocumentDate(termsOf(current), documentDate)));
                 }} /></Field>
+              {type === "quotation" && <Field label="Valid until"
+                hint={draft.dueDateAuto ? `${QUOTATION_VALID_DAYS} days after the document date until you change it.` : "How long the prices hold. Printed on the quotation."}>
+                <input type="date" value={draft.dueDate} min={draft.documentDate || undefined}
+                  onChange={(event) => { const dueDate = event.target.value; setDraft((current) => ({ ...current, dueDate, dueDateAuto: false })); }} />
+              </Field>}
               {hasOutstanding(type) && <Field label="Payment terms" hint="Choosing terms sets the due date from the document date.">
                 <Combobox value={draft.paymentTerms} options={options.terms} placeholder="No payment terms" loading={paymentTerms.loading}
                   fallbackLabel={draft.paymentTerms} onChange={(name) => {
@@ -515,9 +602,13 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
               {hasOutstanding(type) && <Field label="Due date" hint={draft.dueDateAuto && draft.termDays !== null ? "Follows the payment terms until you change it." : undefined}>
                 <input type="date" value={draft.dueDate}
                   onChange={(event) => { const dueDate = event.target.value; setDraft((current) => withTerms(current, editDueDate(termsOf(current), dueDate))); }} /></Field>}
-              <Field label={type === "bill" ? "Supplier invoice no." : "Reference no."}>
+              <Field label={type === "bill" ? "Supplier invoice no." : "Reference no."} hint={sales ? "The customer's PO or their reference" : undefined}>
                 <input value={draft.referenceNo} maxLength={200} onChange={(event) => setField("referenceNo", event.target.value)} />
               </Field>
+              {printed && sales && type !== "payment" && <Field label="Attention" hint="The person the document is for">
+                <input value={draft.attention} maxLength={200} placeholder="e.g. Purchasing manager"
+                  onChange={(event) => setField("attention", event.target.value)} />
+              </Field>}
               <Field label="Currency *" hint={draft.currency && draft.currency !== "MYR" ? "Only MYR documents post to the ledger" : undefined}>
                 <input value={draft.currency} required pattern="[A-Za-z]{3}" maxLength={3}
                   onChange={(event) => setField("currency", event.target.value.toUpperCase())} />
@@ -536,8 +627,14 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
                 <input type="number" min="0" step="0.01" inputMode="decimal" value={draft.amount} placeholder="0.00"
                   onChange={(event) => setField("amount", event.target.value)} /></Field>}
             </div>
-            <Field label="Description"><textarea rows={2} value={draft.description} maxLength={4000}
+            {printed && sales && type !== "payment" && <Field label="Delivery address" hint={type === "delivery-order"
+              ? "Prints under Deliver to. Empty prints the billing address." : "Only when the goods go somewhere other than the billing address."}>
+              <textarea rows={2} value={draft.deliveryAddress} maxLength={1000} placeholder="Site or warehouse address"
+                onChange={(event) => setField("deliveryAddress", event.target.value)} /></Field>}
+            <Field label={printed ? "Notes (printed)" : "Description"}><textarea rows={2} value={draft.description} maxLength={4000}
               onChange={(event) => setField("description", event.target.value)} /></Field>
+            {printed && <Field label="Terms and conditions" hint="Empty prints the company's standard terms.">
+              <textarea rows={2} value={draft.terms} maxLength={4000} onChange={(event) => setField("terms", event.target.value)} /></Field>}
           </div>
         </Panel>
         {!amountOnly && <Panel title="Lines" action={editable && <>
@@ -551,6 +648,7 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
             {draft.lines.map((line, index) => <LineFields key={line.key} line={line.value} index={index} editable={editable}
               currency={draft.currency || "MYR"} products={productList} options={options}
               sales={sales} requiresAccount={type === "money-in" || type === "money-out"} autoFocus={focusLine === line.key}
+              lastPrice={line.value.itemId ? prices.get(line.value.itemId) : undefined}
               onChange={(changes) => changeLine(line.key, changes)}
               onCreateProduct={(name) => setQuickAdd({ kind: "product", name, lineKey: line.key })}
               onRemove={() => setDraft((current) => ({ ...current, lines: current.lines.filter(({ key }) => key !== line.key) }))} />)}
@@ -580,6 +678,10 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
         </dl>
       </Panel>
     </form>
+    </div>
+    {printed && showPreview && <LivePreview type={type} input={liveInput} documentId={document?.id} editable={editable}
+      stored={document ? (latest ? documentFileUrl(type, document.id, latest.revision, true) : documentPreviewUrl(type, document.id)) : null} />}
+    </div>
     {quickAdd?.kind === "contact" && contactKind && <QuickAddContact kind={contactKind} name={quickAdd.name}
       onClose={() => setQuickAdd(null)} onCreated={(contact) => {
         setQuickAdd(null);
@@ -617,7 +719,152 @@ function DocumentEditor({ base, group, type, role, initialDocument }: FormProps 
         </div>
       </form>
     </Modal>}
+    {sheet && document && <Modal title={`${sheet.action.label} ${document.number}?`} onClose={() => setSheet(null)}>
+      <IssueSheet type={type} document={document} draft={draft} posting={sheet.posting} postingError={sheet.postingError} />
+      <div className="modal-actions">
+        <button type="button" className="btn" disabled={locked} onClick={() => setSheet(null)}>Back to editing</button>
+        <button type="button" className="btn primary" disabled={locked} onClick={() => {
+          const action = sheet.action;
+          setSheet(null);
+          void perform(action);
+        }}>{sheet.action.label}{POSTING_TYPES.has(type) ? " and post" : ""}</button>
+      </div>
+    </Modal>}
+    {delivering && document && <DeliveredDialog document={document} onClose={() => setDelivering(false)}
+      onSaved={(saved) => { setDelivering(false); acceptSaved(saved); }} />}
   </>;
+}
+
+/** The PDF as it will print, beside the form: drawn by the server from what the form holds (nothing saved, no number
+ * taken), or the stored copy once the document can no longer be edited. */
+function LivePreview({ type, input, documentId, editable, stored }: {
+  type: DocumentType; input: DocumentInput; documentId?: string; editable: boolean; stored: string | null;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const current = useRef<string | null>(null);
+  const body = JSON.stringify(input);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = globalThis.setTimeout(async () => {
+      if (!editable && !stored) return;
+      setLoading(true);
+      try {
+        const blob = editable ? await previewUnsavedPdf(type, JSON.parse(body) as DocumentInput, documentId) : await fetchBlob(stored!);
+        if (cancelled) return;
+        const next = URL.createObjectURL(blob);
+        if (current.current) URL.revokeObjectURL(current.current);
+        current.current = next;
+        setUrl(next);
+        setError("");
+      } catch (problem) {
+        if (!cancelled) setError(problem instanceof Error ? problem.message : "Unable to draw the preview.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, editable ? 700 : 0);
+    return () => { cancelled = true; globalThis.clearTimeout(timer); };
+  }, [type, body, documentId, editable, stored]);
+  useEffect(() => () => { if (current.current) URL.revokeObjectURL(current.current); }, []);
+  return <aside className="doc-preview" aria-label="Document preview">
+    <div className="doc-preview-bar">
+      <strong>{editable ? "Live preview" : "Printed copy"}</strong>
+      <span role="status">{loading ? "Updating…" : editable ? "As it will print. Nothing is saved." : ""}</span>
+      {url && <a className="btn small" href={url} target="_blank" rel="noreferrer">Open full size</a>}
+    </div>
+    {error && <p className="notice warning" role="status">The preview updates when the form can be printed: {error}</p>}
+    {url ? <iframe title="Document preview" className="doc-preview-frame" src={`${url}#view=FitH`} />
+      : !error && <p className="doc-preview-empty">Drawing the preview…</p>}
+  </aside>;
+}
+
+/** The confirm step: what Send / Confirm / Issue does, reminders, and the journal it posts. */
+function IssueSheet({ type, document, draft, posting, postingError }: {
+  type: DocumentType; document: TypedDocument; draft: Draft; posting: PostingPreview | null; postingError: string;
+}) {
+  const verb = issueLabel(type).toLowerCase();
+  const lines = draft.lines.map(({ value }) => value).filter((line) => !isBlankLine(line));
+  const checklist = issueChecklist(type, {
+    contactId: draft.contactId, lines, dueDate: draft.dueDate, attention: draft.attention, deliveryAddress: draft.deliveryAddress,
+  });
+  const what = [
+    type === "quotation" ? "It becomes Sent and can no longer be edited."
+      : type === "sales-order" ? "It becomes Confirmed and can no longer be edited."
+        : "It becomes Issued and can no longer be edited; a correction is made by voiding it.",
+    "PDF revision 1 is stored and never changes.",
+    POSTING_TYPES.has(type) ? "The journal below is posted to the ledger."
+      : `Nothing is posted: a ${DOCUMENT_LABELS[type].toLowerCase()} never touches the ledger.`,
+  ];
+  return <div className="issue-sheet">
+    <h3>What happens</h3>
+    <ul>{what.map((line) => <li key={line}>{line}</li>)}</ul>
+    <h3>Before you {verb}</h3>
+    {checklist.length || document.possibleDuplicates?.length ? <ul className="issue-reminders">
+      {checklist.map((line) => <li key={line}>{line}</li>)}
+      {document.possibleDuplicates?.map((duplicate) => <li key={duplicate.id}>Possible duplicate of {duplicate.number} ({duplicate.reason}).</li>)}
+    </ul> : <p>Everything usually printed is filled in.</p>}
+    {POSTING_TYPES.has(type) && <>
+      <h3>Posting</h3>
+      {postingError && <p className="notice warning">{postingError}</p>}
+      {posting?.problem && <p className="notice warning">{posting.problem}</p>}
+      {posting && posting.lines.length > 0 && <div className="table-scroll"><table>
+        <thead><tr><th scope="col">Account</th><th scope="col">Debit</th><th scope="col">Credit</th></tr></thead>
+        <tbody>{posting.lines.map((line, index) => <tr key={`${line.accountId}:${index}`}>
+          <td>{line.code} {line.name}</td>
+          <td>{amountInCents(line.debit) ? money(line.debit) : ""}</td><td>{amountInCents(line.credit) ? money(line.credit) : ""}</td>
+        </tr>)}</tbody>
+        <tfoot><tr><th scope="row">Total</th><td>{money(posting.totalDebit)}</td><td>{money(posting.totalCredit)}</td></tr></tfoot>
+      </table></div>}
+      <p className="issue-note">Tax is the amount typed on each line; nothing is calculated.</p>
+    </>}
+  </div>;
+}
+
+function DeliveryFact({ fields }: { fields: Record<string, unknown> }) {
+  const record = deliveryRecord(fields);
+  return record
+    ? <span><StatusBadge status="Delivered" /> Received by <strong>{record.receivedBy}</strong> on {formatDate(record.receivedOn)}
+      {record.note ? ` · ${record.note}` : ""}</span>
+    : <span>Out for delivery. When the signed copy comes back, choose Mark delivered and attach it under Attachments.</span>;
+}
+
+/** Records who signed for an issued delivery order. The signed copy goes in the Attachments panel below. */
+function DeliveredDialog({ document, onClose, onSaved }: {
+  document: TypedDocument; onClose: () => void; onSaved: (saved: TypedDocument) => void;
+}) {
+  const earliest = document.documentDate ?? "";
+  const [receivedBy, setReceivedBy] = useState(text(document.fields.attention));
+  const [receivedOn, setReceivedOn] = useState(() => (earliest && today() < earliest ? earliest : today()));
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <Modal title={`Mark ${document.number} delivered`} onClose={onClose} closeDisabled={busy}>
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        onSaved(await markDelivered(document.id, { receivedBy: receivedBy.trim(), receivedOn, note: note.trim() || null }));
+      } catch (problem) {
+        setError(problem instanceof Error ? problem.message : "Unable to record the delivery.");
+      } finally {
+        setBusy(false);
+      }
+    }}>
+      <p>Record who signed for the goods. Attach the signed and chopped copy under Attachments; a delivery order never posts.</p>
+      {error && <RequestError message={error} />}
+      <Field label="Received by *"><input required maxLength={200} value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} /></Field>
+      <Field label="Date received *"><input type="date" required min={earliest || undefined} value={receivedOn}
+        onChange={(event) => setReceivedOn(event.target.value)} /></Field>
+      <Field label="Note"><textarea rows={2} maxLength={1000} value={note} placeholder="e.g. 2 bags short, to follow"
+        onChange={(event) => setNote(event.target.value)} /></Field>
+      <div className="modal-actions">
+        <button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button>
+        <button type="submit" className="btn primary" disabled={busy || !receivedBy.trim() || !receivedOn}>Mark delivered</button>
+      </div>
+    </form>
+  </Modal>;
 }
 
 /** The loaded list plus records just added from this form (until the list reloads with them). */
@@ -642,11 +889,11 @@ function ContactCard({ summary, label }: { summary: NonNullable<ReturnType<typeo
 type LineChoices = { products: ComboOption[]; descriptions: Suggestion[]; accounts: ComboOption[]; taxes: ComboOption[] };
 
 function LineFields({
-  line, index, editable, currency, products, options, sales, requiresAccount, autoFocus, onChange, onCreateProduct, onRemove,
+  line, index, editable, currency, products, options, sales, requiresAccount, autoFocus, onChange, onCreateProduct, onRemove, lastPrice,
 }: {
   line: DocumentLine; index: number; editable: boolean; currency: string; products: readonly Product[]; options: LineChoices;
   sales: boolean; requiresAccount: boolean; autoFocus: boolean; onChange: (changes: Partial<DocumentLine>) => void;
-  onCreateProduct: (name: string) => void; onRemove: () => void;
+  onCreateProduct: (name: string) => void; onRemove: () => void; lastPrice?: LastPrice;
 }) {
   const fields = [
     { key: "quantity", label: "Quantity *", min: "0.001", step: "0.001", required: true },
@@ -698,6 +945,12 @@ function LineFields({
         <output aria-label={`Line ${index + 1} amount`}>{currency} {formatAmount(lineAmount(line))}</output>
       </div>
     </div>
+    {lastPrice && <p className="line-hint" role="note">
+      Last charged to this customer: {currency} {formatAmount(lastPrice.unitPrice)} on {lastPrice.number}
+      {lastPrice.documentDate ? ` (${formatDate(lastPrice.documentDate)})` : ""}.
+      {editable && amountInCents(lastPrice.unitPrice) !== amountInCents(line.unitPrice || "0") && <>{" "}
+        <button type="button" className="btn small" onClick={() => onChange({ unitPrice: lastPrice.unitPrice })}>Use this price</button></>}
+    </p>}
   </section>;
 }
 
@@ -803,6 +1056,8 @@ function DocumentFacts({ base, document }: { base: string; document: TypedDocume
         {document.outstanding != null && <span>Outstanding <strong>{money(document.outstanding)}</strong></span>}
         {document.paymentStatus && <span>Payment status <StatusBadge status={document.paymentStatus} /></span>}
       </>}
+      {document.type === "quotation" && document.dueDate && <span>Valid until <strong>{formatDate(document.dueDate)}</strong></span>}
+      {document.type === "delivery-order" && document.status === "ready" && <DeliveryFact fields={document.fields} />}
     </div>
   </Panel>;
 }

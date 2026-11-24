@@ -116,6 +116,11 @@ export async function download(path: string, filename: string) {
   globalThis.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** A binary response (a PDF rendered from the form, a stored copy) through the refresh-aware request. */
+export function fetchBlob(path: string, init: RequestInit = {}) {
+  return request(path, (response) => response.blob(), init, true);
+}
+
 /** Open a file (e.g. a PDF) in a new tab through the refresh-aware request, so an expired access cookie is renewed first. */
 export async function openInNewTab(path: string, fallbackName = "document.pdf") {
   const tab = globalThis.open("", "_blank");  // opened before the await so pop-up blockers allow it
