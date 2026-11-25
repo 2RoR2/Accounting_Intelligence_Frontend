@@ -205,7 +205,11 @@ export function PublicPage({ page }: { page: string }) {
     setBusy(true);
     setError("");
     try {
-      const user = await verifyMfa(mfaCode.trim());
+      // Read the controls at submit time as well as keeping React state. This
+      // covers autofill and very fast multi-input entry where the DOM has the
+      // latest digits but the final state update has not committed yet.
+      const enteredCode = mfaInputRefs.current.map((input) => input?.value ?? "").join("").trim();
+      const user = await verifyMfa(enteredCode);
       if (user.mustChangePassword) {
         router.push(roleHome(user.role));
         return;
@@ -487,9 +491,16 @@ export function PublicPage({ page }: { page: string }) {
                       }}
                       onChange={(event) => {
                         const digit = event.target.value.replace(/\D/g, "").slice(-1);
-                        const next = mfaCode.split("");
-                        next[index] = digit;
-                        setMfaCode(next.join("").slice(0, 6));
+                        // Use the latest state value. Playwright, password
+                        // managers, and fast keyboard entry can update more
+                        // than one digit before React commits the previous
+                        // render; deriving from the closed-over value can
+                        // otherwise submit a stale or incomplete code.
+                        setMfaCode((current) => {
+                          const next = current.split("");
+                          next[index] = digit;
+                          return next.join("").slice(0, 6);
+                        });
                         if (digit && index < 5) mfaInputRefs.current[index + 1]?.focus();
                       }}
                     />

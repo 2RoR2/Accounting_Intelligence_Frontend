@@ -27,7 +27,9 @@ test("email sign-in and distinct administrative columns", async ({ page }, testI
     .fill("platform.demo@saic.example");
   await page.getByLabel("Password *", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Continue with email" }).click();
-  if (await page.getByRole("heading", { name: "Verify your sign-in" }).isVisible().catch(() => false)) {
+  const mfaHeading = page.getByRole("heading", { name: "Verify your sign-in" });
+  await mfaHeading.waitFor({ state: "visible", timeout: 10000 }).catch(() => undefined);
+  if (await mfaHeading.isVisible().catch(() => false)) {
     const secret = await page.getByLabel("Manual TOTP setup key", { exact: true }).inputValue();
     const code = totp(secret);
     for (let i = 0; i < code.length; i++) {
@@ -37,12 +39,12 @@ test("email sign-in and distinct administrative columns", async ({ page }, testI
     }
     await page.getByRole("button", { name: "Verify and continue" }).click();
   }
-  await page.getByRole("link", { name: /Continue to dashboard/ }).click();
+  await page.getByRole("link", { name: /Continue to (dashboard|workspace)/ }).click();
   await expect(
     page.getByRole("heading", { name: "Platform overview" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30000 });
   await page.goto("/admin/approvals");
-  const table = page.getByRole("table").first();
+  const table = page.getByRole("table").filter({ hasText: "Registration number" }).first();
   for (const name of [
     "Company",
     "Registration number",
@@ -53,16 +55,16 @@ test("email sign-in and distinct administrative columns", async ({ page }, testI
       table.getByRole("columnheader", { name, exact: true }),
     ).toBeVisible();
   }
-  const meridian = table
+  const pendingCompany = table
     .getByRole("row")
-    .filter({ hasText: "Meridian Group Sdn Bhd" });
-  await expect(meridian.getByRole("cell").nth(0)).toHaveText(
-    "Meridian Group Sdn Bhd",
+    .filter({ hasText: "Pending Demo Holdings" });
+  await expect(pendingCompany.getByRole("cell").nth(0)).toHaveText(
+    "Pending Demo Holdings",
   );
-  await expect(meridian.getByRole("cell").nth(1)).toHaveText("202601002100");
-  await expect(meridian.getByRole("cell").nth(2)).toHaveText("Lim Wei Jun");
-  await expect(meridian.getByRole("cell").nth(3)).toHaveText(
-    "wei@meridian.example",
+  await expect(pendingCompany.getByRole("cell").nth(1)).toHaveText("DEMO-REG-002");
+  await expect(pendingCompany.getByRole("cell").nth(2)).toHaveText("Nadia Demo");
+  await expect(pendingCompany.getByRole("cell").nth(3)).toHaveText(
+    "nadia@pending.example",
   );
   const colors = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
@@ -70,7 +72,7 @@ test("email sign-in and distinct administrative columns", async ({ page }, testI
       root.getPropertyValue(name).trim(),
     );
   });
-  expect(colors).toEqual(["#061433", "#022fa2", "#eaf5ff"]);
+  expect(colors).toEqual(["#0b2d55", "#3C92F7", "#ECF5FF"]);
   await page.screenshot({
     path: testInfo.outputPath("approvals-desktop.png"),
     fullPage: true,

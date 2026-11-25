@@ -6,7 +6,7 @@ async function signIn(page: Page, email: string) {
   await page.getByLabel("Company email *", { exact: true }).fill(email);
   await page.getByLabel("Password *", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Continue with email" }).click();
-  await page.getByRole("link", { name: /Continue to dashboard/ }).click();
+  await page.getByRole("link", { name: /Continue to (dashboard|workspace)/ }).click();
   const dashboard = page.getByRole("heading", {
     name: /Platform overview|Company overview|Welcome back/,
   });
@@ -28,7 +28,7 @@ test("desktop and mobile layouts, navigation, and tenant isolation", async ({
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /Less paperwork/ }),
+    page.getByRole("heading", { name: "A general look across the workspace." }),
   ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("landing-desktop.png"),

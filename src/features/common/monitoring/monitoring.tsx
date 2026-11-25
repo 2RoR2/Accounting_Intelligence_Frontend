@@ -11,7 +11,7 @@ import {
 } from "@/lib/api/processing.service";
 import { getDocuments } from "@/lib/api/document.service";
 import { getTenants } from "@/lib/api/tenant.service";
-import { getAuditLogs } from "@/lib/api/audit.service";
+import { getAiAudit, getAuditLogs } from "@/lib/api/audit.service";
 import { downloadCsv } from "@/lib/api/record.service";
 import {
   Badge,
@@ -241,6 +241,7 @@ export function AuditPage({
     () => getAuditLogs(user),
     user.id,
   );
+  const aiAudit = useResource(() => getAiAudit(user), user.id);
   const [search, setSearch] = useState("");
   const [action, setAction] = useState("");
   if (loading) return <LoadingState />;
@@ -323,6 +324,31 @@ export function AuditPage({
           ]}
         />
       </Panel>
+      {user.role !== "ACCOUNTANT" && (
+        <Panel>
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">AI GOVERNANCE</span>
+              <h2>AI call audit</h2>
+            </div>
+            <p>Metadata only: prompts, OCR text, and model payloads are never shown.</p>
+          </div>
+          {aiAudit.loading ? <LoadingState /> : aiAudit.error ? <ErrorState message={aiAudit.error} retry={aiAudit.refresh} /> : (
+            <DataTable
+              rows={aiAudit.data ?? []}
+              rowKey={(a) => a.id}
+              columns={[
+                { label: "Date", render: (a) => formatDate(a.timestamp) },
+                { label: "Document", render: (a) => a.documentCode },
+                { label: "Provider / model", render: (a) => `${a.provider ?? "local"} / ${a.model ?? "n/a"}` },
+                { label: "Seconds", render: (a) => a.seconds ?? "—" },
+                { label: "Tokens", render: (a) => `${a.promptTokens ?? 0} + ${a.completionTokens ?? 0}` },
+                { label: "Outcome", render: (a) => a.outcome },
+              ]}
+            />
+          )}
+        </Panel>
+      )}
     </>
   );
 }
