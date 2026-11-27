@@ -1,0 +1,87 @@
+/* AI Inbox page and Fraud Shield chip, panel and approve-anyway form. */
+.ai-group { margin: 0 0 24px; }
+.ai-group-head { margin: 0 0 10px; }
+.ai-group-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 700; }
+.ai-group-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted, #526176); }
+.ai-group-count { display: inline-block; min-width: 22px; padding: 1px 8px; border-radius: 999px; background: #e8f1fe; color: #1d4f9a; font-size: 12px; font-weight: 700; text-align: center; }
+
+.ai-card { margin: 0 0 12px; padding: 14px 16px; border: 1px solid var(--border, #dfe5ed); border-left: 4px solid #3c92f7; border-radius: 12px; background: #fff; }
+.ai-card h3 { margin: 0 0 6px; font-size: 15px; line-height: 1.35; }
+.ai-why { margin: 0 0 8px; font-size: 13.5px; line-height: 1.5; color: #34445a; }
+.ai-evidence { display: grid; gap: 4px; margin: 0 0 10px; padding: 8px 10px; list-style: none; border-radius: 8px; background: #f6f8fb; font-size: 13px; }
+.ai-evidence li { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.ai-evidence li > span { min-width: 130px; color: var(--muted, #526176); }
+.ai-evidence a { font-weight: 600; overflow-wrap: anywhere; }
+.ai-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 6px; }
+.ai-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.ai-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: #eaf7ef; color: #14532d; font-size: 13.5px; }
+
+.ai-draft { margin: 0 0 10px; border: 1px dashed #b8c6da; border-radius: 10px; padding: 10px 12px; background: #fbfcfe; }
+.ai-draft-head { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0 0 6px; font-size: 13px; }
+.ai-draft-head dt { color: var(--muted, #526176); }
+.ai-draft-head dd { margin: 0; overflow-wrap: anywhere; }
+.ai-draft-body { margin: 0 0 8px; white-space: pre-wrap; font: inherit; font-size: 13.5px; line-height: 1.5; }
+.ai-draft-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ai-draft-actions small { color: var(--muted, #526176); }
+
+.ai-confirm { display: grid; gap: 8px; padding: 16px 20px 18px; min-width: min(480px, 86vw); }
+.ai-confirm p { margin: 0; }
+.ai-confirm-action { font-size: 15px; }
+.ai-confirm-call span { color: var(--muted, #526176); font-size: 13px; }
+.ai-confirm-call code, .ai-confirm-calls code { display: inline-block; padding: 2px 6px; border-radius: 6px; background: #eef2f7; font-size: 12.5px; overflow-wrap: anywhere; }
+.ai-confirm-details { margin: 0; padding: 8px 10px 8px 26px; border-radius: 8px; background: #f6f8fb; font-size: 13px; overflow-wrap: anywhere; }
+.ai-confirm-error { padding: 8px 10px; border-radius: 8px; background: #fdf0ef; color: #7a1d18; font-size: 13px; }
+.ai-confirm-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+/* Fraud Shield */
+.shield-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid transparent; border-radius: 999px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.shield-chip:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 2px; }
+.shield-chip.is-clear { background: #e6f5ec; border-color: #9bd3b2; color: #14532d; }
+.shield-chip.is-amber { background: #fff4d9; border-color: #e5b04f; color: #6b4300; }
+.shield-chip.is-red { background: #fde8e6; border-color: #e08a84; color: #8a1c15; }
+.shield-chip.is-unknown { background: #eef2f7; border-color: #c5d0de; color: #34445a; }
+
+.shield-panel, .shield-anyway { display: grid; gap: 10px; padding: 16px 20px 18px; min-width: min(520px, 88vw); max-height: 70vh; overflow-y: auto; }
+.shield-panel p, .shield-anyway p { margin: 0; }
+.shield-flags { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.shield-flag { padding: 10px 12px; border: 1px solid #e3e9f1; border-left-width: 4px; border-radius: 10px; background: #fff; }
+.shield-flag.is-high { border-left-color: #c2413b; background: #fdf3f2; }
+.shield-flag.is-medium { border-left-color: #d99a27; background: #fff9ec; }
+.shield-flag.is-low { border-left-color: #8ba3c4; }
+.shield-flag-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.shield-sev { padding: 1px 7px; border-radius: 6px; background: #e4e9f1; color: #34445a; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.is-high .shield-sev { background: #c2413b; color: #fff; }
+.is-medium .shield-sev { background: #d99a27; color: #2b1a00; }
+.shield-evidence { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.shield-evidence li { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.shield-evidence li > span { min-width: 120px; color: var(--muted, #526176); }
+.shield-action { margin: 8px 0 0 !important; font-size: 13px; }
+.shield-note { color: var(--muted, #526176); }
+.shield-anyway label { font-weight: 600; font-size: 13.5px; }
+.shield-anyway textarea { width: 100%; font: inherit; }
+.shield-anyway small { color: var(--muted, #526176); }
+.shield-anyway-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+.app-shell.theme-dark .ai-card, .app-shell.theme-dark .shield-flag, .app-shell.theme-dark .ai-draft { background: #142235; border-color: #2b3d57; }
+.app-shell.theme-dark .ai-why { color: #d3e2f5; }
+.app-shell.theme-dark .ai-evidence, .app-shell.theme-dark .ai-confirm-details { background: #1b2c44; }
+.app-shell.theme-dark .ai-group-count { background: #1f3a5f; color: #cfe3ff; }
+.app-shell.theme-dark .ai-confirm-call code { background: #1b2c44; }
+.app-shell.theme-dark .ai-notice { background: #153a27; color: #c8f0d6; }
+.app-shell.theme-dark .ai-confirm-error { background: #3d1f22; color: #ffd4d0; }
+.app-shell.theme-dark .shield-flag.is-high { background: #3d1f22; }
+.app-shell.theme-dark .shield-flag.is-medium { background: #3b2e14; }
+.app-shell.theme-dark .shield-chip.is-clear { background: #153a27; border-color: #2f7a52; color: #c8f0d6; }
+.app-shell.theme-dark .shield-chip.is-amber { background: #3b2e14; border-color: #a9791f; color: #ffe2a3; }
+.app-shell.theme-dark .shield-chip.is-red { background: #3d1f22; border-color: #a8453f; color: #ffd4d0; }
+.app-shell.theme-dark .shield-chip.is-unknown { background: #1b2c44; border-color: #3a5273; color: #d3e2f5; }
+
+/* Severity tag, bank-match basis tags and the call list in the confirm step. */
+.ai-sev { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 6px; background: #e4e9f1; color: #34445a; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; vertical-align: 2px; }
+.ai-sev.is-high { background: #c2413b; color: #fff; }
+.ai-sev.is-medium { background: #d99a27; color: #2b1a00; }
+.ai-basis { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.ai-basis span { padding: 1px 8px; border-radius: 999px; background: #e8f1fe; color: #1d4f9a; font-size: 12px; font-weight: 600; }
+.ai-confirm-text { font-size: 14px; }
+.ai-confirm-calls { display: grid; gap: 4px; max-height: 180px; margin: 0; padding: 0 0 0 22px; overflow-y: auto; font-size: 13px; }
+.app-shell.theme-dark .ai-basis span { background: #1f3a5f; color: #cfe3ff; }
