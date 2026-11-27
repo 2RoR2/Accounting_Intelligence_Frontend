@@ -46,6 +46,7 @@ import { useResource } from "@/features/common/hooks/use-resource";
 import { HelpCenter } from "@/features/common/help/help-center";
 import { getNotifications, markNotificationRead } from "@/lib/api/workflow.service";
 import { Modal } from "@/components/common/ui";
+import { AskAssistantButton, AssistantHost } from "@/features/common/assistant";
 import Image from "next/image";
 import accordAiLogo from "@/images/AccordAI_logo.png";
 
@@ -501,6 +502,7 @@ export function AppShell({
           </div>
           {!isAdmin && <GlobalSearch base={`/${prefix}`} />}
           <div className="topbar-right">
+            {(isAccountant || isCompanyAdmin) && <AskAssistantButton />}
             <button type="button" className="theme-toggle btn small" aria-label={`Theme: ${themePreference}. Click to change`} title="Change theme" onClick={cycleTheme}>
               {darkMode ? <Sun size={15} /> : <Moon size={15} />}
               {themePreference === "system" ? "System" : darkMode ? "Light mode" : "Dark mode"}
@@ -653,6 +655,7 @@ export function AppShell({
             </button>
           </footer>
         </main>
+        {(isAccountant || isCompanyAdmin) && <AssistantHost user={user} pathname={pathname} />}
         {helpOpen && (
           <Modal title="Help & support" onClose={() => setHelpOpen(false)}>
             <HelpCenter compact />
