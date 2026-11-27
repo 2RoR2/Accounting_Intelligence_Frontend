@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { ArrowUpRight, FileText, Info, ShieldAlert } from "lucide-react";
-import type { ReactNode } from "react";
-import { FALLBACK_NOTE, formatFactValue, safeHref, splitAnswer } from "./assistant-logic";
+import { useState, type ReactNode } from "react";
+import { FALLBACK_NOTE, dropListedFacts, formatFactValue, safeHref, splitAnswer } from "./assistant-logic";
 import type { AssistantAnswer, AssistantFact } from "./types";
 
 /**
@@ -53,6 +53,27 @@ export function SourcesList({ citations, onNavigate }: { citations: AssistantAns
   );
 }
 
+const FACTS_SHOWN = 6;
+
+/** The figures the text does not place inline: a compact list, the first six, with the rest one click away. */
+function FactsList({ facts, onNavigate }: { facts: AssistantFact[]; onNavigate?: () => void }) {
+  const [all, setAll] = useState(false);
+  if (!facts.length) return null;
+  const shown = all ? facts : facts.slice(0, FACTS_SHOWN);
+  return (
+    <>
+      <ul className="ask-facts" aria-label="Figures from your books">
+        {shown.map((fact) => <li key={fact.id}><Chip fact={fact} onNavigate={onNavigate} /></li>)}
+      </ul>
+      {facts.length > FACTS_SHOWN && (
+        <button type="button" className="ask-more" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? "Show fewer figures" : `Show ${facts.length - FACTS_SHOWN} more figures`}
+        </button>
+      )}
+    </>
+  );
+}
+
 export function AnswerView({ answer, onNavigate, onAsk, disabled }: {
   answer: AssistantAnswer;
   onNavigate?: () => void;
@@ -60,7 +81,7 @@ export function AnswerView({ answer, onNavigate, onAsk, disabled }: {
   onAsk?: (question: string) => void;
   disabled?: boolean;
 }) {
-  const { segments, loose } = splitAnswer(answer.answer, answer.facts);
+  const { segments, loose } = splitAnswer(dropListedFacts(answer.answer, answer.facts), answer.facts);
   const refused = answer.refused;
   return (
     <article className={`ask-answer${refused ? " is-refused" : ""}${answer.fallback ? " is-fallback" : ""}`} aria-label={refused ? "AccordAI cannot help with this" : "AccordAI answer"}>
@@ -72,11 +93,8 @@ export function AnswerView({ answer, onNavigate, onAsk, disabled }: {
           ? <span key={index}>{segment.text}</span>
           : <Chip key={index} fact={segment.fact} inline onNavigate={onNavigate} />)}
       </p>
-      {loose.length > 0 && (
-        <ul className="ask-facts" aria-label="Figures from your books">
-          {loose.map((fact) => <li key={fact.id}><Chip fact={fact} onNavigate={onNavigate} /></li>)}
-        </ul>
-      )}
+      <FactsList facts={loose} onNavigate={onNavigate} />
+
       <SourcesList citations={answer.citations} onNavigate={onNavigate} />
       {answer.toolsUsed.length > 0 && (
         <details className="ask-how">

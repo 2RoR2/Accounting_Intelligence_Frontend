@@ -138,8 +138,13 @@
 .app-shell .ask-panel a.ask-chip:not(.nav-item):not(.btn) { color: var(--ask-chip-ink) !important; text-decoration: none !important; }
 .app-shell .ask-panel a.ask-chip:not(.nav-item):not(.btn):hover { background: var(--ask-chip-border); border-color: var(--ask-accent); transform: translateY(-1px); }
 .ask-chip.is-static { cursor: default; }
-.ask-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.ask-facts .ask-chip { padding: 6px 11px; border-radius: 12px; flex-wrap: wrap; }
+.ask-panel .ask-facts { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.ask-facts .ask-chip { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 11px; border-radius: 10px; }
+.ask-facts .ask-chip-label { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.ask-facts .ask-chip strong { flex: none; text-align: right; white-space: nowrap; }
+.ask-facts .ask-chip-arrow { margin-left: -4px; }
+.ask-more { margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--ask-accent-strong); }
+.ask-more:hover { text-decoration: underline; }
 
 .ask-sources { margin-top: 14px; padding-top: 11px; border-top: 1px dashed var(--ask-border); }
 .ask-sources h4 { margin-bottom: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ask-muted); }
@@ -188,7 +193,7 @@
 @keyframes ask-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .ask-empty h3 { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: var(--ask-ink); }
 .ask-empty > p { max-width: 330px; margin-top: 6px; font-size: 13px; color: var(--ask-muted); }
-.ask-suggest { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 22px; text-align: left; }
+.ask-panel .ask-suggest { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 22px; text-align: left; }
 .ask-suggest button { width: 100%; display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; font-size: 13.5px; text-align: left; color: var(--ask-ink); background: var(--ask-surface); border: 1px solid var(--ask-border); border-radius: 12px; cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast); }
 .ask-suggest button svg { flex: none; margin-top: 3px; color: var(--ask-accent-strong); }
 .ask-suggest button:hover:not(:disabled) { border-color: var(--ask-accent); background: var(--ask-chip-bg); transform: translateY(-1px); }

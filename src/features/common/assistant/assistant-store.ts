@@ -210,10 +210,11 @@ export function createAssistantStore(client: AssistantClient = defaultClient, ge
       const changed = key !== storageKey;
       storageKey = key;
       state = { ...state, hosted: true, page };
-      if (changed) state = { ...state, turns: load(), availability: "checking", suggestions: {}, pinned: null };
+      if (changed) state = { ...state, turns: load(), availability: "checking", suggestions: {}, pinned: null, open: false };
       emit();
       void ensureSuggestions(page);
-      return () => set({ hosted: false, open: false });
+      // The shell remounts when the user opens another area, and the panel should stay open through that.
+      return () => set({ hosted: false });
     },
     setPage(page: string) {
       if (page === state.page) return;

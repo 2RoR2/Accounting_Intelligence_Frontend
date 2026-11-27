@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 // tsx compiles JSX with the classic runtime; the components rely on Next's automatic one.
 (globalThis as { React?: typeof React }).React = React;
 import { AnswerView, FactChip, SourcesList } from "../src/features/common/assistant/answer-view";
-import { composerKeyAction, formatFactValue, normaliseAnswer, pageFromPath, safeHref, splitAnswer, wireContext } from "../src/features/common/assistant/assistant-logic";
+import { composerKeyAction, dropListedFacts, formatFactValue, normaliseAnswer, pageFromPath, safeHref, splitAnswer, wireContext } from "../src/features/common/assistant/assistant-logic";
 import { AskButtonView, ExplainThisButton } from "../src/features/common/assistant/assistant-panel";
 import { createAssistantStore, friendlyError, type AssistantClient, type TextStorage } from "../src/features/common/assistant/assistant-store";
 import { mockAsk, mockSuggestions, mockTiming } from "../src/features/common/assistant/mock";
@@ -94,11 +94,42 @@ test("a figure reads 'RM 18,420.00', '6 bills' or '12%', and the unit is never d
 test("the backend's units read naturally: MYR gets 'RM' and thousands separators, count, date and text are shown as sent", () => {
   assert.equal(formatFactValue({ value: "4210.00", unit: "MYR" }), "RM 4,210.00");
   assert.equal(formatFactValue({ value: "1234567.50", unit: "MYR" }), "RM 1,234,567.50");
-  assert.equal(formatFactValue({ value: "-3160.00", unit: "MYR" }), "RM -3,160.00");
+  assert.equal(formatFactValue({ value: "-3160.00", unit: "MYR" }), "-RM 3,160.00");
   assert.equal(formatFactValue({ value: "6", unit: "count" }), "6");
   assert.equal(formatFactValue({ value: "2026-12-04", unit: "date" }), "2026-12-04");
   assert.equal(formatFactValue({ value: "Seladah Utilities", unit: "text" }), "Seladah Utilities");
   assert.equal(formatFactValue({ value: "n/a", unit: "MYR" }), "RM n/a", "a value that is not a plain number is left alone");
+});
+
+test("a rule-based answer's '- label: value' lines are shown once, as the figures below them", () => {
+  const facts: AssistantAnswer["facts"] = [
+    { id: "f1", label: "Bills due in the next 7 days", value: "6", unit: "count", href: "/workspace/reports?report=ageing" },
+    { id: "f2", label: "Total due", value: "21703.75", unit: "MYR", href: "/workspace/reports?report=ageing" },
+    { id: "f3", label: "Change in income", value: "-2200.70", unit: "MYR", href: null },
+  ];
+  const text = "Here are the figures from the ageing report:\n- Bills due in the next 7 days: 6\n- Total due: RM 21,703.75\n- Change in income: -RM 2,200.70\n- A note the facts do not cover: 5\n\nMore figures are listed below.";
+  assert.equal(dropListedFacts(text, facts), "Here are the figures from the ageing report:\n- A note the facts do not cover: 5\n\nMore figures are listed below.");
+  assert.equal(dropListedFacts("No list here", facts), "No list here");
+  assert.equal(dropListedFacts(text, []), text, "with no facts nothing is dropped");
+  // A line whose value differs from the fact's stays, so a mismatch is never hidden.
+  assert.match(dropListedFacts("Intro\n- Total due: RM 99.00", facts), /RM 99\.00/);
+  const html = renderToStaticMarkup(createElement(AnswerView, { answer: answer({ answer: text, facts }) }));
+  assert.equal((html.match(/>RM 21,703\.75</g) ?? []).length, 1, "the figure is shown once (the chip's aria-label is the only other mention)");
+  assert.match(html, /-RM 2,200\.70/);
+});
+
+test("more than six loose figures start collapsed, with the rest one click away", () => {
+  const facts = Array.from({ length: 9 }, (_, i) => ({ id: `f${i + 1}`, label: `Figure ${i + 1}`, value: `${i + 1}`, unit: "count", href: null }));
+  const html = renderToStaticMarkup(createElement(AnswerView, { answer: answer({ answer: "Here you go.", facts }) }));
+  assert.equal((html.match(/class="ask-chip is-static"/g) ?? []).length, 6);
+  assert.match(html, /Show 3 more figures/);
+  assert.doesNotMatch(renderToStaticMarkup(createElement(AnswerView, { answer: answer({ answer: "Here you go.", facts: facts.slice(0, 6) }) })), /more figures/);
+});
+
+test("a fact label that carries the server's 'text hidden' notice is shown as plain text", () => {
+  const label = "Supplier [text hidden: it reads like an instruction; open the record to see it]";
+  const html = renderToStaticMarkup(createElement(AnswerView, { answer: answer({ answer: "Done.", facts: [{ id: "f1", label, value: "1", unit: "count", href: "/workspace/purchases/abc" }] }) }));
+  assert.match(html, /text hidden: it reads like an instruction/);
 });
 
 test("the context sent to the backend includes the document id, and nothing it would reject", () => {
@@ -339,6 +370,21 @@ test("an Explain request made before the first check answers is held, then sent"
   await store.settled();
   assert.equal(store.getState().open, true);
   assert.equal(asked[0].question, "Explain this");
+});
+
+test("the panel stays open when the shell remounts on another page, and closes for a different user", async () => {
+  const store = createAssistantStore(fakeClient().client, () => memoryStorage());
+  const unmount = store.mount("u1", "dashboard");
+  await store.settled();
+  store.open();
+  unmount();
+  assert.equal(store.getState().hosted, false);
+  assert.equal(store.getState().open, true, "kept for the next page");
+  store.mount("u1", "reports");
+  assert.equal(store.getState().open, true);
+  assert.equal(store.getState().page, "reports");
+  store.mount("u2", "dashboard");
+  assert.equal(store.getState().open, false, "another user never inherits an open panel");
 });
 
 test("without a mounted panel (a super admin, a public page) openAssistant does nothing", () => {

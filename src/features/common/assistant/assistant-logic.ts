@@ -111,8 +111,27 @@ export function formatFactValue(fact: Pick<AssistantFact, "value" | "unit">): st
   const lower = fact.value.toLowerCase();
   if (lower.startsWith(unit.toLowerCase()) || lower.endsWith(unit.toLowerCase())) return fact.value;
   if (unit === "%") return `${fact.value}%`;
-  if (CURRENCY_UNIT.test(unit)) return `${/^MYR$/i.test(unit) ? "RM" : unit.toUpperCase()} ${groupThousands(fact.value)}`;
+  if (CURRENCY_UNIT.test(unit)) {
+    // A negative amount reads "-RM 2,200.70", the way the server words it in the text.
+    const grouped = groupThousands(fact.value);
+    const sign = grouped.startsWith("-") ? "-" : "";
+    return `${sign}${/^MYR$/i.test(unit) ? "RM" : unit.toUpperCase()} ${sign ? grouped.slice(1) : grouped}`;
+  }
   return `${fact.value} ${unit}`;
+}
+
+/**
+ * A rule-based answer lists its figures as "- label: value" lines, and the same figures come back as facts (with links).
+ * A list line that is exactly one fact (its label and its formatted value both appear in it) is dropped from the text,
+ * because the fact is shown below it; every other line stays. Nothing is hidden: a dropped line is always shown as the fact.
+ */
+export function dropListedFacts(answer: string, facts: AssistantFact[]): string {
+  if (!facts.length || !answer.includes("\n- ")) return answer;
+  const kept = answer.split("\n").filter((line) => {
+    if (!line.startsWith("- ")) return true;
+    return !facts.some((fact) => line.includes(fact.label) && line.includes(formatFactValue(fact)));
+  });
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** What an Enter key does in the composer: Enter sends, Shift+Enter adds a line, composing text (IME) is left alone. */
