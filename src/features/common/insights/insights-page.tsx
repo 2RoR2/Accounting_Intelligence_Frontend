@@ -9,7 +9,7 @@ import { AnomalyList, BucketTable, CategoryDonut, ForecastChart, KpiRow, Supplie
 import { CommentarySection } from "./commentary-card";
 import { getInsightsCommentary, getInsightsOverview, HORIZONS, type Horizon, type InsightsOverview } from "./insights-api";
 import { currentPeriod, isPeriod, periodLabel, shiftPeriod } from "./insights-data";
-import { openAssistant, useAssistantAvailable } from "./open-assistant";
+import { openAssistant, useAssistantAvailable } from "@/features/common/assistant";
 import "./insights.css";
 
 function HorizonToggle({ days, onChange }: { days: Horizon; onChange: (days: Horizon) => void }) {
