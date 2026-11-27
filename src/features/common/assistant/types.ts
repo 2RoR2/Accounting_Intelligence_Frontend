@@ -23,11 +23,16 @@ export type AssistantAnswer = {
   fallback: boolean;
   suggestions: string[];
   auditId: string | null;
+  /** Names of the read-only report tools the answer used, in order (shown under "How this was answered"). */
+  toolsUsed: string[];
+  /** The model that wrote the answer; null for a rule-based answer or a refusal made without the model. */
+  model: string | null;
 };
 
-/** What the backend accepts as page context. */
+/** What the backend accepts as page context (it rejects any other key with 422). */
 export type AssistantContext = {
   page?: string;
+  documentId?: string;
   recordId?: string;
   reportType?: string;
   period?: string;

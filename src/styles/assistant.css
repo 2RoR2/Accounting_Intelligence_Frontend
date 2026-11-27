@@ -150,6 +150,10 @@
 .app-shell .ask-panel .ask-sources li a:not(.nav-item):not(.btn) { color: var(--ask-accent-strong) !important; }
 .app-shell .ask-panel .ask-sources li a:not(.nav-item):not(.btn):hover { text-decoration: underline; }
 
+.ask-how { margin-top: 10px; font-size: 12px; color: var(--ask-muted); }
+.ask-how summary { cursor: pointer; font-weight: 700; width: fit-content; }
+.ask-how summary:focus-visible { outline: 2px solid var(--ask-accent); outline-offset: 2px; }
+.ask-how p { margin-top: 5px; line-height: 1.55; }
 .ask-answer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
 .ask-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 11.5px; font-weight: 700; color: var(--ask-warn-ink); background: var(--ask-warn-bg); border: 1px solid var(--ask-warn-border); border-radius: 999px; }
 .ask-audit { font-size: 11px; color: var(--ask-muted); font-variant-numeric: tabular-nums; }

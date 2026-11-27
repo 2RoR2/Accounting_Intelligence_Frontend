@@ -78,6 +78,15 @@ export function AnswerView({ answer, onNavigate, onAsk, disabled }: {
         </ul>
       )}
       <SourcesList citations={answer.citations} onNavigate={onNavigate} />
+      {answer.toolsUsed.length > 0 && (
+        <details className="ask-how">
+          <summary>How this was answered</summary>
+          <p>
+            Read from your books with {answer.toolsUsed.map((tool) => tool.replaceAll("_", " ")).join(", then ")}.
+            {answer.model ? ` Worded by ${answer.model}; every figure is the database's, not the model's.` : " No AI model was used; every figure is the database's."}
+          </p>
+        </details>
+      )}
       {(answer.fallback || answer.auditId) && (
         <footer className="ask-answer-foot">
           {answer.fallback && (

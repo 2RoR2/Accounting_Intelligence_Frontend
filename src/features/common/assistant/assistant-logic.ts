@@ -57,6 +57,10 @@ export function normaliseAnswer(raw: unknown): AssistantAnswer {
     fallback: data.fallback === true,
     suggestions,
     auditId: text(data.auditId, 80) || null,
+    toolsUsed: (Array.isArray(data.toolsUsed) ? data.toolsUsed : [])
+      .filter((item): item is string => typeof item === "string" && /^[a-z0-9_]{1,40}$/i.test(item))
+      .slice(0, 8),
+    model: text(data.model, 80) || null,
   };
 }
 
@@ -89,14 +93,26 @@ export function splitAnswer(answer: string, facts: AssistantFact[]): { segments:
 
 const CURRENCY_UNIT = /^(RM|MYR|SGD|USD|EUR|GBP|CNY|JPY|AUD|THB|IDR|\$|€|£)$/i;
 
-/** "RM 18,420.00", "42 bills", "12%": the unit goes before a currency and after anything else, never twice. */
+/** "4210.00" becomes "4,210.00". String work only: the digits are the server's, nothing is calculated here. */
+function groupThousands(value: string): string {
+  const match = /^(-?)(\d+)(\.\d+)?$/.exec(value.trim());
+  if (!match) return value;
+  return `${match[1]}${match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${match[3] ?? ""}`;
+}
+
+/**
+ * How a fact reads. The backend sends the unit `MYR` with a plain two-decimal string ("4210.00") → "RM 4,210.00";
+ * `count`, `date` and `text` are shown as sent. Any other unit goes before a currency and after anything else
+ * ("6 bills", "12%"), and is never shown twice.
+ */
 export function formatFactValue(fact: Pick<AssistantFact, "value" | "unit">): string {
   const unit = fact.unit?.trim();
-  if (!unit) return fact.value;
+  if (!unit || /^(count|date|text)$/i.test(unit)) return fact.value;
   const lower = fact.value.toLowerCase();
   if (lower.startsWith(unit.toLowerCase()) || lower.endsWith(unit.toLowerCase())) return fact.value;
   if (unit === "%") return `${fact.value}%`;
-  return CURRENCY_UNIT.test(unit) ? `${unit} ${fact.value}` : `${fact.value} ${unit}`;
+  if (CURRENCY_UNIT.test(unit)) return `${/^MYR$/i.test(unit) ? "RM" : unit.toUpperCase()} ${groupThousands(fact.value)}`;
+  return `${fact.value} ${unit}`;
 }
 
 /** What an Enter key does in the composer: Enter sends, Shift+Enter adds a line, composing text (IME) is left alone. */
@@ -111,9 +127,9 @@ export function pageFromPath(pathname: string): string {
   return pathname.split("/")[2] ?? "";
 }
 
-const CONTEXT_KEYS = ["page", "recordId", "reportType", "period"] as const;
+const CONTEXT_KEYS = ["page", "documentId", "recordId", "reportType", "period"] as const;
 
-/** Only the four documented context keys leave the browser. The panel label stays here. */
+/** Only the documented context keys leave the browser (the backend answers any other key with 422). The label stays here. */
 export function wireContext(context: AssistantContext & { label?: string }): AssistantContext {
   const out: AssistantContext = {};
   for (const key of CONTEXT_KEYS) {

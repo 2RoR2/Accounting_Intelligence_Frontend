@@ -25,6 +25,7 @@ const answer = (patch: Partial<AssistantAnswer> = {}): AssistantAnswer => ({
   ],
   citations: [{ label: "Profit and loss, November 2026", href: "/workspace/reports/profit-and-loss" }, { label: "Supplier bills", href: null }],
   refused: false, fallback: false, suggestions: ["Which bills are due next week?"], auditId: "9f3a1c2e77aa",
+  toolsUsed: ["compare_periods"], model: "gpt-oss-20b",
   ...patch,
 });
 
@@ -69,7 +70,10 @@ test("a response is trimmed to the contract: unknown fields, bad hrefs and dupli
   assert.deepEqual(parsed.facts.map((fact) => [fact.id, fact.href]), [["f1", null], ["f3", "/ok"]]);
   assert.deepEqual(parsed.citations, [{ label: "R", href: null }, { label: "S", href: "/s" }]);
   assert.deepEqual(parsed.suggestions, ["Q1", "Q2", "Q3", "Q4"]);
-  assert.deepEqual(normaliseAnswer(null), { answer: "", facts: [], citations: [], refused: false, fallback: false, suggestions: [], auditId: null });
+  assert.deepEqual(normaliseAnswer(null), { answer: "", facts: [], citations: [], refused: false, fallback: false, suggestions: [], auditId: null, toolsUsed: [], model: null });
+  const extras = normaliseAnswer({ toolsUsed: ["compare_periods", "x; DROP", 5, "ageing"], model: "gpt-oss-20b" });
+  assert.deepEqual(extras.toolsUsed, ["compare_periods", "ageing"]);
+  assert.equal(extras.model, "gpt-oss-20b");
 });
 
 test("{{f1}} markers become chips in place; unknown markers are dropped; unused facts go to the Figures row", () => {
@@ -85,6 +89,32 @@ test("a figure reads 'RM 18,420.00', '6 bills' or '12%', and the unit is never d
   assert.equal(formatFactValue({ value: "6", unit: "bills" }), "6 bills");
   assert.equal(formatFactValue({ value: "12", unit: "%" }), "12%");
   assert.equal(formatFactValue({ value: "42", unit: null }), "42");
+});
+
+test("the backend's units read naturally: MYR gets 'RM' and thousands separators, count, date and text are shown as sent", () => {
+  assert.equal(formatFactValue({ value: "4210.00", unit: "MYR" }), "RM 4,210.00");
+  assert.equal(formatFactValue({ value: "1234567.50", unit: "MYR" }), "RM 1,234,567.50");
+  assert.equal(formatFactValue({ value: "-3160.00", unit: "MYR" }), "RM -3,160.00");
+  assert.equal(formatFactValue({ value: "6", unit: "count" }), "6");
+  assert.equal(formatFactValue({ value: "2026-12-04", unit: "date" }), "2026-12-04");
+  assert.equal(formatFactValue({ value: "Seladah Utilities", unit: "text" }), "Seladah Utilities");
+  assert.equal(formatFactValue({ value: "n/a", unit: "MYR" }), "RM n/a", "a value that is not a plain number is left alone");
+});
+
+test("the context sent to the backend includes the document id, and nothing it would reject", () => {
+  assert.deepEqual(wireContext({ page: "documents", documentId: "0b0e6f5e-1111-4222-8333-444455556666", label: "INV-1", foo: "bar" } as never),
+    { page: "documents", documentId: "0b0e6f5e-1111-4222-8333-444455556666" });
+});
+
+test("the 'How this was answered' note names the tools, and says when no model was used", () => {
+  const withModel = renderToStaticMarkup(createElement(AnswerView, { answer: answer() }));
+  assert.match(withModel, /How this was answered/);
+  assert.match(withModel, /compare periods/);
+  assert.match(withModel, /Worded by gpt-oss-20b/);
+  const rules = renderToStaticMarkup(createElement(AnswerView, { answer: answer({ fallback: true, model: null, toolsUsed: ["cash_position", "ageing"] }) }));
+  assert.match(rules, /cash position, then ageing/);
+  assert.match(rules, /No AI model was used/);
+  assert.doesNotMatch(renderToStaticMarkup(createElement(AnswerView, { answer: answer({ toolsUsed: [] }) })), /How this was answered/);
 });
 
 test("only the four documented context keys are sent, and the page comes from the path", () => {
