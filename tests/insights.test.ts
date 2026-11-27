@@ -95,12 +95,13 @@ test("donut slices cover the ring once, in order, and a lone row is a full ring"
   assert.deepEqual(donutSlices([{ ...rows[0], amount: "0.00" }], 100, 100, 92, 58), []);
 });
 
-test("anomalies attach to their month, and those outside the six months are listed without a marker", () => {
+test("only month anomalies are marked on the trend; supplier anomalies and older months are listed without a marker", () => {
   const { trend, anomalies } = overview();
+  assert.equal(anomalies.find((anomaly) => anomaly.kind === "supplier")?.month, "2026-10");
   const columns = trendColumns(trend, anomalies);
-  assert.deepEqual(columns.map((column) => column.anomalies.length), [0, 0, 0, 0, 1, 1]);
-  const older = { ...anomalies[0], id: "old", month: "2026-01" };
-  assert.deepEqual(unplottedAnomalies(trend, [...anomalies, older]).map((anomaly) => anomaly.id), ["old"]);
+  assert.deepEqual(columns.map((column) => column.anomalies.length), [0, 0, 0, 0, 0, 1]);
+  const older = { ...anomalies[1], id: "old", month: "2026-01" };
+  assert.deepEqual(unplottedAnomalies(trend, [...anomalies, older]).map((anomaly) => anomaly.id), ["a1", "old"]);
 });
 
 test("fact values use the backend's wording, else read from their unit", () => {
@@ -221,7 +222,7 @@ test("a six-month trend with no activity shows an empty message", () => {
 test("the trend marks flagged months and shows each reason as text", () => {
   const { trend, anomalies } = overview();
   const markup = html(createElement(TrendChart, { trend, anomalies }));
-  assert.equal((markup.match(/class="ins-marker"/g) ?? []).length, 2);
+  assert.equal((markup.match(/class="ins-marker"/g) ?? []).length, 1, "the supplier anomaly in October gets no marker");
   assert.match(markup, /Expenses of RM 38,420\.00 in Nov 2026 is higher than the usual RM 31,020\.00/);
   assert.match(markup, /Month to date/);
   const list = html(createElement(AnomalyList, { anomalies }));

@@ -195,13 +195,16 @@ export function donutSlices(rows: SpendRow[], cx: number, cy: number, outer: num
 
 export type TrendColumn = { point: TrendPoint; revenue: number; expenses: number; net: number; anomalies: InsightAnomaly[] };
 
+/** Only whole-month anomalies are marked on the trend; a supplier anomaly is listed as a text row instead. */
+export const isMonthAnomaly = (anomaly: InsightAnomaly) => anomaly.kind === "month";
+
 export function trendColumns(trend: TrendPoint[], anomalies: InsightAnomaly[]): TrendColumn[] {
   return trend.map((point) => ({
     point,
     revenue: Number(point.revenue),
     expenses: Number(point.expenses),
     net: Number(point.net),
-    anomalies: anomalies.filter((anomaly) => anomaly.month === point.month),
+    anomalies: anomalies.filter((anomaly) => isMonthAnomaly(anomaly) && anomaly.month === point.month),
   }));
 }
 
@@ -209,10 +212,10 @@ export function trendIsEmpty(trend: TrendPoint[]): boolean {
   return trend.every((point) => Number(point.revenue) === 0 && Number(point.expenses) === 0 && Number(point.net) === 0);
 }
 
-/** Anomalies whose month is not one of the plotted months: listed, but with no marker on the chart. */
+/** Anomalies with no marker on the chart: supplier anomalies, and month anomalies outside the plotted months. */
 export function unplottedAnomalies(trend: TrendPoint[], anomalies: InsightAnomaly[]): InsightAnomaly[] {
   const months = new Set(trend.map((point) => point.month));
-  return anomalies.filter((anomaly) => !anomaly.month || !months.has(anomaly.month));
+  return anomalies.filter((anomaly) => !isMonthAnomaly(anomaly) || !anomaly.month || !months.has(anomaly.month));
 }
 
 /** A fact's value as the backend wrote it into the text (`display`), else formatted from its unit. */
