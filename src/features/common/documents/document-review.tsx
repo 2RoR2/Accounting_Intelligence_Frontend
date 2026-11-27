@@ -937,7 +937,10 @@ function DocumentReviewPage({
                           onClick={() => hasFraudWarnings(shield) ? setAnywayOpen(true) : decide("approved", "Approved", "Document approved and saved to records.")}>Approve document</button>
                         {anywayOpen && hasFraudWarnings(shield) && <ApproveAnywayDialog flags={shield.flags} prefix={base.slice(1)} busy={busy}
                           onCancel={() => setAnywayOpen(false)}
-                          onConfirm={(reason) => { setAnywayOpen(false); decide("approved", "Approved", "Document approved and saved to records.", () => acknowledgeFraud(documentId, approveAnywayCodes(shield.flags), reason)); }} />}
+                          onConfirm={(reason) => { setAnywayOpen(false); decide("approved", `Approved anyway: ${reason.trim().slice(0, 300)}`, "Document approved and saved to records.",
+                            // The same reason also becomes the decision's note (unless a note was typed), so it shows in the review history.
+                            // A refused acknowledgement (422: a flag changed, or the reason is too short) re-reads the flags.
+                            () => acknowledgeFraud(documentId, approveAnywayCodes(shield.flags), reason).catch((error) => { shield.refresh(); throw error; })); }} />}
                         <button className="btn" disabled={busy || !canDecide} onClick={() => decide("returned", "Returned for changes", "Document returned to the accountant.")}>Return</button>
                         <button className="btn danger" disabled={busy || !canDecide} onClick={() => decide("rejected", "Rejected", "Document rejected.")}>Reject</button>
                         {reasons.length > 0 && <ul className="review-approve-reasons">{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}

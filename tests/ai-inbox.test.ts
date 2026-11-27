@@ -403,7 +403,7 @@ test("the review page asks for the reason before approving a flagged document, a
   // A flagged document opens the reason dialog instead of approving; a clear one approves as before.
   assert.match(review, /hasFraudWarnings\(shield\) \? setAnywayOpen\(true\) : decide\("approved"/);
   // The confirmed reason is acknowledged first; the unchanged decision call follows, and does not run if that fails.
-  assert.match(review, /decide\("approved", "Approved", "Document approved and saved to records\.", \(\) => acknowledgeFraud\(documentId, approveAnywayCodes\(shield\.flags\), reason\)\)/);
+  assert.match(review, /decide\("approved", `Approved anyway: \$\{reason\.trim\(\)\.slice\(0, 300\)\}`, "Document approved and saved to records\.",[\s\S]*?\(\) => acknowledgeFraud\(documentId, approveAnywayCodes\(shield\.flags\), reason\)\.catch\(\(error\) => \{ shield\.refresh\(\); throw error; \}\)\)/);
   assert.match(review, /await before\?\.\(\);\s*await decideDocumentReview\(/);
   // The chip sits in the header; the existing decision call is the only one used.
   assert.match(review, /<ShieldChip shield=\{shield\}/);
