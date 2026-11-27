@@ -244,6 +244,14 @@ test("a template commentary carries the Template, not AI badge and an AI one doe
   assert.match(ai, /AI draft commentary\. Check it against the figures/);
 });
 
+test("the Explain button is hidden when the assistant is not offered", () => {
+  const on = html(createElement(CommentaryBody, { commentary: commentary(), base: BASE, onExplain: noop }));
+  assert.match(on, /Explain this report/);
+  const off = html(createElement(CommentaryBody, { commentary: commentary(), base: BASE, onExplain: noop, canExplain: false }));
+  assert.doesNotMatch(off, /Explain this report/);
+  assert.match(off, /AI month-end commentary/);
+});
+
 test("fact chips show the backend's wording and link to the reports they came from", () => {
   const markup = html(createElement(CommentaryBody, { commentary: commentary(), base: BASE, onExplain: noop }));
   assert.match(markup, /Sales, November 2026/);

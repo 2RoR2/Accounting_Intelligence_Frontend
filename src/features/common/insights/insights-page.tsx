@@ -9,7 +9,7 @@ import { AnomalyList, BucketTable, CategoryDonut, ForecastChart, KpiRow, Supplie
 import { CommentarySection } from "./commentary-card";
 import { getInsightsCommentary, getInsightsOverview, HORIZONS, type Horizon, type InsightsOverview } from "./insights-api";
 import { currentPeriod, isPeriod, periodLabel, shiftPeriod } from "./insights-data";
-import { openAssistant } from "./open-assistant";
+import { openAssistant, useAssistantAvailable } from "./open-assistant";
 import "./insights.css";
 
 function HorizonToggle({ days, onChange }: { days: Horizon; onChange: (days: Horizon) => void }) {
@@ -43,6 +43,7 @@ function InsightsBody({ period, base }: { period: string; base: string }) {
   const overview = useResource(() => getInsightsOverview(period), `insights:${period}`);
   const commentary = useResource(() => getInsightsCommentary(period), `insights-commentary:${period}`);
   const data = overview.data;
+  const canExplain = useAssistantAvailable();
 
   return <>
     {data ? <>
@@ -74,8 +75,11 @@ function InsightsBody({ period, base }: { period: string; base: string }) {
         </div>
       </Panel>
     </> : overview.loading ? <Skeleton /> : <ErrorState message={overview.error || "The insights could not be loaded."} retry={overview.refresh} />}
-    <CommentarySection result={commentary.data} loading={commentary.loading} error={commentary.error} retry={commentary.refresh} base={base}
-      onExplain={() => openAssistant({ context: { kind: "report", period, label: `Insights, ${periodLabel(period)}` } })} />
+    <CommentarySection result={commentary.data} loading={commentary.loading} error={commentary.error} retry={commentary.refresh} base={base} canExplain={canExplain}
+      onExplain={() => openAssistant({
+        context: { page: "insights", period, label: `Insights, ${periodLabel(period)}` },
+        question: "Explain this report",
+      })} />
   </>;
 }
 

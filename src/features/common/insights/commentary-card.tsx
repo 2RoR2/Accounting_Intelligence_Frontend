@@ -26,7 +26,7 @@ export function FactChips({ commentary, factIds, base }: { commentary: Commentar
   </ul>;
 }
 
-export function CommentaryBody({ commentary, base, onExplain }: { commentary: Commentary; base: string; onExplain: () => void }) {
+export function CommentaryBody({ commentary, base, onExplain, canExplain = true }: { commentary: Commentary; base: string; onExplain: () => void; canExplain?: boolean }) {
   return <section className="ins-commentary" aria-labelledby="ins-commentary-title">
     <div className="ins-commentary-head">
       <div>
@@ -39,9 +39,9 @@ export function CommentaryBody({ commentary, base, onExplain }: { commentary: Co
         </div>
         <h2 id="ins-commentary-title">AI month-end commentary</h2>
       </div>
-      <button type="button" className="btn ins-explain" onClick={onExplain}>
+      {canExplain && <button type="button" className="btn ins-explain" onClick={onExplain}>
         <MessageSquareText size={16} aria-hidden="true" /> Explain this report
-      </button>
+      </button>}
     </div>
     {commentary.paragraphs.length === 0
       ? <p className="ins-footnote">There is nothing to comment on for this month yet.</p>
@@ -58,13 +58,14 @@ export function CommentaryBody({ commentary, base, onExplain }: { commentary: Co
 }
 
 /** Loading, failure and the switched-off case. When the AI features are off nothing at all is drawn. */
-export function CommentarySection({ result, loading, error, retry, base, onExplain }: {
+export function CommentarySection({ result, loading, error, retry, base, onExplain, canExplain = true }: {
   result: CommentaryResult | undefined;
   loading: boolean;
   error: string;
   retry: () => void;
   base: string;
   onExplain: () => void;
+  canExplain?: boolean;
 }) {
   if (result?.status === "off") return null;
   if (loading) return <section className="ins-commentary" aria-busy="true" aria-label="AI month-end commentary">
@@ -73,5 +74,5 @@ export function CommentarySection({ result, loading, error, retry, base, onExpla
   if (!result) return <section className="ins-commentary" aria-label="AI month-end commentary">
     <ErrorState message={error || "The commentary could not be loaded."} retry={retry} />
   </section>;
-  return <CommentaryBody commentary={result.commentary} base={base} onExplain={onExplain} />;
+  return <CommentaryBody commentary={result.commentary} base={base} onExplain={onExplain} canExplain={canExplain} />;
 }
