@@ -71,6 +71,9 @@ import { AddMissingInfo, BlockingChecksNotice, DueDateHelper } from "./review/re
 import { addableFields, approvalBlockers, blockingFields, keyFieldsPresent, reviewNoticeChecks } from "./review/key-fields";
 import { useReviewQueue } from "./review/use-review-queue";
 import { PostingPreviewPanel } from "./review/posting-preview";
+import { ApproveAnywayDialog, ShieldChip, ShieldPanel, hasFraudWarnings, useFraudShield } from "@/features/common/inbox/shield";
+import { approveAnywayCodes } from "@/features/common/inbox/inbox-contract";
+import { acknowledgeFraud } from "@/lib/api/inbox.service";
 import { LINE_ITEM_FIELDS, SIGNAL_TEXT, correctionBy, documentTarget, enterAction, failedCheckNames, isToCheck, notFoundEntries, nextAfterSubmit, resolveLineItemField, reviewOrder, reviewShortcut, revisionToSubmit, settleDraft, stableOrder, stepField, suggestedValue, unsavedOutside, visibleEntries, type ReviewSignal, type SavedDraft } from "./review/review-logic";
 import "@/styles/review.css";
 
@@ -356,6 +359,10 @@ function DocumentReviewPage({
   const [failure, setFailure] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  // Fraud Shield (F2): advisory flags for this document. Off (403) when AI_ASSIST is off, and then nothing below shows.
+  const shield = useFraudShield(documentId, data?.doc.contentRevision);
+  const [shieldOpen, setShieldOpen] = useState(false);
+  const [anywayOpen, setAnywayOpen] = useState(false);
   const [comment, setComment] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | undefined>();
   const [selectedLine, setSelectedLine] = useState<{ index: number; key: string; label: string }>();
@@ -707,6 +714,7 @@ function DocumentReviewPage({
         description={`${data.doc.id} · Uploaded ${formatDate(data.doc.createdAt)}`}
         actions={
           <>
+            <ShieldChip shield={shield} onOpen={() => setShieldOpen(true)} />
             <StatusBadge status={data.doc.status} />
             {queue.length > 1 && <span className="review-queue-nav" role="group" aria-label="Documents in this list">
               <button type="button" className="btn small" disabled={!previousId} aria-keyshortcuts="Alt+ArrowLeft" title="Previous document (Alt+Left)" onClick={() => previousId && openDocument(previousId)}>Previous</button>
@@ -720,6 +728,7 @@ function DocumentReviewPage({
         }
       />
 
+      {shieldOpen && <ShieldPanel shield={shield} prefix={base.slice(1)} onClose={() => setShieldOpen(false)} onRetry={shield.refresh} />}
       {failure && <ErrorState message={failure} dismissible onClose={() => setFailure("")} />}
       {data.doc.excludedAt && <SetAsideBanner excludedAt={data.doc.excludedAt} reason={data.doc.excludedReason} documentId={documentId}
         canRestore={user.role === "LOCAL_ADMIN"} onRestored={() => void refresh().then(() => setToast("Restored to the lists."))} />}
@@ -913,15 +922,25 @@ function DocumentReviewPage({
                       const reasons = approvalBlockers({ canDecide, ownSubmission: data.reviews?.submissions[0]?.submittedBy === user.id,
                         report: data.validationReport, blocking: summary.blocking });
                       const revision = data.doc.contentRevision ?? 1;
-                      const decide = (decision: "approved" | "returned" | "rejected", text: string, done: string) =>
+                      // `before` runs first and, if it fails, the decision is not made (the approve-anyway reason must be recorded).
+                      const decide = (decision: "approved" | "returned" | "rejected", text: string, done: string, before?: () => Promise<void>) =>
                         run(async () => {
+                          await before?.();
                           await decideDocumentReview(documentId, decision, note || text, revision);
                           if (decision === "approved") await standardiseDocument(user, documentId).catch((e: Error) => { throw new Error(`Approved, but not saved to records: ${e.message} Use Save to records on the Checks tab.`); });
                         }, done);
                       return <div className="review-admin-decision" role="group" aria-label="Approval decision">
                         {/* Roadmap P10: what approval would do to the books, before the admin decides. */}
                         <PostingPreviewPanel documentId={documentId} revision={revision} />
-                        <button className="btn primary" disabled={busy || reasons.length > 0} onClick={() => decide("approved", "Approved", "Document approved and saved to records.")}>Approve document</button>
+                        {/* Fraud flags advise, they never block: approving past one asks for a reason, kept on the decision's note. */}
+                        <button className="btn primary" disabled={busy || reasons.length > 0}
+                          onClick={() => hasFraudWarnings(shield) ? setAnywayOpen(true) : decide("approved", "Approved", "Document approved and saved to records.")}>Approve document</button>
+                        {anywayOpen && hasFraudWarnings(shield) && <ApproveAnywayDialog flags={shield.flags} prefix={base.slice(1)} busy={busy}
+                          onCancel={() => setAnywayOpen(false)}
+                          onConfirm={(reason) => { setAnywayOpen(false); decide("approved", `Approved anyway: ${reason.trim().slice(0, 300)}`, "Document approved and saved to records.",
+                            // The same reason also becomes the decision's note (unless a note was typed), so it shows in the review history.
+                            // A refused acknowledgement (422: a flag changed, or the reason is too short) re-reads the flags.
+                            () => acknowledgeFraud(documentId, approveAnywayCodes(shield.flags), reason).catch((error) => { shield.refresh(); throw error; })); }} />}
                         <button className="btn" disabled={busy || !canDecide} onClick={() => decide("returned", "Returned for changes", "Document returned to the accountant.")}>Return</button>
                         <button className="btn danger" disabled={busy || !canDecide} onClick={() => decide("rejected", "Rejected", "Document rejected.")}>Reject</button>
                         {reasons.length > 0 && <ul className="review-approve-reasons">{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}

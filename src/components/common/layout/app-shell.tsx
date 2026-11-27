@@ -35,6 +35,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { activeNavItem, jobNavigation, navHref, navParent, type NavIcon, type NavSection } from "./navigation";
+import { useAiNav } from "@/features/common/inbox/use-inbox";
 import { ruleSentence } from "@/lib/glossary";
 import { GlobalSearch } from "./global-search";
 import type { User } from "@/types";
@@ -268,6 +269,8 @@ export function AppShell({
   const isAdmin = user.role === "SUPER_ADMIN";
   const isCompanyAdmin = user.role === "LOCAL_ADMIN";
   const isAccountant = user.role === "ACCOUNTANT";
+  // AI Inbox and Insights links: shown only once the backend confirms AI_ASSIST is on (it answers 403 otherwise).
+  const aiNav = useAiNav(!isAdmin);
   const prefix = isAdmin
     ? "admin"
     : isCompanyAdmin
@@ -280,7 +283,7 @@ export function AppShell({
         { label: "Overview", items: [{ label: "Dashboard", page: "dashboard", icon: "today" }] },
         { label: "Workspace", items: adminNav.filter((item) => item[1] !== "dashboard").map(([label, page]) => ({ label, page, icon: "today" as const })) },
       ]
-    : jobNavigation(user.role);
+    : jobNavigation(user.role, aiNav.available);
   const adminIcon = (page: string) => adminNav.find((item) => item[1] === page)?.[2] ?? LayoutDashboard;
   const homeHref = `/${prefix}/dashboard`;
 
@@ -396,7 +399,9 @@ export function AppShell({
             {section.label && section.items.length > 1 && <div className="nav-group-heading">{section.label}</div>}
             {section.items.map((item) => {
               const Icon = isAdmin ? adminIcon(item.page) : NAV_ICONS[item.icon];
-              const countFor = (entry: typeof item) => entry.count === "exceptions" || (isAdmin && entry.page === "exceptions")
+              const countFor = (entry: typeof item) => entry.count === "ai-inbox"
+                ? (aiNav.count > 0 ? aiNav.count : undefined)
+                : entry.count === "exceptions" || (isAdmin && entry.page === "exceptions")
                 ? (openExceptions.length > 0 ? openExceptions.length : undefined)
                 : isAdmin && entry.page === "approvals" && (data.data?.pending ?? 0) > 0
                   ? data.data?.pending

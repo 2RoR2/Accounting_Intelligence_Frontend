@@ -10,7 +10,7 @@ export interface NavItem {
   /** Optional query that pre-filters the page, e.g. "tab=purchase-bills". */
   query?: string;
   icon: NavIcon;
-  count?: "exceptions";
+  count?: "exceptions" | "ai-inbox";
   /** Sub-items: the entry becomes an expandable group (it has no page of its own). */
   children?: NavItem[];
 }
@@ -82,11 +82,25 @@ const ADMIN_ITEM: NavItem = { label: "Admin", page: "approvals", icon: "approve"
   leaf("System", "system"),
 ] };
 
-export function jobNavigation(role?: string): NavSection[] {
-  if (role !== "LOCAL_ADMIN") return SECTIONS;
+/**
+ * AI Inbox and Insights (AI features F2/F3/F4). Shown only when the assistant is on (`ai`): the backend answers 403
+ * for both when AI_ASSIST is off. The Insights pages live under `insights` in both areas.
+ */
+const AI_ITEMS: NavItem[] = [
+  { label: "AI Inbox", page: "ai-inbox", icon: "approve", count: "ai-inbox" },
+  { label: "Insights", page: "insights", icon: "reports" },
+];
+
+export function jobNavigation(role?: string, ai = false): NavSection[] {
+  if (role !== "LOCAL_ADMIN" && !ai) return SECTIONS;
   const [main] = SECTIONS;
-  const settings = main.items.length - 1; // Admin sits just above Settings
-  return [{ ...main, items: [...main.items.slice(0, settings), ADMIN_ITEM, ...main.items.slice(settings)] }];
+  // The AI links sit right under Dashboard.
+  let items = ai ? [main.items[0], ...AI_ITEMS, ...main.items.slice(1)] : main.items;
+  if (role === "LOCAL_ADMIN") {
+    const settings = items.length - 1; // Admin sits just above Settings
+    items = [...items.slice(0, settings), ADMIN_ITEM, ...items.slice(settings)];
+  }
+  return [{ ...main, items }];
 }
 
 /** Every entry that opens a page: plain items and sub-items (groups themselves are not links). */
