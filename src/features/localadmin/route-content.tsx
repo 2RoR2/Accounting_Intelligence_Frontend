@@ -21,6 +21,8 @@ import { LedgerPage } from "@/features/common/ledger/ledger-page";
 import { ValidationOverviewPage } from "@/features/common/validation/validation-overview";
 import { AccountingReportsPage } from "@/features/common/reports/accounting-reports";
 import { SystemPage } from "@/features/localadmin/system-page";
+import { AiInboxPage } from "@/features/common/inbox/ai-inbox-page";
+import "@/styles/ai-inbox.css";
 
 import type { User } from "@/types";
 
@@ -35,6 +37,8 @@ export function LocalAdminRoutes({ path, user }: { path: string[]; user: User })
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;
+    // AI Inbox (F3). The Insights pages (FE-3) add their own case.
+    case "ai-inbox": return <AiInboxPage user={user} />;
     case "contacts": return <ContactsPage user={user} contactId={id} />;
     // Plan L: sales/purchases documents (typed + approved scanned), bank entries and the catalog.
     case "sales":

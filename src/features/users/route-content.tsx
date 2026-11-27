@@ -18,6 +18,8 @@ import { BankAccountsPage } from "@/features/common/money/bank-accounts";
 import { EvaluationPage } from "@/features/common/reports/evaluation-page";
 import { UserManagement } from "@/features/common/users/user-management";
 import { HelpCenter } from "@/features/common/help/help-center";
+import { AiInboxPage } from "@/features/common/inbox/ai-inbox-page";
+import "@/styles/ai-inbox.css";
 import type { User } from "@/types";
 export function UserRoutes({ path, user }: { path: string[]; user: User }) {
   const [, page, id] = path;
@@ -43,6 +45,8 @@ export function UserRoutes({ path, user }: { path: string[]; user: User }) {
     case "documents": return id ? <DocumentReview user={user} documentId={id} /> : <DocumentList user={user} />;
     case "upload": return <UploadPage user={user} />;
     case "exceptions": return <ExceptionsPage user={user} />;
+    // AI Inbox (F3). The Insights pages (FE-3) add their own case.
+    case "ai-inbox": return <AiInboxPage user={user} />;
     case "contacts": return <ContactsPage user={user} contactId={id} />;
     // Plan L: sales/purchases documents (typed + approved scanned), bank entries and the catalog.
     case "sales":

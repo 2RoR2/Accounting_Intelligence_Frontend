@@ -26,6 +26,7 @@ function apiUrl(path: string) {
 // yet active; a 401 from them must surface instead of triggering a refresh.
 const NO_REFRESH = /^\/api\/auth\/(refresh|login|verify-mfa|resend-mfa|logout|forgot-password|verify-reset-code|reset-status|reset-password|activate|recover-authenticator)\b/;
 let refreshInFlight: Promise<boolean> | null = null;
+const SLOW_REQUESTS = /^\/api\/assistant\/ask\b/;
 
 /** Refresh tokens rotate on use, so concurrent 401s must share one refresh request. */
 function refreshSession(): Promise<boolean> {
@@ -66,8 +67,9 @@ async function request<T>(path: string, read: (response: Response) => Promise<T>
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   const controller = new AbortController();
-  // An upload (up to 20 MiB) needs far longer than an ordinary request on a slow connection.
-  const timeout = globalThis.setTimeout(() => controller.abort(), init.body instanceof FormData ? 120000 : 15000);
+  // An upload (up to 20 MiB) needs far longer than an ordinary request on a slow connection. An AI answer can take
+  // up to 25 s on the server (model calls plus report queries), so it gets a longer limit than a page load.
+  const timeout = globalThis.setTimeout(() => controller.abort(), init.body instanceof FormData ? 120000 : SLOW_REQUESTS.test(path) ? 40000 : 15000);
   try {
     const response = await fetch(apiUrl(path), {
       ...init,

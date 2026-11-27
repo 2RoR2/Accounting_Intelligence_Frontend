@@ -9,6 +9,7 @@ import "@/styles/dashboard-layout.css";
 import "@/styles/latest-template.css";
 import "@/styles/trace.css";
 import "@/styles/dark-surfaces.css";
+import "@/styles/assistant.css";
 
 export const metadata: Metadata = {
   title: "AccordAI | Accounting Intelligence",
